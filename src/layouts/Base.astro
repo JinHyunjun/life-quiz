@@ -1,0 +1,74 @@
+---
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} | 라이프퀴즈</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">라이프퀴즈</a>
+      <nav>
+        <a href="/">콘텐츠</a>
+        <a href="/review">오늘의 복습</a>
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(body) {
+    margin: 0;
+    font-family: "Apple SD Gothic Neo", "Pretendard", system-ui, sans-serif;
+    background: #f7f7fb;
+    color: #1a1a1a;
+  }
+
+  .site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+  }
+
+  .brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #1a1a1a;
+    text-decoration: none;
+  }
+
+  nav a {
+    margin-left: 16px;
+    color: #555;
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+
+  nav a:hover {
+    color: #1a1a1a;
+  }
+
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+</style>

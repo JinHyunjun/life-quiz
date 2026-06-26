@@ -1,0 +1,146 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import Base from "../../layouts/Base.astro";
+import { createDb } from "../../db/client";
+import { getContentItemWithQuiz } from "../../lib/content";
+import { categoryLabel } from "../../lib/categories";
+
+const id = Number(Astro.params.id);
+const db = createDb(env.DB);
+const result = Number.isInteger(id) ? await getContentItemWithQuiz(db, id) : null;
+
+if (!result) {
+  return Astro.redirect("/");
+}
+
+const { item, quizzes } = result;
+const paragraphs = item.bodyMd.split("\n\n").filter(Boolean);
+---
+
+<Base title={item.title}>
+  <a class="back" href="/">← 목록으로</a>
+  <span class="badge">{categoryLabel(item.category)}</span>
+  <h1>{item.title}</h1>
+
+  {item.cards && item.cards.length > 0 && (
+    <div class="carousel">
+      {item.cards.map((card, i) => (
+        <div class="card-news">
+          <span class="card-index">{i + 1} / {item.cards!.length}</span>
+          <h3>{card.heading}</h3>
+          <p>{card.body}</p>
+        </div>
+      ))}
+    </div>
+  )}
+
+  <article class="body">
+    {paragraphs.map((p) => <p>{p}</p>)}
+  </article>
+
+  <a class="citation-link" href={item.citationUrl} target="_blank" rel="noopener noreferrer">
+    출처: {item.citationLabel}
+  </a>
+
+  {quizzes.length > 0 && (
+    <a class="quiz-cta" href="/review">이 글로 만든 퀴즈, 오늘의 복습에서 풀어보기 →</a>
+  )}
+</Base>
+
+<style>
+  .back {
+    display: inline-block;
+    margin-bottom: 12px;
+    color: #888;
+    text-decoration: none;
+    font-size: 0.9rem;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: #6a5acd;
+    background: #f0eeff;
+    padding: 2px 8px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    margin: 0 0 20px;
+    font-size: 1.4rem;
+  }
+
+  .carousel {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .card-news {
+    flex: 0 0 78%;
+    scroll-snap-align: start;
+    background: linear-gradient(135deg, #6a5acd, #8a7ff0);
+    color: #fff;
+    border-radius: 16px;
+    padding: 22px;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .card-index {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    margin-bottom: 8px;
+  }
+
+  .card-news h3 {
+    margin: 0 0 10px;
+    font-size: 1.15rem;
+  }
+
+  .card-news p {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  .body {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    line-height: 1.7;
+  }
+
+  .body p {
+    margin: 0 0 14px;
+  }
+
+  .citation-link {
+    display: block;
+    margin-top: 16px;
+    color: #888;
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+
+  .quiz-cta {
+    display: block;
+    margin-top: 20px;
+    text-align: center;
+    background: #1a1a1a;
+    color: #fff;
+    padding: 14px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 600;
+  }
+</style>
