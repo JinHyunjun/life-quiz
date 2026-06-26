@@ -10,7 +10,9 @@ export interface Env {
   DB: D1Database;
   GEMINI_API_KEY: string;
   GEMINI_MODEL: string;
-  // data.go.kr issues one serviceKey per approved dataset, not one shared account-wide key.
+  // data.go.kr actually issues one shared account-wide serviceKey reused across all approved
+  // datasets (confirmed by comparing the values on each dataset's detail page). Kept as separate
+  // secrets per dataset anyway in case that policy ever changes per-dataset.
   DATA_GO_KR_KEY_TRASH: string;
   DATA_GO_KR_KEY_LOAN: string;
   DATA_GO_KR_KEY_APT_SALE: string;
