@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { createDb, schema, type AppDb } from "./db";
 import { generateArticleAndQuiz } from "./gemini";
-import { fetchAptTransactions, type AptTransactionRow } from "./fetchers/gov";
+import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed } from "./fetchers/rss";
 import { fetchYoutubeVideoMeta } from "./fetchers/youtube";
 
@@ -78,6 +78,21 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     } catch {
       // Skip this source for this run; next scheduled run will retry.
     }
+  }
+
+  const sggName = "종로구"; // Seoul Jongno-gu, used as the MVP default region.
+  try {
+    const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, sggName);
+    if (rows.length > 0) {
+      items.push({
+        url,
+        originType: "gov",
+        citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
+        sourceText: `서울 종로구 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`,
+      });
+    }
+  } catch {
+    // Skip this source for this run; next scheduled run will retry.
   }
 
   return items;
