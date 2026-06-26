@@ -1,0 +1,21 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"compatibility_date": "2026-06-26",
+	"compatibility_flags": ["global_fetch_strictly_public"],
+	"name": "life-quiz",
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "life-quiz-db",
+			"database_id": "REPLACE_WITH_REAL_ID_AFTER_WRANGLER_D1_CREATE"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}
