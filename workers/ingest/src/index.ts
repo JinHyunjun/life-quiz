@@ -5,6 +5,7 @@ import { fetchYoutubeVideoMeta } from "./fetchers/youtube";
 export interface Env {
   DB: D1Database;
   GEMINI_API_KEY: string;
+  GEMINI_MODEL: string;
   DATA_GO_KR_KEY: string;
   YOUTUBE_API_KEY: string;
 }
