@@ -12,7 +12,7 @@
 		{
 			"binding": "DB",
 			"database_name": "life-quiz-db",
-			"database_id": "REPLACE_WITH_REAL_ID_AFTER_WRANGLER_D1_CREATE"
+			"database_id": "31dea428-bbf0-4e8d-a8c8-816e2b2a970c"
 		}
 	],
 	"observability": {
