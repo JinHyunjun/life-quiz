@@ -15,11 +15,19 @@ export const sources = sqliteTable("sources", {
   lastFetchedAt: integer("last_fetched_at", { mode: "timestamp" }),
 });
 
+export interface ContentCard {
+  heading: string;
+  body: string;
+}
+
 export const contentItems = sqliteTable("content_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   sourceId: integer("source_id").references(() => sources.id),
   title: text("title").notNull(),
   bodyMd: text("body_md").notNull(),
+  // Card-news style slides (3-5 short heading+body pairs) for skimmable rendering; null for
+  // content ingested before this column existed.
+  cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
   category: text("category", {
     enum: ["finance", "housing", "seoul_life", "daily_tips"],
   }).notNull(),

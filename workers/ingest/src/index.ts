@@ -139,6 +139,7 @@ async function ingestItem(db: AppDb, env: Env, item: PendingItem) {
       sourceId: source.id,
       title: generated.title,
       bodyMd: generated.bodyMd,
+      cards: generated.cards,
       category: generated.category,
       citationUrl: item.url,
       citationLabel: item.citationLabel,

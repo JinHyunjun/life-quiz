@@ -15,6 +15,13 @@
       "when": 1782451720030,
       "tag": "0001_workable_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782477101089,
+      "tag": "0002_magical_ultron",
+      "breakpoints": true
     }
   ]
 }
