@@ -6,7 +6,11 @@ export interface Env {
   DB: D1Database;
   GEMINI_API_KEY: string;
   GEMINI_MODEL: string;
-  DATA_GO_KR_KEY: string;
+  // data.go.kr issues one serviceKey per approved dataset, not one shared account-wide key.
+  DATA_GO_KR_KEY_TRASH: string;
+  DATA_GO_KR_KEY_LOAN: string;
+  DATA_GO_KR_KEY_APT_SALE: string;
+  DATA_GO_KR_KEY_APT_RENT: string;
   YOUTUBE_API_KEY: string;
 }
 
