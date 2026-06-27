@@ -18,10 +18,10 @@ export async function fetchGovApi({ endpoint, serviceKey, query = {} }: GovApiPa
 
   const res = await fetch(url.toString());
   if (!res.ok) {
-    throw new Error(`data.go.kr request failed: ${res.status} ${url.toString()}`);
+    throw new Error(`data.go.kr request failed: ${res.status} ${publicDataUrl(url)}`);
   }
 
-  return { raw: await res.text(), url: url.toString() };
+  return { raw: await res.text(), url: publicDataUrl(url) };
 }
 
 export interface AptTransactionRow {
@@ -101,13 +101,19 @@ export async function fetchTrashInfo(serviceKey: string, sggName: string): Promi
 
   const res = await fetch(url.toString());
   if (!res.ok) {
-    throw new Error(`data.go.kr request failed: ${res.status} ${url.toString()} ${await res.text()}`);
+    throw new Error(`data.go.kr request failed: ${res.status} ${publicDataUrl(url)} ${(await res.text()).slice(0, 300)}`);
   }
 
   const data = (await res.json()) as { response?: { body?: { items?: { item?: Record<string, unknown>[] | Record<string, unknown> } } } };
   const items = data.response?.body?.items?.item ?? [];
   const rows = Array.isArray(items) ? items : [items];
-  return { url: url.toString(), rows };
+  return { url: publicDataUrl(url), rows };
+}
+
+function publicDataUrl(url: URL) {
+  const safeUrl = new URL(url);
+  safeUrl.searchParams.delete("serviceKey");
+  return safeUrl.toString();
 }
 
 // Renders any flat record as "key: value" lines, skipping empty values - used for sources whose

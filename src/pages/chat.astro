@@ -1,0 +1,782 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { BookOpen, Bot, ChevronRight, MessageCircle, Send, ShieldCheck, Sparkles } from "lucide-astro";
+import Base from "../layouts/Base.astro";
+import { createDb } from "../db/client";
+import { categoryLabel } from "../lib/categories";
+import { listChatTopics } from "../lib/content";
+
+const db = createDb(env.DB);
+const topics = await listChatTopics(db);
+const requestedContentId = Number(Astro.url.searchParams.get("content"));
+const selectedTopic = Number.isInteger(requestedContentId) ? topics.find((topic) => topic.id === requestedContentId) : undefined;
+const initialSuggestions = selectedTopic
+  ? ["이 글의 핵심을 세 문장으로 정리해줘", "실생활에서는 어떻게 활용할 수 있어?"]
+  : ["오늘 알아두면 좋은 생활상식은 뭐야?", "사회초년생이 자주 놓치는 돈 상식을 알려줘"];
+---
+
+<Base title="라이프 메이트" description="라이프퀴즈 콘텐츠를 근거로 생활 상식에 답하는 AI 큐레이터입니다.">
+  <div class="chat-page shell">
+    <header class="chat-header">
+      <div>
+        <p class="eyebrow">AI CURATOR</p>
+        <h1 class="page-title">라이프 메이트</h1>
+        <p>라이프퀴즈에 쌓인 상식을 바탕으로, 헷갈리는 부분을 함께 풀어봐요.</p>
+      </div>
+      <div class="usage-pill"><ShieldCheck size={16} /> <span id="usage-copy">시간당 8회 질문</span></div>
+    </header>
+
+    <div class="chat-layout">
+      <aside class="topic-panel" aria-labelledby="topic-title">
+        <div class="topic-heading">
+          <BookOpen size={18} />
+          <div>
+            <h2 id="topic-title">질문 범위</h2>
+            <p>한 글을 고르면 더 정확하게 답해요.</p>
+          </div>
+        </div>
+
+        <label class="mobile-topic-select">
+          <span class="visually-hidden">질문할 콘텐츠</span>
+          <select id="topic-select">
+            <option value="/chat">최근 상식 전체</option>
+            {topics.map((topic) => (
+              <option value={`/chat?content=${topic.id}`} selected={selectedTopic?.id === topic.id}>{topic.title}</option>
+            ))}
+          </select>
+        </label>
+
+        <nav class="topic-list" aria-label="질문할 콘텐츠 선택">
+          <a class:list={["topic-link", { active: !selectedTopic }]} href="/chat" aria-current={!selectedTopic ? "page" : undefined}>
+            <span class="topic-icon"><Sparkles size={16} /></span>
+            <span><strong>최근 상식 전체</strong><small>새로 도착한 6개 콘텐츠</small></span>
+            <ChevronRight size={16} />
+          </a>
+          {topics.map((topic) => (
+            <a
+              class:list={["topic-link", { active: selectedTopic?.id === topic.id }]}
+              href={`/chat?content=${topic.id}`}
+              aria-current={selectedTopic?.id === topic.id ? "page" : undefined}
+            >
+              <span class="topic-swatch" data-category={topic.category}></span>
+              <span><strong>{topic.title}</strong><small>{categoryLabel(topic.category)} · {topic.citationLabel}</small></span>
+              <ChevronRight size={16} />
+            </a>
+          ))}
+        </nav>
+      </aside>
+
+      <section
+        class="chat-workspace"
+        id="chat-app"
+        data-content-id={selectedTopic?.id ?? ""}
+        data-context-title={selectedTopic?.title ?? "최근 상식 전체"}
+        data-suggestion-one={initialSuggestions[0]}
+        data-suggestion-two={initialSuggestions[1]}
+        aria-labelledby="chat-title"
+      >
+        <header class="workspace-header">
+          <div class="bot-avatar" aria-hidden="true"><Bot size={20} /></div>
+          <div>
+            <h2 id="chat-title">{selectedTopic ? "선택한 글로 대화 중" : "최근 상식으로 대화 중"}</h2>
+            <p>{selectedTopic?.title ?? "금융, 집, 서울살이, 생활상식"}</p>
+          </div>
+          <span class="online-status"><span></span> 준비됨</span>
+        </header>
+
+        <div class="message-list" id="message-list" aria-live="polite">
+          <div class="message-row assistant-message">
+            <div class="message-avatar" aria-hidden="true"><MessageCircle size={17} /></div>
+            <div class="message-content">
+              <div class="message-bubble">
+                {selectedTopic
+                  ? <p><strong>{selectedTopic.title}</strong> 내용을 함께 보고 있어요. 이해가 안 되는 부분이나 실생활 적용법을 물어보세요.</p>
+                  : <p>최근 라이프퀴즈 콘텐츠를 함께 보고 있어요. 생활하면서 문득 궁금했던 것을 물어보세요.</p>}
+              </div>
+              <div class="suggestion-list" id="initial-suggestions">
+                {initialSuggestions.map((suggestion) => <button type="button" class="suggestion-chip" data-suggestion={suggestion}>{suggestion}</button>)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <form class="chat-composer" id="chat-form">
+          <label for="chat-input" class="visually-hidden">라이프 메이트에게 질문</label>
+          <textarea id="chat-input" name="message" rows="1" maxlength="800" placeholder="궁금한 생활 상식을 물어보세요" required></textarea>
+          <span class="character-count" id="character-count">0 / 800</span>
+          <button class="send-button" id="send-button" type="submit" aria-label="질문 보내기">
+            <Send size={19} />
+          </button>
+        </form>
+        <p class="chat-caution">AI 답변은 선택한 콘텐츠를 재구성한 참고 정보입니다. 중요한 결정 전에는 연결된 출처를 확인하세요.</p>
+      </section>
+    </div>
+  </div>
+</Base>
+
+<style is:global>
+  .chat-page {
+    padding-top: 46px;
+  }
+
+  .chat-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 28px;
+    margin-bottom: 30px;
+  }
+
+  .chat-header > div:first-child > p:not(.eyebrow) {
+    margin: 10px 0 0;
+    color: var(--muted);
+  }
+
+  .usage-pill {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 11px;
+    border-radius: var(--radius-sm);
+    color: var(--green-deep);
+    background: var(--green-soft);
+    font-size: 0.75rem;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .chat-layout {
+    min-height: 680px;
+    display: grid;
+    grid-template-columns: 290px minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .topic-panel {
+    min-width: 0;
+    padding: 22px 14px;
+    border-right: 1px solid var(--line);
+    background: var(--surface);
+  }
+
+  .topic-heading {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 9px;
+    padding: 0 8px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .topic-heading h2 {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .topic-heading p {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+
+  .topic-list {
+    max-height: 600px;
+    display: grid;
+    gap: 3px;
+    margin-top: 12px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .topic-link {
+    min-height: 60px;
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) 16px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .topic-link:hover,
+  .topic-link.active {
+    background: var(--surface-strong);
+  }
+
+  .topic-link.active {
+    box-shadow: inset 3px 0 0 var(--green);
+  }
+
+  .topic-icon {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--green);
+    background: var(--green-soft);
+  }
+
+  .topic-swatch {
+    width: 10px;
+    height: 28px;
+    justify-self: center;
+    border-radius: 3px;
+    background: var(--green);
+  }
+
+  .topic-swatch[data-category="housing"] { background: var(--coral); }
+  .topic-swatch[data-category="seoul_life"] { background: var(--blue); }
+  .topic-swatch[data-category="daily_tips"] { background: var(--yellow); }
+  .topic-swatch[data-category="history"] { background: #7b5ca8; }
+  .topic-swatch[data-category="humor"] { background: #d66a29; }
+  .topic-swatch[data-category="social_skills"] { background: #277e8e; }
+
+  .topic-link > span:nth-child(2) {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .topic-link strong,
+  .topic-link small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topic-link strong { font-size: 0.78rem; }
+  .topic-link small { color: var(--muted); font-size: 0.66rem; }
+  .topic-link > svg { color: var(--muted); }
+
+  .mobile-topic-select {
+    display: none;
+  }
+
+  .chat-workspace {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    background: var(--paper);
+  }
+
+  .workspace-header {
+    min-height: 74px;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .bot-avatar,
+  .message-avatar {
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: white;
+    background: var(--green);
+  }
+
+  .bot-avatar { width: 38px; height: 38px; }
+
+  .workspace-header h2 {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  .workspace-header p {
+    max-width: 540px;
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .online-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+
+  .online-status > span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #28a26b;
+  }
+
+  .message-list {
+    height: 500px;
+    padding: 26px 24px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+
+  .message-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+
+  .message-row.user-message {
+    justify-content: flex-end;
+  }
+
+  .message-avatar {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+  }
+
+  .message-content {
+    max-width: min(78%, 680px);
+  }
+
+  .message-bubble {
+    padding: 13px 15px;
+    border-radius: var(--radius-md);
+    background: var(--surface-strong);
+    color: var(--ink);
+    font-size: 0.88rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+  }
+
+  .user-message .message-bubble {
+    color: white;
+    background: var(--green);
+  }
+
+  .message-bubble p {
+    margin: 0;
+  }
+
+  .suggestion-list,
+  .source-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 9px;
+  }
+
+  .suggestion-chip,
+  .source-link {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: white;
+    color: var(--muted-strong);
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .suggestion-chip:hover,
+  .source-link:hover {
+    border-color: var(--green);
+    color: var(--green-deep);
+  }
+
+  .typing-bubble {
+    display: flex;
+    gap: 4px;
+    padding-block: 17px;
+  }
+
+  .typing-bubble span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: typing 900ms ease-in-out infinite;
+  }
+
+  .typing-bubble span:nth-child(2) { animation-delay: 120ms; }
+  .typing-bubble span:nth-child(3) { animation-delay: 240ms; }
+
+  @keyframes typing {
+    0%, 100% { opacity: 0.35; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  .chat-composer {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 9px;
+    margin: 0 20px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .chat-composer:focus-within {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 12%, transparent);
+  }
+
+  .chat-composer textarea {
+    width: 100%;
+    min-height: 42px;
+    max-height: 130px;
+    resize: none;
+    padding: 10px 58px 10px 4px;
+    border: 0;
+    background: transparent;
+    line-height: 1.45;
+  }
+
+  .character-count {
+    position: absolute;
+    right: 64px;
+    bottom: 20px;
+    color: var(--muted);
+    font-size: 0.65rem;
+  }
+
+  .send-button {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    align-self: end;
+    border-radius: var(--radius-md);
+    color: white;
+    background: var(--green);
+    cursor: pointer;
+  }
+
+  .send-button:disabled {
+    cursor: wait;
+    opacity: 0.55;
+  }
+
+  .chat-caution {
+    margin: 9px 20px 16px;
+    color: var(--muted);
+    font-size: 0.66rem;
+    text-align: center;
+  }
+
+  @media (max-width: 880px) {
+    .chat-layout {
+      min-height: 0;
+      grid-template-columns: 1fr;
+    }
+
+    .topic-panel {
+      padding: 14px;
+      border-right: 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topic-heading,
+    .topic-list {
+      display: none;
+    }
+
+    .mobile-topic-select {
+      display: block;
+    }
+
+    .mobile-topic-select select {
+      width: 100%;
+      min-height: 42px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--paper);
+      font-size: 0.82rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .chat-page {
+      width: 100%;
+      padding-top: 30px;
+    }
+
+    .chat-header {
+      width: calc(100% - 28px);
+      align-items: start;
+      margin-inline: auto;
+    }
+
+    .chat-header > div:first-child > p:not(.eyebrow) {
+      max-width: 260px;
+      font-size: 0.82rem;
+    }
+
+    .usage-pill {
+      padding-inline: 8px;
+    }
+
+    .usage-pill svg {
+      display: none;
+    }
+
+    .chat-layout {
+      border-right: 0;
+      border-left: 0;
+      border-radius: 0;
+    }
+
+    .workspace-header {
+      padding-inline: 14px;
+    }
+
+    .online-status {
+      display: none;
+    }
+
+    .message-list {
+      height: min(54vh, 520px);
+      min-height: 380px;
+      padding: 20px 14px;
+    }
+
+    .message-content {
+      max-width: 88%;
+    }
+
+    .message-bubble {
+      font-size: 0.84rem;
+    }
+
+    .chat-composer {
+      margin-inline: 12px;
+    }
+
+    .chat-caution {
+      margin-inline: 14px;
+    }
+  }
+</style>
+
+<script>
+  interface ClientMessage {
+    role: "user" | "assistant";
+    text: string;
+  }
+
+  interface ChatSource {
+    id: number;
+    title: string;
+    citationLabel: string;
+    citationUrl: string | null;
+  }
+
+  interface ChatResult {
+    answer: string;
+    suggestions: string[];
+    sources: ChatSource[];
+    error?: string;
+  }
+
+  const app = document.querySelector<HTMLElement>("#chat-app");
+  const form = document.querySelector<HTMLFormElement>("#chat-form");
+  const input = document.querySelector<HTMLTextAreaElement>("#chat-input");
+  const sendButton = document.querySelector<HTMLButtonElement>("#send-button");
+  const messageList = document.querySelector<HTMLElement>("#message-list");
+  const characterCount = document.querySelector<HTMLElement>("#character-count");
+  const usageCopy = document.querySelector<HTMLElement>("#usage-copy");
+  const topicSelect = document.querySelector<HTMLSelectElement>("#topic-select");
+  const contentItemId = app?.dataset.contentId ? Number(app.dataset.contentId) : undefined;
+  const historyKey = `life-quiz-chat:${contentItemId ?? "recent"}`;
+  let messages: ClientMessage[] = [];
+  let pending = false;
+
+  function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function saveHistory() {
+    try {
+      sessionStorage.setItem(historyKey, JSON.stringify(messages.slice(-8)));
+    } catch {
+      // Chat still works when session storage is unavailable.
+    }
+  }
+
+  function restoreHistory() {
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(historyKey) ?? "[]") as unknown;
+      if (!Array.isArray(stored)) return;
+      messages = stored.filter((entry): entry is ClientMessage => {
+        if (!entry || typeof entry !== "object") return false;
+        const value = entry as Record<string, unknown>;
+        return (value.role === "user" || value.role === "assistant") && typeof value.text === "string";
+      }).slice(-8);
+      messages.forEach((message) => renderMessage(message.role, message.text));
+    } catch {
+      messages = [];
+    }
+  }
+
+  function renderMessage(role: ClientMessage["role"], text: string, sources: ChatSource[] = [], suggestions: string[] = []) {
+    if (!messageList) return null;
+    const row = element("div", `message-row ${role === "user" ? "user-message" : "assistant-message"}`);
+    const content = element("div", "message-content");
+
+    if (role === "assistant") {
+      const avatar = element("div", "message-avatar");
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = "LQ";
+      row.append(avatar);
+    }
+
+    const bubble = element("div", "message-bubble");
+    bubble.append(element("p", "", text));
+    content.append(bubble);
+
+    if (sources.length > 0) {
+      const sourceList = element("div", "source-list");
+      sources.forEach((source) => {
+        const link = element("a", "source-link", `출처 · ${source.citationLabel}`);
+        link.href = source.citationUrl ?? `/articles/${source.id}`;
+        if (source.citationUrl) {
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+        }
+        sourceList.append(link);
+      });
+      content.append(sourceList);
+    }
+
+    if (suggestions.length > 0) {
+      const suggestionList = element("div", "suggestion-list");
+      suggestions.slice(0, 2).forEach((suggestion) => {
+        const button = element("button", "suggestion-chip", suggestion);
+        button.type = "button";
+        button.addEventListener("click", () => useSuggestion(suggestion));
+        suggestionList.append(button);
+      });
+      content.append(suggestionList);
+    }
+
+    row.append(content);
+    messageList.append(row);
+    messageList.scrollTop = messageList.scrollHeight;
+    return row;
+  }
+
+  function renderTyping() {
+    if (!messageList) return null;
+    const row = element("div", "message-row assistant-message");
+    const avatar = element("div", "message-avatar", "LQ");
+    avatar.setAttribute("aria-hidden", "true");
+    const content = element("div", "message-content");
+    const bubble = element("div", "message-bubble typing-bubble");
+    bubble.setAttribute("aria-label", "답변 작성 중");
+    bubble.append(element("span"), element("span"), element("span"));
+    content.append(bubble);
+    row.append(avatar, content);
+    messageList.append(row);
+    messageList.scrollTop = messageList.scrollHeight;
+    return row;
+  }
+
+  function useSuggestion(text: string) {
+    if (!input || pending) return;
+    input.value = text;
+    updateComposer();
+    input.focus();
+  }
+
+  function updateComposer() {
+    if (!input) return;
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 130)}px`;
+    if (characterCount) characterCount.textContent = `${input.value.length} / 800`;
+  }
+
+  async function submitQuestion(text: string) {
+    if (!text || pending) return;
+    pending = true;
+    if (sendButton) sendButton.disabled = true;
+    document.querySelector("#initial-suggestions")?.remove();
+
+    const userMessage = { role: "user", text } satisfies ClientMessage;
+    messages.push(userMessage);
+    messages = messages.slice(-8);
+    renderMessage("user", text);
+    if (input) input.value = "";
+    updateComposer();
+    const typing = renderTyping();
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ messages, contentItemId }),
+      });
+      const result = (await response.json()) as ChatResult;
+      typing?.remove();
+
+      if (!response.ok) throw new Error(result.error ?? "답변을 가져오지 못했습니다.");
+      const assistantMessage = { role: "assistant", text: result.answer } satisfies ClientMessage;
+      messages.push(assistantMessage);
+      messages = messages.slice(-8);
+      renderMessage("assistant", result.answer, result.sources, result.suggestions);
+      const remaining = response.headers.get("x-ratelimit-remaining");
+      if (remaining !== null && usageCopy) usageCopy.textContent = `이번 시간 ${remaining}회 남음`;
+      saveHistory();
+    } catch (error) {
+      typing?.remove();
+      const message = error instanceof Error ? error.message : "잠시 후 다시 질문해주세요.";
+      renderMessage("assistant", message);
+      messages = messages.filter((entry) => entry !== userMessage);
+    } finally {
+      pending = false;
+      if (sendButton) sendButton.disabled = false;
+      input?.focus();
+    }
+  }
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void submitQuestion(input?.value.trim() ?? "");
+  });
+
+  input?.addEventListener("input", updateComposer);
+  input?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      form?.requestSubmit();
+    }
+  });
+
+  topicSelect?.addEventListener("change", () => {
+    window.location.href = topicSelect.value;
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-suggestion]").forEach((button) => {
+    button.addEventListener("click", () => useSuggestion(button.dataset.suggestion ?? ""));
+  });
+
+  restoreHistory();
+  updateComposer();
+</script>

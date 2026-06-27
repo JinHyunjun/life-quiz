@@ -1,9 +1,12 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"compatibility_date": "2026-06-26",
-	"compatibility_flags": ["global_fetch_strictly_public"],
+	"compatibility_date": "2026-06-27",
+	"compatibility_flags": ["global_fetch_strictly_public", "nodejs_compat"],
 	"name": "life-quiz",
 	"main": "@astrojs/cloudflare/entrypoints/server",
+	"vars": {
+		"CHAT_HOURLY_LIMIT": "8"
+	},
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"
@@ -12,10 +15,20 @@
 		{
 			"binding": "DB",
 			"database_name": "life-quiz-db",
-			"database_id": "31dea428-bbf0-4e8d-a8c8-816e2b2a970c"
+			"database_id": "31dea428-bbf0-4e8d-a8c8-816e2b2a970c",
+			"migrations_dir": "drizzle"
+		}
+	],
+	"services": [
+		{
+			"binding": "INGEST",
+			"service": "life-quiz-ingest",
+			"remote": true
 		}
 	],
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"logs": { "head_sampling_rate": 1 },
+		"traces": { "enabled": true, "head_sampling_rate": 0.05 }
 	}
 }

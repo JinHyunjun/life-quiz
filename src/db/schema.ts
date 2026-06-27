@@ -77,3 +77,14 @@ export const reviewLogs = sqliteTable(
     index("review_logs_user_due_idx").on(table.userId, table.due),
   ],
 );
+
+export const chatUsage = sqliteTable(
+  "chat_usage",
+  {
+    key: text("key").primaryKey(),
+    identityHash: text("identity_hash").notNull(),
+    windowStartedAt: integer("window_started_at", { mode: "timestamp" }).notNull(),
+    requestCount: integer("request_count").notNull().default(1),
+  },
+  (table) => [index("chat_usage_window_idx").on(table.windowStartedAt)],
+);

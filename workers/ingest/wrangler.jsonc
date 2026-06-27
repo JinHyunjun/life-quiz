@@ -2,7 +2,9 @@
 	"$schema": "../../node_modules/wrangler/config-schema.json",
 	"name": "life-quiz-ingest",
 	"main": "src/index.ts",
-	"compatibility_date": "2026-06-26",
+	"compatibility_date": "2026-06-27",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": false,
 	"vars": {
 		"GEMINI_MODEL": "gemini-3.1-flash-lite"
 	},
@@ -17,6 +19,8 @@
 		"crons": ["0 21 * * *"]
 	},
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"logs": { "head_sampling_rate": 1 },
+		"traces": { "enabled": true, "head_sampling_rate": 0.05 }
 	}
 }

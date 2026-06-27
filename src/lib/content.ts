@@ -8,12 +8,16 @@ export async function listContentItems(db: AppDb, category?: Category) {
     .select({
       id: contentItems.id,
       title: contentItems.title,
+      bodyMd: contentItems.bodyMd,
+      cards: contentItems.cards,
       category: contentItems.category,
+      citationUrl: contentItems.citationUrl,
       citationLabel: contentItems.citationLabel,
       createdAt: contentItems.createdAt,
     })
     .from(contentItems)
-    .orderBy(desc(contentItems.createdAt));
+    .orderBy(desc(contentItems.createdAt))
+    .limit(60);
 
   return category ? await query.where(eq(contentItems.category, category)) : await query;
 }
@@ -26,4 +30,17 @@ export async function getContentItemWithQuiz(db: AppDb, id: number) {
 
   const quizzes = await db.select().from(quizItems).where(eq(quizItems.contentItemId, id));
   return { item, quizzes };
+}
+
+export async function listChatTopics(db: AppDb, limit = 24) {
+  return db
+    .select({
+      id: contentItems.id,
+      title: contentItems.title,
+      category: contentItems.category,
+      citationLabel: contentItems.citationLabel,
+    })
+    .from(contentItems)
+    .orderBy(desc(contentItems.createdAt))
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), 50));
 }

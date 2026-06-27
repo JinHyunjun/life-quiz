@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, lt } from "drizzle-orm";
 import { createDb, schema, type AppDb } from "./db";
-import { generateArticleAndQuiz, generateTrivia } from "./gemini";
+import { answerChat, generateArticleAndQuiz, generateTrivia, type ChatMessage } from "./gemini";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed } from "./fetchers/rss";
 import { fetchYoutubeVideoMeta } from "./fetchers/youtube";
@@ -30,11 +30,95 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.get("/health", (c) => c.json({ ok: true }));
 
+app.post("/internal/chat", async (c) => {
+  if (c.req.header("x-life-quiz-service") !== "chat") {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const payload = parseInternalChatPayload(await c.req.json<unknown>());
+  const db = createDb(c.env.DB);
+  const contextItems = await loadChatContext(db, payload.contentItemId);
+  const generated = await answerChat({
+    messages: payload.messages,
+    contextItems,
+    apiKey: c.env.GEMINI_API_KEY,
+    model: c.env.GEMINI_MODEL,
+  });
+  const citedIds = new Set(generated.citedContentIds);
+
+  return c.json({
+    answer: generated.answer,
+    suggestions: generated.suggestions,
+    sources: contextItems
+      .filter((item) => citedIds.has(item.id))
+      .map(({ id, title, citationLabel, citationUrl }) => ({ id, title, citationLabel, citationUrl })),
+  });
+});
+
 // Manual trigger for local dev: `wrangler dev` then hit this route instead of waiting for cron.
 app.post("/trigger", async (c) => {
   const result = await runIngestion(c.env);
   return c.json(result);
 });
+
+app.onError((error, c) => {
+  console.error(JSON.stringify({
+    message: "ingest worker request failed",
+    path: c.req.path,
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  return c.json({ error: "Internal service error" }, 500);
+});
+
+function parseInternalChatPayload(value: unknown): { messages: ChatMessage[]; contentItemId?: number } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Invalid chat payload");
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (!Array.isArray(candidate.messages) || candidate.messages.length < 1 || candidate.messages.length > 8) {
+    throw new Error("Invalid chat messages");
+  }
+
+  const messages = candidate.messages.map((message) => {
+    if (!message || typeof message !== "object" || Array.isArray(message)) throw new Error("Invalid chat message");
+    const entry = message as Record<string, unknown>;
+    if ((entry.role !== "user" && entry.role !== "assistant") || typeof entry.text !== "string") {
+      throw new Error("Invalid chat message");
+    }
+    return { role: entry.role, text: entry.text.slice(0, 800) } satisfies ChatMessage;
+  });
+
+  const contentItemId = candidate.contentItemId === undefined ? undefined : Number(candidate.contentItemId);
+  if (contentItemId !== undefined && (!Number.isInteger(contentItemId) || contentItemId < 1)) {
+    throw new Error("Invalid content item id");
+  }
+
+  return { messages, contentItemId };
+}
+
+async function loadChatContext(db: AppDb, contentItemId?: number) {
+  const selectFields = {
+    id: schema.contentItems.id,
+    title: schema.contentItems.title,
+    bodyMd: schema.contentItems.bodyMd,
+    citationLabel: schema.contentItems.citationLabel,
+    citationUrl: schema.contentItems.citationUrl,
+  };
+
+  if (contentItemId) {
+    const selected = await db.select(selectFields).from(schema.contentItems).where(eq(schema.contentItems.id, contentItemId)).limit(1);
+    if (selected.length > 0) return selected;
+  }
+
+  const recent = await db
+    .select(selectFields)
+    .from(schema.contentItems)
+    .orderBy(desc(schema.contentItems.createdAt))
+    .limit(6);
+
+  return recent.map((item) => ({ ...item, bodyMd: item.bodyMd.slice(0, 1_200) }));
+}
 
 async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   const items: PendingItem[] = [];
@@ -267,6 +351,10 @@ async function runIngestion(env: Env) {
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledEvent, env: Env) {
-    await runIngestion(env);
+    const result = await runIngestion(env);
+    const db = createDb(env.DB);
+    const expiry = new Date(Date.now() - 48 * 60 * 60 * 1_000);
+    await db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry));
+    console.log(JSON.stringify({ message: "scheduled ingestion completed", ...result }));
   },
 };

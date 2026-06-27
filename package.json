@@ -10,7 +10,13 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "generate-types": "wrangler types"
+    "generate-types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "db:migrate:local": "wrangler d1 migrations apply life-quiz-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply life-quiz-db --remote",
+    "deploy:ingest": "wrangler deploy --config workers/ingest/wrangler.jsonc",
+    "deploy:app": "wrangler deploy"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.0.1",
@@ -19,10 +25,13 @@
     "drizzle-orm": "^0.45.2",
     "fast-xml-parser": "^5.9.3",
     "hono": "^4.12.27",
+    "lucide-astro": "^0.556.0",
     "ts-fsrs": "^5.4.1",
     "wrangler": "^4.105.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^26.0.1",
     "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3"
   }

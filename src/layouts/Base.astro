@@ -1,74 +1,253 @@
 ---
+import { BookOpenCheck, House, MessageCircle, RotateCcw } from "lucide-astro";
+import "../styles/global.css";
+
 interface Props {
   title: string;
+  description?: string;
 }
-const { title } = Astro.props;
+
+const {
+  title,
+  description = "사회초년생에게 필요한 생활 상식을 읽고, 묻고, 오래 기억하는 라이프퀴즈",
+} = Astro.props;
+const pathname = Astro.url.pathname;
+
+const navItems = [
+  { href: "/", label: "홈", icon: House, active: pathname === "/" || pathname.startsWith("/articles/") },
+  { href: "/review", label: "오늘의 복습", icon: RotateCcw, active: pathname === "/review" },
+  { href: "/chat", label: "라이프 메이트", icon: MessageCircle, active: pathname === "/chat" },
+];
 ---
 
+<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#f4f6f4" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title} | 라이프퀴즈</title>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">본문으로 바로가기</a>
+
     <header class="site-header">
-      <a class="brand" href="/">라이프퀴즈</a>
-      <nav>
-        <a href="/">콘텐츠</a>
-        <a href="/review">오늘의 복습</a>
-      </nav>
+      <div class="header-inner">
+        <a class="brand" href="/" aria-label="라이프퀴즈 홈">
+          <span class="brand-mark" aria-hidden="true"><BookOpenCheck size={21} strokeWidth={2.2} /></span>
+          <span class="brand-copy">
+            <strong>라이프퀴즈</strong>
+            <small>읽고, 묻고, 오래 기억하기</small>
+          </span>
+        </a>
+
+        <nav class="desktop-nav" aria-label="주요 메뉴">
+          {navItems.map(({ href, label, icon: Icon, active }) => (
+            <a href={href} class:list={["nav-link", { active }]} aria-current={active ? "page" : undefined}>
+              <Icon size={18} strokeWidth={2} />
+              <span>{label}</span>
+            </a>
+          ))}
+        </nav>
+      </div>
     </header>
-    <main>
+
+    <main id="main-content">
       <slot />
     </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <div>
+          <strong>라이프퀴즈</strong>
+          <p>출처를 확인하고, 내 말로 이해하고, 다시 만나는 지식.</p>
+        </div>
+        <p>정보는 참고용이며 중요한 결정 전에는 연결된 원문을 확인하세요.</p>
+      </div>
+    </footer>
+
+    <nav class="mobile-nav" aria-label="모바일 주요 메뉴">
+      {navItems.map(({ href, label, icon: Icon, active }) => (
+        <a href={href} class:list={["mobile-nav-link", { active }]} aria-current={active ? "page" : undefined}>
+          <Icon size={20} strokeWidth={2} />
+          <span>{label}</span>
+        </a>
+      ))}
+    </nav>
   </body>
 </html>
 
 <style>
-  :global(*) {
-    box-sizing: border-box;
+  .skip-link {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    z-index: 100;
+    transform: translateY(-150%);
+    background: var(--ink);
+    color: white;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
   }
 
-  :global(body) {
-    margin: 0;
-    font-family: "Apple SD Gothic Neo", "Pretendard", system-ui, sans-serif;
-    background: #f7f7fb;
-    color: #1a1a1a;
+  .skip-link:focus {
+    transform: translateY(0);
   }
 
   .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(14px);
+  }
+
+  .header-inner {
+    width: min(1180px, calc(100% - 40px));
+    min-height: 68px;
+    margin: 0 auto;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
-    background: #fff;
-    border-bottom: 1px solid #eee;
-    position: sticky;
-    top: 0;
+    gap: 28px;
   }
 
   .brand {
-    font-weight: 700;
-    font-size: 1.1rem;
-    color: #1a1a1a;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--ink);
     text-decoration: none;
   }
 
-  nav a {
-    margin-left: 16px;
-    color: #555;
+  .brand-mark {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 38px;
+    border-radius: var(--radius-md);
+    color: white;
+    background: var(--green);
+  }
+
+  .brand-copy {
+    display: grid;
+    gap: 1px;
+  }
+
+  .brand-copy strong {
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  .brand-copy small {
+    color: var(--muted);
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  .desktop-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .nav-link {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 12px;
+    border-radius: var(--radius-sm);
+    color: var(--muted-strong);
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    font-weight: 650;
   }
 
-  nav a:hover {
-    color: #1a1a1a;
+  .nav-link:hover,
+  .nav-link.active {
+    color: var(--ink);
+    background: var(--surface-strong);
   }
 
-  main {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 20px;
+  .site-footer {
+    margin-top: 72px;
+    padding: 30px 0 38px;
+    border-top: 1px solid var(--line);
+    background: var(--paper);
+  }
+
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    gap: 32px;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  .footer-inner strong {
+    color: var(--ink);
+  }
+
+  .footer-inner p {
+    margin: 5px 0 0;
+  }
+
+  .mobile-nav {
+    display: none;
+  }
+
+  @media (max-width: 720px) {
+    .header-inner {
+      width: min(100% - 28px, 1180px);
+      min-height: 60px;
+    }
+
+    .brand-copy small,
+    .desktop-nav,
+    .site-footer {
+      display: none;
+    }
+
+    .mobile-nav {
+      position: fixed;
+      z-index: 60;
+      right: 10px;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      left: 10px;
+      height: 62px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      padding: 5px;
+      border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+      border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--paper) 96%, transparent);
+      box-shadow: var(--shadow-lg);
+      backdrop-filter: blur(16px);
+    }
+
+    .mobile-nav-link {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      border-radius: var(--radius-md);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+
+    .mobile-nav-link.active {
+      color: var(--green);
+      background: var(--green-soft);
+    }
   }
 </style>
