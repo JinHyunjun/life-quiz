@@ -1,0 +1,1 @@
+ALTER TABLE `content_items` ADD `content_format` text DEFAULT 'article' NOT NULL;

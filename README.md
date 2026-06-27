@@ -5,8 +5,10 @@
 ## 현재 기능
 
 - KST 00시 기준 오늘 피드와 날짜·분야·출처·페이지별 지난 상식 보관함
+- 서울 25개 자치구를 배치마다 순환하는 부동산·생활 공공데이터 수집
 - 분야별 상식 피드와 출처가 연결된 상세 글
-- Gemini가 생성한 3~5장의 카드뉴스 요약
+- Gemini가 생성하고 의미 중복 검사를 통과한 4장의 카드뉴스 요약
+- 금융·부동산 초보 용어를 정의·구조·사례·체크포인트로 설명하는 4컷 가이드
 - `ts-fsrs` 기반 오늘의 복습 큐와 다음 복습일 계산
 - 선택한 글 또는 최근 콘텐츠 6개를 근거로 답하는 라이프 메이트
 - D1 기반 익명 챗 사용량 제한: IP와 User-Agent의 SHA-256 해시 기준 시간당 8회
@@ -58,6 +60,7 @@ npx wrangler secret put YOUTUBE_API_KEY --config workers/ingest/wrangler.jsonc
 ```sh
 npm run typecheck
 npm run build
+npm run test:logic
 npm run test:e2e
 npx wrangler deploy --dry-run
 npx wrangler deploy --dry-run --config workers/ingest/wrangler.jsonc
@@ -74,7 +77,7 @@ npm run build
 npm run deploy:app
 ```
 
-Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이므로 설정에는 `0 15`, `0 21`, `0 3`, `0 9`가 등록됩니다.
+Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이므로 설정에는 `0 15`, `0 21`, `0 3`, `0 9`가 등록됩니다. 각 배치는 서울 자치구 하나를 순환하고, 매일 금융·부동산 기초 용어를 하나씩 추가합니다.
 
 ## 남은 큰 작업
 

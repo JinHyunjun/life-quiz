@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Archive, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Database, Filter, House, Layers3 } from "lucide-astro";
+import { Archive, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Database, Filter, House, Layers3, PanelsTopLeft } from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import { CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
 import {
@@ -169,7 +169,10 @@ function formatItemDate(value: Date) {
             <li>
               <a class="archive-card" href={`/articles/${item.id}`}>
                 <div class="card-topline">
-                  <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                  <div class="card-tags">
+                    <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                    {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+                  </div>
                   <span class="source-type">{item.originType ? SOURCE_LABELS[item.originType] : "기타"}</span>
                 </div>
                 <h3>{item.title}</h3>
@@ -418,6 +421,14 @@ function formatItemDate(value: Date) {
     color: var(--muted);
     font-size: 0.7rem;
     font-weight: 700;
+  }
+
+  .card-tags {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
   }
 
   .archive-card h3 {

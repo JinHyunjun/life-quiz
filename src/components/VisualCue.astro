@@ -1,0 +1,41 @@
+---
+import {
+  Calculator,
+  ChartLine,
+  Coins,
+  CreditCard,
+  FileText,
+  House,
+  KeyRound,
+  Landmark,
+  Search,
+  ShieldCheck,
+  TriangleAlert,
+  WalletCards,
+} from "lucide-astro";
+import type { ContentVisualCue } from "../db/schema";
+
+interface Props {
+  cue?: ContentVisualCue;
+  size?: number;
+}
+
+const { cue = "search", size = 44 } = Astro.props;
+const icons = {
+  wallet: WalletCards,
+  bank: Landmark,
+  coins: Coins,
+  chart: ChartLine,
+  card: CreditCard,
+  calculator: Calculator,
+  shield: ShieldCheck,
+  home: House,
+  key: KeyRound,
+  contract: FileText,
+  search: Search,
+  alert: TriangleAlert,
+};
+const Icon = icons[cue];
+---
+
+<Icon size={size} strokeWidth={1.65} aria-hidden="true" />

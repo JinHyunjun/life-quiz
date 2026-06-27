@@ -187,6 +187,20 @@ img {
 .category-label[data-category="humor"] { --category-color: #d66a29; }
 .category-label[data-category="social_skills"] { --category-color: #277e8e; }
 
+.visual-format-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid #c9b866;
+  border-radius: var(--radius-sm);
+  color: #695a0a;
+  background: #fff6c9;
+  font-size: 0.67rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

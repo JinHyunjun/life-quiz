@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
-import { contentItems, quizItems, sources } from "../db/schema";
+import { contentItems, quizItems, sources, type ContentCard } from "../db/schema";
+import { sanitizeContentCards } from "./card-quality";
 import type { Category } from "./categories";
 import { kstDayRange, todayKstRange } from "./dates";
 
@@ -22,6 +23,7 @@ const summaryFields = {
   title: contentItems.title,
   bodyMd: contentItems.bodyMd,
   cards: contentItems.cards,
+  contentFormat: contentItems.contentFormat,
   category: contentItems.category,
   citationUrl: contentItems.citationUrl,
   citationLabel: contentItems.citationLabel,
@@ -35,11 +37,25 @@ export async function listTodayContentItems(db: AppDb, category?: Category, now 
   const conditions: SQL[] = [gte(contentItems.createdAt, today.start), lt(contentItems.createdAt, today.end)];
   if (category) conditions.push(eq(contentItems.category, category));
 
-  return db
+  const items = await db
     .select(summaryFields)
     .from(contentItems)
     .where(and(...conditions))
     .orderBy(desc(contentItems.createdAt));
+  return items.map(withQualityCards);
+}
+
+export async function listRecentVisualGuides(db: AppDb, category?: Category, limit = 2) {
+  const conditions: SQL[] = [eq(contentItems.contentFormat, "visual_guide")];
+  if (category) conditions.push(eq(contentItems.category, category));
+
+  const items = await db
+    .select(summaryFields)
+    .from(contentItems)
+    .where(and(...conditions))
+    .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), 6));
+  return items.map(withQualityCards);
 }
 
 export async function getContentStats(db: AppDb, now = new Date()) {
@@ -93,7 +109,7 @@ export async function listArchivedContentItems(db: AppDb, filters: ArchiveFilter
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  return { items, total, page, totalPages, pageSize };
+  return { items: items.map(withQualityCards), total, page, totalPages, pageSize };
 }
 
 export async function listArchiveDays(db: AppDb, now = new Date(), limit = 90) {
@@ -137,7 +153,7 @@ export async function getContentItemWithQuiz(db: AppDb, id: number) {
   if (!item) return null;
 
   const quizzes = await db.select().from(quizItems).where(eq(quizItems.contentItemId, id));
-  return { item, quizzes };
+  return { item: withQualityCards(item), quizzes };
 }
 
 export async function listChatTopics(db: AppDb, limit = 24) {
@@ -160,4 +176,11 @@ function normalizePage(value: number | undefined) {
 function normalizePageSize(value: number | undefined) {
   if (!Number.isFinite(value)) return ARCHIVE_PAGE_SIZE;
   return Math.min(Math.max(Math.trunc(value!), 6), 36);
+}
+
+function withQualityCards<T extends { cards: ContentCard[] | null }>(item: T): T {
+  return {
+    ...item,
+    cards: item.cards ? sanitizeContentCards(item.cards) : null,
+  };
 }

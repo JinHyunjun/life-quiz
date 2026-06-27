@@ -20,7 +20,22 @@ export const sources = sqliteTable("sources", {
 export interface ContentCard {
   heading: string;
   body: string;
+  visual?: ContentVisualCue;
 }
+
+export type ContentVisualCue =
+  | "wallet"
+  | "bank"
+  | "coins"
+  | "chart"
+  | "card"
+  | "calculator"
+  | "shield"
+  | "home"
+  | "key"
+  | "contract"
+  | "search"
+  | "alert";
 
 export const contentItems = sqliteTable(
   "content_items",
@@ -29,9 +44,10 @@ export const contentItems = sqliteTable(
     sourceId: integer("source_id").references(() => sources.id),
     title: text("title").notNull(),
     bodyMd: text("body_md").notNull(),
-    // Card-news style slides (3-5 short heading+body pairs) for skimmable rendering; null for
+    // Card-news slides (four distinct heading+body pairs) for skimmable rendering; null for
     // content ingested before this column existed.
     cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
+    contentFormat: text("content_format", { enum: ["article", "visual_guide"] }).notNull().default("article"),
     category: text("category", {
       enum: ["finance", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
     }).notNull(),

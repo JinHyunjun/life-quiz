@@ -43,6 +43,13 @@
       "when": 1782530730523,
       "tag": "0005_wild_wind_dancer",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1782533052408,
+      "tag": "0006_organic_beast",
+      "breakpoints": true
     }
   ]
 }

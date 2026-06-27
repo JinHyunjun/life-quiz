@@ -2,8 +2,9 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, RotateCcw } from "lucide-astro";
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, RotateCcw } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
+import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
 import { getContentItemWithQuiz } from "../../lib/content";
 import { categoryLabel } from "../../lib/categories";
@@ -17,6 +18,7 @@ if (!result) {
 }
 
 const { item, quizzes } = result;
+const isVisualGuide = item.contentFormat === "visual_guide";
 const paragraphs = item.bodyMd.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
 const publishedAt = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
@@ -39,7 +41,34 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
       </div>
     </header>
 
-    {item.cards && item.cards.length > 0 && (
+    {isVisualGuide && item.cards && item.cards.length > 0 && (
+      <section class="visual-guide-section" aria-labelledby="visual-guide-title">
+        <div class="card-news-toolbar">
+          <div>
+            <p class="eyebrow">VISUAL GLOSSARY</p>
+            <h2 id="visual-guide-title"><PanelsTopLeft size={20} /> 4컷으로 용어 이해하기</h2>
+          </div>
+          <span class="visual-guide-count">1분 개념 정리</span>
+        </div>
+
+        <ol class="comic-grid">
+          {item.cards.map((card, index) => (
+            <li class="comic-panel">
+              <div class="comic-visual">
+                <span>{index + 1} / {item.cards!.length}</span>
+                <VisualCue cue={card.visual} size={54} />
+              </div>
+              <div class="comic-speech">
+                <h3>{card.heading}</h3>
+                <p>{card.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
+    )}
+
+    {!isVisualGuide && item.cards && item.cards.length > 0 && (
       <section class="card-news-section" aria-labelledby="card-news-title">
         <div class="card-news-toolbar">
           <div>
@@ -175,6 +204,101 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
 
   .card-news-section {
     margin-bottom: 64px;
+  }
+
+  .visual-guide-section {
+    margin-bottom: 64px;
+  }
+
+  .visual-guide-section .card-news-toolbar h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .visual-guide-count {
+    padding: 7px 10px;
+    border: 1px solid color-mix(in srgb, var(--article-color) 25%, var(--line));
+    border-radius: var(--radius-sm);
+    color: var(--article-color);
+    background: var(--article-soft);
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .comic-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .comic-panel {
+    min-height: 300px;
+    display: grid;
+    grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--article-color) 24%, var(--line));
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .comic-visual {
+    display: grid;
+    place-items: center;
+    align-content: space-between;
+    padding: 22px 18px 38px;
+    color: var(--article-color);
+    background: var(--article-soft);
+  }
+
+  .comic-visual span {
+    justify-self: start;
+    font-size: 0.7rem;
+    font-weight: 850;
+  }
+
+  .comic-visual :global(svg) {
+    filter: drop-shadow(0 8px 16px color-mix(in srgb, var(--article-color) 18%, transparent));
+  }
+
+  .comic-speech {
+    align-self: center;
+    position: relative;
+    margin: 24px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .comic-speech::before {
+    position: absolute;
+    top: 42%;
+    left: -9px;
+    width: 16px;
+    height: 16px;
+    transform: rotate(45deg);
+    border-bottom: 1px solid var(--line);
+    border-left: 1px solid var(--line);
+    background: var(--surface);
+    content: "";
+  }
+
+  .comic-speech h3 {
+    margin: 0 0 9px;
+    font-size: 1.15rem;
+    line-height: 1.35;
+  }
+
+  .comic-speech p {
+    margin: 0;
+    color: var(--muted-strong);
+    font-size: 0.88rem;
+    line-height: 1.7;
   }
 
   .card-news-toolbar {
@@ -449,6 +573,28 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
 
     .card-news-section {
       margin-bottom: 42px;
+    }
+
+    .visual-guide-section {
+      margin-bottom: 42px;
+    }
+
+    .comic-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .comic-panel {
+      min-height: 250px;
+      grid-template-columns: 112px minmax(0, 1fr);
+    }
+
+    .comic-visual {
+      padding: 18px 12px 30px;
+    }
+
+    .comic-speech {
+      margin: 16px;
+      padding: 16px;
     }
 
     .card-news-toolbar {

@@ -89,11 +89,17 @@ export async function fetchLoanProducts(serviceKey: string): Promise<{ url: stri
 }
 
 // SGG_NM: 시군구명 (e.g. "종로구"), filtered with the LIKE operator.
-export async function fetchTrashInfo(serviceKey: string, sggName: string): Promise<{ url: string; rows: Record<string, unknown>[] }> {
+export async function fetchTrashInfo(
+  serviceKey: string,
+  sggName: string,
+  provinceName = "서울",
+): Promise<{ url: string; rows: Record<string, unknown>[] }> {
   const url = new URL("https://apis.data.go.kr/1741000/household_waste_info/info");
   url.searchParams.set("serviceKey", serviceKey);
   url.searchParams.set("pageNo", "1");
-  url.searchParams.set("numOfRows", "10");
+  // District names such as "중구" exist in several provinces. Fetch enough candidates and
+  // verify the province from each response row before sending anything to Gemini.
+  url.searchParams.set("numOfRows", "100");
   url.searchParams.set("returnType", "json");
   if (sggName) {
     url.searchParams.set("cond[SGG_NM::LIKE]", sggName);
@@ -107,7 +113,15 @@ export async function fetchTrashInfo(serviceKey: string, sggName: string): Promi
   const data = (await res.json()) as { response?: { body?: { items?: { item?: Record<string, unknown>[] | Record<string, unknown> } } } };
   const items = data.response?.body?.items?.item ?? [];
   const rows = Array.isArray(items) ? items : [items];
-  return { url: publicDataUrl(url), rows };
+  return {
+    url: publicDataUrl(url),
+    rows: rows.filter((row) => rowMatchesRegion(row, provinceName, sggName)),
+  };
+}
+
+export function rowMatchesRegion(row: Record<string, unknown>, provinceName: string, districtName: string) {
+  const values = Object.values(row).map((value) => String(value ?? ""));
+  return values.some((value) => value.includes(provinceName)) && values.some((value) => value.includes(districtName));
 }
 
 function publicDataUrl(url: URL) {

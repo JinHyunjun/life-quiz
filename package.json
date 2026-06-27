@@ -12,6 +12,7 @@
     "astro": "astro",
     "generate-types": "wrangler types",
     "typecheck": "tsc --noEmit",
+    "test:logic": "node --experimental-strip-types --test tests/content-logic.test.mjs",
     "test:e2e": "playwright test",
     "db:migrate:local": "wrangler d1 migrations apply life-quiz-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply life-quiz-db --remote",

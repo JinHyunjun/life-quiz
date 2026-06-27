@@ -2,20 +2,21 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Archive, ArrowRight, BookOpen, CalendarDays, MessageCircle, RotateCcw, Sparkles } from "lucide-astro";
+import { Archive, ArrowRight, BookOpen, CalendarDays, MessageCircle, PanelsTopLeft, RotateCcw, Sparkles } from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import { createDb } from "../db/client";
-import { getContentStats, listArchiveDays, listTodayContentItems } from "../lib/content";
+import { getContentStats, listArchiveDays, listRecentVisualGuides, listTodayContentItems } from "../lib/content";
 import { CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
 import { formatKstDate } from "../lib/dates";
 
 const db = createDb(env.DB);
 const categoryParam = Astro.url.searchParams.get("category");
 const activeCategory = (categoryParam && categoryParam in CATEGORY_LABELS ? categoryParam : undefined) as Category | undefined;
-const [items, stats, archiveDays] = await Promise.all([
+const [items, stats, archiveDays, visualGuides] = await Promise.all([
   listTodayContentItems(db, activeCategory),
   getContentStats(db),
   listArchiveDays(db, new Date(), 3),
+  listRecentVisualGuides(db, activeCategory, 2),
 ]);
 const featured = items[0];
 const feedItems = items.slice(1);
@@ -74,6 +75,31 @@ function formatDate(value: Date) {
       </nav>
     </section>
 
+    {visualGuides.length > 0 && (
+      <section class="glossary-section" aria-labelledby="glossary-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STARTER GLOSSARY</p>
+            <h2 id="glossary-title">처음 배우는 금융·부동산 용어</h2>
+          </div>
+          <span class="glossary-note"><PanelsTopLeft size={16} /> 4컷으로 쉽게</span>
+        </div>
+        <div class="glossary-grid">
+          {visualGuides.map((guide) => (
+            <a class="glossary-card" href={`/articles/${guide.id}`} data-category={guide.category}>
+              <span class="glossary-icon"><PanelsTopLeft size={28} /></span>
+              <span class="glossary-copy">
+                <span class="category-label" data-category={guide.category}>{categoryLabel(guide.category)}</span>
+                <strong>{guide.title}</strong>
+                <small>{guide.cards?.[0]?.body ?? excerpt(guide.bodyMd, 90)}</small>
+              </span>
+              <ArrowRight size={19} />
+            </a>
+          ))}
+        </div>
+      </section>
+    )}
+
     {featured ? (
       <>
         <section class="featured-section" aria-labelledby="featured-title">
@@ -87,7 +113,10 @@ function formatDate(value: Date) {
           <a class="featured-story" href={`/articles/${featured.id}`}>
             <div class="featured-number" aria-hidden="true">01</div>
             <div class="featured-copy">
-              <span class="category-label" data-category={featured.category}>{categoryLabel(featured.category)}</span>
+              <div class="featured-tags">
+                <span class="category-label" data-category={featured.category}>{categoryLabel(featured.category)}</span>
+                {featured.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+              </div>
               <h3>{featured.title}</h3>
               <p>{featured.cards?.[0]?.body ?? excerpt(featured.bodyMd, 150)}</p>
               <span class="story-meta">{featured.citationLabel} · {formatDate(featured.createdAt)}</span>
@@ -110,7 +139,10 @@ function formatDate(value: Date) {
                 <li>
                   <a class="content-card" href={`/articles/${item.id}`}>
                     <div class="card-topline">
-                      <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                      <div class="card-tags">
+                        <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                        {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+                      </div>
                       <span class="card-number">{String(index + 2).padStart(2, "0")}</span>
                     </div>
                     <h3>{item.title}</h3>
@@ -307,6 +339,98 @@ function formatDate(value: Date) {
   .featured-copy {
     align-self: center;
     padding: 34px 38px;
+  }
+
+  .featured-tags,
+  .card-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .glossary-section {
+    margin-bottom: 52px;
+    padding: 24px;
+    border: 1px solid #d8ce94;
+    border-radius: var(--radius-md);
+    background: #fffbdf;
+  }
+
+  .glossary-section .section-heading {
+    margin-bottom: 16px;
+  }
+
+  .glossary-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #695a0a;
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .glossary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .glossary-card {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) 22px;
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--ink);
+    background: var(--paper);
+    text-decoration: none;
+    transition: transform 160ms ease, border-color 160ms ease;
+  }
+
+  .glossary-card:hover {
+    transform: translateY(-2px);
+    border-color: #b4a54c;
+  }
+
+  .glossary-icon {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: var(--green-deep);
+    background: var(--green-soft);
+  }
+
+  .glossary-card[data-category="housing"] .glossary-icon {
+    color: var(--coral);
+    background: var(--coral-soft);
+  }
+
+  .glossary-copy {
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+  }
+
+  .glossary-copy strong,
+  .glossary-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .glossary-copy strong {
+    font-size: 0.96rem;
+  }
+
+  .glossary-copy small {
+    color: var(--muted);
+    font-size: 0.75rem;
   }
 
   .featured-copy h3 {
@@ -520,6 +644,18 @@ function formatDate(value: Date) {
   }
 
   @media (max-width: 620px) {
+    .glossary-section {
+      padding: 18px;
+    }
+
+    .glossary-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .glossary-note {
+      display: none;
+    }
+
     .hero,
     .hero-content {
       min-height: 430px;
