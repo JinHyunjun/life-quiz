@@ -26,6 +26,23 @@ test("article carousel and source area are usable", async ({ page }) => {
   }
 });
 
+test("archive separates older content by date and filters", async ({ page }) => {
+  await page.goto("/archive");
+
+  await expect(page.getByRole("heading", { level: 1, name: "지난 상식 보관함" })).toBeVisible();
+  await expect(page.locator(".archive-card").first()).toBeVisible();
+  await expect(page.getByText("보관된 상식")).toBeVisible();
+
+  const datedTab = page.locator(".date-tab").nth(1);
+  await expect(datedTab).toBeVisible();
+  await datedTab.click();
+  await expect(page).toHaveURL(/date=\d{4}-\d{2}-\d{2}/);
+  await expect(page.locator(".archive-card").first()).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test("review flow loads a due card and records an answer", async ({ page }) => {
   await page.goto("/review");
 

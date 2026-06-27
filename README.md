@@ -4,6 +4,7 @@
 
 ## 현재 기능
 
+- KST 00시 기준 오늘 피드와 날짜·분야·출처·페이지별 지난 상식 보관함
 - 분야별 상식 피드와 출처가 연결된 상세 글
 - Gemini가 생성한 3~5장의 카드뉴스 요약
 - `ts-fsrs` 기반 오늘의 복습 큐와 다음 복습일 계산
@@ -15,11 +16,11 @@
 
 ```text
 Astro 7 + Cloudflare Workers Static Assets
-├─ /, /articles/:id, /review, /chat
+├─ /, /archive, /articles/:id, /review, /chat
 ├─ Astro API: /api/reviews/*, /api/chat
 ├─ D1: 콘텐츠, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
-   ├─ Hono 수집 API와 Cron
+   ├─ Hono 수집 API와 KST 00/06/12/18시 Cron
    └─ Gemini 생성 및 근거형 챗 응답
 ```
 
@@ -73,7 +74,7 @@ npm run build
 npm run deploy:app
 ```
 
-Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 매일 `0 21 * * *` UTC에 실행됩니다.
+Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이므로 설정에는 `0 15`, `0 21`, `0 3`, `0 9`가 등록됩니다.
 
 ## 남은 큰 작업
 

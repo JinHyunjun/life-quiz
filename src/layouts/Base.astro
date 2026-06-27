@@ -1,5 +1,5 @@
 ---
-import { BookOpenCheck, House, MessageCircle, RotateCcw } from "lucide-astro";
+import { Archive, BookOpenCheck, House, MessageCircle, RotateCcw } from "lucide-astro";
 import "../styles/global.css";
 
 interface Props {
@@ -15,6 +15,7 @@ const pathname = Astro.url.pathname;
 
 const navItems = [
   { href: "/", label: "홈", icon: House, active: pathname === "/" || pathname.startsWith("/articles/") },
+  { href: "/archive", label: "지난 상식", icon: Archive, active: pathname.startsWith("/archive") },
   { href: "/review", label: "오늘의 복습", icon: RotateCcw, active: pathname === "/review" },
   { href: "/chat", label: "라이프 메이트", icon: MessageCircle, active: pathname === "/chat" },
 ];
@@ -222,7 +223,7 @@ const navItems = [
       left: 10px;
       height: 62px;
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       padding: 5px;
       border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
       border-radius: var(--radius-lg);

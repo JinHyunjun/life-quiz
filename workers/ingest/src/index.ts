@@ -4,7 +4,7 @@ import { createDb, schema, type AppDb } from "./db";
 import { answerChat, generateArticleAndQuiz, generateTrivia, type ChatMessage } from "./gemini";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed } from "./fetchers/rss";
-import { fetchYoutubeVideoMeta } from "./fetchers/youtube";
+import { searchRecentYoutubeVideos } from "./fetchers/youtube";
 
 export interface Env {
   DB: D1Database;
@@ -55,8 +55,11 @@ app.post("/internal/chat", async (c) => {
   });
 });
 
-// Manual trigger for local dev: `wrangler dev` then hit this route instead of waiting for cron.
-app.post("/trigger", async (c) => {
+// Service-binding-only trigger used by local maintenance tooling and future admin workflows.
+app.post("/internal/trigger", async (c) => {
+  if (c.req.header("x-life-quiz-service") !== "ingest") {
+    return c.json({ error: "Not found" }, 404);
+  }
   const result = await runIngestion(c.env);
   return c.json(result);
 });
@@ -134,14 +137,19 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     });
   }
 
-  const youtube = await fetchYoutubeVideoMeta(["dQw4w9WgXcQ"], env.YOUTUBE_API_KEY).catch(() => []);
+  const youtubeQuery = youtubeQueryForCurrentKstSlot();
+  const youtube = await searchRecentYoutubeVideos({
+    query: youtubeQuery,
+    apiKey: env.YOUTUBE_API_KEY,
+    maxResults: 2,
+  }).catch(() => []);
   for (const video of youtube) {
     items.push({
       kind: "sourced",
       url: video.watchUrl,
       originType: "youtube",
       citationLabel: `유튜브 - ${video.channelTitle}`,
-      sourceText: `${video.title}\n\n${video.description}`,
+      sourceText: `${video.title}\n\n${video.description}\n\n게시일: ${video.publishedAt}\n검색 주제: ${youtubeQuery}`,
     });
   }
 
@@ -197,6 +205,17 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   }
 
   return items;
+}
+
+function youtubeQueryForCurrentKstSlot(now = new Date()) {
+  const queries = [
+    "사회초년생 금융 상식",
+    "서울 자취 생활 팁",
+    "청년 주거 정책",
+    "직장생활 매너 대화법",
+  ];
+  const kstHour = new Date(now.getTime() + 9 * 60 * 60 * 1_000).getUTCHours();
+  return queries[Math.floor(kstHour / 6) % queries.length];
 }
 
 function summarizeAptRows(kind: "rent" | "sale", rows: AptTransactionRow[]) {

@@ -22,23 +22,30 @@ export interface ContentCard {
   body: string;
 }
 
-export const contentItems = sqliteTable("content_items", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  sourceId: integer("source_id").references(() => sources.id),
-  title: text("title").notNull(),
-  bodyMd: text("body_md").notNull(),
-  // Card-news style slides (3-5 short heading+body pairs) for skimmable rendering; null for
-  // content ingested before this column existed.
-  cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
-  category: text("category", {
-    enum: ["finance", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
-  }).notNull(),
-  // Nullable: ai_trivia content has no real external article to cite. The frontend shows an
-  // "AI가 정리한 상식" badge instead of a citation link when this is null.
-  citationUrl: text("citation_url"),
-  citationLabel: text("citation_label").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+export const contentItems = sqliteTable(
+  "content_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sourceId: integer("source_id").references(() => sources.id),
+    title: text("title").notNull(),
+    bodyMd: text("body_md").notNull(),
+    // Card-news style slides (3-5 short heading+body pairs) for skimmable rendering; null for
+    // content ingested before this column existed.
+    cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
+    category: text("category", {
+      enum: ["finance", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
+    }).notNull(),
+    // Nullable: ai_trivia content has no real external article to cite. The frontend shows an
+    // "AI가 정리한 상식" badge instead of a citation link when this is null.
+    citationUrl: text("citation_url"),
+    citationLabel: text("citation_label").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("content_items_created_at_idx").on(table.createdAt),
+    index("content_items_category_created_idx").on(table.category, table.createdAt),
+  ],
+);
 
 export const quizItems = sqliteTable("quiz_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),
