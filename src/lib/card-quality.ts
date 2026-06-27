@@ -40,6 +40,20 @@ export function assertDistinctCards<T extends CardText>(cards: readonly T[], exp
   return sanitized;
 }
 
+export function assertDeepReadCoversCards(bodyMd: string, cards: readonly CardText[]) {
+  const compactBody = compact(bodyMd);
+  const missing = cards.filter((card) => !compactBody.includes(compact(card.body)));
+  if (missing.length > 0) {
+    throw new Error(`Deep Read quality check failed: ${missing.length} card summaries are missing`);
+  }
+
+  const quickLength = cards.reduce((total, card) => total + compact(card.body).length, 0);
+  const minimumDeepLength = quickLength + cards.length * 40;
+  if (compactBody.length < minimumDeepLength) {
+    throw new Error(`Deep Read quality check failed: expected at least ${minimumDeepLength} characters`);
+  }
+}
+
 function cardsOverlap(left: CardText, right: CardText) {
   const leftHeading = normalize(left.heading);
   const rightHeading = normalize(right.heading);
@@ -83,4 +97,8 @@ function tokens(value: string) {
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^0-9a-z가-힣]+/g, "");
+}
+
+function compact(value: string) {
+  return value.replace(/\s+/g, "").trim();
 }

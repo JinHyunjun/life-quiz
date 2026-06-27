@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertDistinctCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
+import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
@@ -33,6 +33,21 @@ test("duplicate cards are removed while distinct four-card stories pass", () => 
 
   assert.equal(sanitizeContentCards(repeated).length, 3);
   assert.equal(assertDistinctCards(distinct).length, 4);
+});
+
+test("Deep Read contains every Quick Read summary and adds detail", () => {
+  const cards = [
+    { heading: "정의", body: "적금은 매달 일정한 금액을 나누어 저축하는 상품입니다." },
+    { heading: "구조", body: "은행은 약정 기간이 끝나면 원금과 이자를 지급합니다." },
+    { heading: "예시", body: "매달 50만 원씩 1년을 넣으면 원금은 600만 원입니다." },
+    { heading: "확인", body: "가입 전 기본금리와 중도해지금리를 함께 확인해야 합니다." },
+  ];
+  const body = cards
+    .map((card, index) => `${card.body} ${"상세한 원리와 실제 적용 시 주의할 점을 설명합니다. ".repeat(index + 2)}`)
+    .join("\n\n");
+
+  assert.doesNotThrow(() => assertDeepReadCoversCards(body, cards));
+  assert.throws(() => assertDeepReadCoversCards("적금은 저축 상품입니다.", cards));
 });
 
 test("starter glossary begins with the most basic finance and housing terms", () => {
