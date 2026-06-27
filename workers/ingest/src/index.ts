@@ -27,8 +27,17 @@ type TriviaCategory = "history" | "humor" | "social_skills" | "daily_tips";
 
 type PendingItem =
   | { kind: "sourced"; url: string; originType: "gov" | "news" | "youtube"; citationLabel: string; sourceText: string }
-  | { kind: "glossary"; url: string; category: GlossaryCategory; term: string; citationLabel: string }
+  | { kind: "glossary"; url: string; category: GlossaryCategory; term: string; citationLabel: string; citationUrl: string | null }
   | { kind: "trivia"; category: TriviaCategory; citationLabel: string };
+
+const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citationUrl: string | null }> = {
+  finance: { citationLabel: "AI가 정리한 금융 기초 용어", citationUrl: null },
+  investment: {
+    citationLabel: "전국투자자교육협의회 참고 · AI 재구성",
+    citationUrl: "https://www.kcie.or.kr/yeouitv/howtoList",
+  },
+  housing: { citationLabel: "AI가 정리한 부동산 기초 용어", citationUrl: null },
+};
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -197,12 +206,14 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   }
 
   for (const topic of glossaryTopicsForKstDay(now)) {
+    const source = GLOSSARY_SOURCES[topic.category];
     items.push({
       kind: "glossary",
       url: topic.url,
       category: topic.category,
       term: topic.term,
-      citationLabel: `AI가 정리한 ${topic.category === "finance" ? "금융" : "부동산"} 기초 용어`,
+      citationLabel: source.citationLabel,
+      citationUrl: source.citationUrl,
     });
   }
 
@@ -223,7 +234,7 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
 
 function youtubeQueryForCurrentKstSlot(now = new Date()) {
   const queries = [
-    "사회초년생 금융 상식",
+    "사회초년생 금융 투자 기초 상식",
     "서울 자취 생활 팁",
     "청년 주거 정책",
     "직장생활 매너 대화법",
@@ -316,7 +327,7 @@ async function ingestGlossaryItem(db: AppDb, env: Env, item: Extract<PendingItem
     cards: generated.cards,
     contentFormat: "visual_guide",
     category: item.category,
-    citationUrl: null,
+    citationUrl: item.citationUrl,
     citationLabel: item.citationLabel,
     question: generated.question,
     choices: generated.choices,

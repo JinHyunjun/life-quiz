@@ -1,5 +1,6 @@
 export const CATEGORY_LABELS = {
   finance: "금융",
+  investment: "주식·투자",
   housing: "부동산",
   seoul_life: "서울살이",
   daily_tips: "생활상식",

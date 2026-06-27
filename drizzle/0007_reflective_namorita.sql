@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `sources_url_unique` ON `sources` (`url`);

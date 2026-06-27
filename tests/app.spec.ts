@@ -4,6 +4,7 @@ test("home feed renders without horizontal overflow", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
+  await expect(page.locator(".category-tab").filter({ hasText: "주식·투자" })).toBeVisible();
   await expect(page.locator(".featured-story")).toBeVisible();
   await expect(page.locator(".content-card").first()).toBeVisible();
 

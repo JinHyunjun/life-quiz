@@ -16,7 +16,7 @@ const [items, stats, archiveDays, visualGuides] = await Promise.all([
   listTodayContentItems(db, activeCategory),
   getContentStats(db),
   listArchiveDays(db, new Date(), 3),
-  listRecentVisualGuides(db, activeCategory, 2),
+  listRecentVisualGuides(db, activeCategory, 3),
 ]);
 const featured = items[0];
 const feedItems = items.slice(1);
@@ -80,7 +80,7 @@ function formatDate(value: Date) {
         <div class="section-heading">
           <div>
             <p class="eyebrow">STARTER GLOSSARY</p>
-            <h2 id="glossary-title">처음 배우는 금융·부동산 용어</h2>
+            <h2 id="glossary-title">처음 배우는 금융·투자·부동산 용어</h2>
           </div>
           <span class="glossary-note"><PanelsTopLeft size={16} /> 4컷으로 쉽게</span>
         </div>
@@ -307,6 +307,7 @@ function formatDate(value: Date) {
   }
 
   .tab-swatch[data-category="housing"] { background: var(--coral); }
+  .tab-swatch[data-category="investment"] { background: var(--berry); }
   .tab-swatch[data-category="seoul_life"] { background: var(--blue); }
   .tab-swatch[data-category="daily_tips"] { background: var(--yellow); }
   .tab-swatch[data-category="history"] { background: #7b5ca8; }
@@ -372,7 +373,7 @@ function formatDate(value: Date) {
 
   .glossary-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
   }
 
@@ -409,6 +410,11 @@ function formatDate(value: Date) {
   .glossary-card[data-category="housing"] .glossary-icon {
     color: var(--coral);
     background: var(--coral-soft);
+  }
+
+  .glossary-card[data-category="investment"] .glossary-icon {
+    color: var(--berry);
+    background: var(--berry-soft);
   }
 
   .glossary-copy {

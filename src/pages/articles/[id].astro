@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, RotateCcw } from "lucide-astro";
+import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, RotateCcw, ShieldAlert } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
@@ -39,6 +39,9 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
         <span aria-hidden="true">·</span>
         <span>{item.citationLabel}</span>
       </div>
+      {item.category === "investment" && (
+        <p class="investment-caution"><ShieldAlert size={16} /> 학습을 위한 일반 정보이며 특정 종목이나 상품의 투자 권유가 아닙니다.</p>
+      )}
     </header>
 
     {isVisualGuide && item.cards && item.cards.length > 0 && (
@@ -165,6 +168,7 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
   }
 
   .article-shell[data-category="housing"] { --article-color: var(--coral); --article-soft: var(--coral-soft); }
+  .article-shell[data-category="investment"] { --article-color: var(--berry); --article-soft: var(--berry-soft); }
   .article-shell[data-category="seoul_life"] { --article-color: var(--blue); --article-soft: var(--blue-soft); }
   .article-shell[data-category="daily_tips"] { --article-color: #b27a08; --article-soft: var(--yellow-soft); }
   .article-shell[data-category="history"] { --article-color: #76529e; --article-soft: #efe8f7; }
@@ -200,6 +204,22 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
     gap: 7px;
     color: var(--muted);
     font-size: 0.82rem;
+  }
+
+  .investment-caution {
+    max-width: 620px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin: 18px auto 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--berry) 28%, var(--line));
+    border-radius: var(--radius-md);
+    color: #71304d;
+    background: var(--berry-soft);
+    font-size: 0.76rem;
+    font-weight: 700;
   }
 
   .card-news-section {

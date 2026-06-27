@@ -1,4 +1,4 @@
-import { index, sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { index, uniqueIndex, sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
 // Placeholder shape; Phase 5 regenerates this via `better-auth` CLI to match its session/account tables.
 export const users = sqliteTable("users", {
@@ -8,14 +8,18 @@ export const users = sqliteTable("users", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
-export const sources = sqliteTable("sources", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  // "ai_trivia": no external raw source - Gemini generates from its own knowledge (history/humor/
-  // social_skills). url is a synthetic internal:// id for these, used only for bookkeeping.
-  originType: text("origin_type", { enum: ["gov", "news", "youtube", "ai_trivia"] }).notNull(),
-  url: text("url").notNull(),
-  lastFetchedAt: integer("last_fetched_at", { mode: "timestamp" }),
-});
+export const sources = sqliteTable(
+  "sources",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    // "ai_trivia": no external raw source - Gemini generates from its own knowledge (history/humor/
+    // social_skills). url is a synthetic internal:// id for these, used only for bookkeeping.
+    originType: text("origin_type", { enum: ["gov", "news", "youtube", "ai_trivia"] }).notNull(),
+    url: text("url").notNull(),
+    lastFetchedAt: integer("last_fetched_at", { mode: "timestamp" }),
+  },
+  (table) => [uniqueIndex("sources_url_unique").on(table.url)],
+);
 
 export interface ContentCard {
   heading: string;
@@ -49,7 +53,7 @@ export const contentItems = sqliteTable(
     cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
     contentFormat: text("content_format", { enum: ["article", "visual_guide"] }).notNull().default("article"),
     category: text("category", {
-      enum: ["finance", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
+      enum: ["finance", "investment", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
     }).notNull(),
     // Nullable: ai_trivia content has no real external article to cite. The frontend shows an
     // "AI가 정리한 상식" badge instead of a citation link when this is null.

@@ -1,4 +1,4 @@
-export type GlossaryCategory = "finance" | "housing";
+export type GlossaryCategory = "finance" | "investment" | "housing";
 
 const GLOSSARY_CURRICULUM: Record<GlossaryCategory, readonly string[]> = {
   finance: [
@@ -21,11 +21,11 @@ const GLOSSARY_CURRICULUM: Record<GlossaryCategory, readonly string[]> = {
     "예금자보호",
     "CMA",
     "파킹통장",
-    "ETF",
-    "주식과 채권",
-    "분산투자",
-    "시가총액",
-    "배당",
+    "가계부와 예산",
+    "고정비와 변동비",
+    "대출 원리금과 총상환액",
+    "우대금리와 기본금리",
+    "현금영수증",
     "인플레이션",
     "세전과 세후",
     "소득공제와 세액공제",
@@ -41,7 +41,49 @@ const GLOSSARY_CURRICULUM: Record<GlossaryCategory, readonly string[]> = {
     "대환대출",
     "마이너스통장",
     "총부채와 순자산",
-    "재무제표 기초",
+    "국민연금과 건강보험료",
+  ],
+  investment: [
+    "주식과 주주",
+    "코스피와 코스닥",
+    "보통주와 우선주",
+    "주가와 기업가치",
+    "시가총액",
+    "시장가와 지정가",
+    "매수와 매도",
+    "호가와 스프레드",
+    "체결과 미체결",
+    "거래량",
+    "변동성",
+    "수익률과 손익률",
+    "평가손익과 실현손익",
+    "배당과 배당수익률",
+    "주당순이익 EPS",
+    "주가수익비율 PER",
+    "주가순자산비율 PBR",
+    "자기자본이익률 ROE",
+    "매출액·영업이익·순이익",
+    "재무제표",
+    "ETF",
+    "인덱스펀드",
+    "액티브와 패시브 투자",
+    "분산투자",
+    "자산배분",
+    "복리",
+    "평균매입단가",
+    "적립식 투자",
+    "리밸런싱",
+    "채권 가격과 금리",
+    "환율 위험",
+    "레버리지와 인버스",
+    "공매도",
+    "예수금과 증거금",
+    "신용거래와 미수거래",
+    "손절매와 익절",
+    "투자위험등급",
+    "상한가와 하한가",
+    "액면분할과 무상증자",
+    "기업공시와 DART",
   ],
   housing: [
     "전세와 월세",
@@ -95,7 +137,7 @@ export function glossaryTopicsForKstDay(now = new Date()) {
   const dayNumber = Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS);
   const curriculumDay = Math.max(0, dayNumber - CURRICULUM_START_DAY);
 
-  return (["finance", "housing"] as const).map((category) => {
+  return (["finance", "investment", "housing"] as const).map((category) => {
     const curriculum = GLOSSARY_CURRICULUM[category];
     const term = curriculum[curriculumDay % curriculum.length];
     return {

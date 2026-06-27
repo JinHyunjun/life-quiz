@@ -14,7 +14,7 @@ const requestedContentId = Number(Astro.url.searchParams.get("content"));
 const selectedTopic = Number.isInteger(requestedContentId) ? topics.find((topic) => topic.id === requestedContentId) : undefined;
 const initialSuggestions = selectedTopic
   ? ["이 글의 핵심을 세 문장으로 정리해줘", "실생활에서는 어떻게 활용할 수 있어?"]
-  : ["오늘 알아두면 좋은 생활상식은 뭐야?", "사회초년생이 자주 놓치는 돈 상식을 알려줘"];
+  : ["오늘 알아두면 좋은 생활상식은 뭐야?", "주식 투자를 시작하기 전에 알아야 할 기초는 뭐야?"];
 ---
 
 <Base title="라이프 메이트" description="라이프퀴즈 콘텐츠를 근거로 생활 상식에 답하는 AI 큐레이터입니다.">
@@ -81,7 +81,7 @@ const initialSuggestions = selectedTopic
           <div class="bot-avatar" aria-hidden="true"><Bot size={20} /></div>
           <div>
             <h2 id="chat-title">{selectedTopic ? "선택한 글로 대화 중" : "최근 상식으로 대화 중"}</h2>
-            <p>{selectedTopic?.title ?? "금융, 집, 서울살이, 생활상식"}</p>
+            <p>{selectedTopic?.title ?? "금융, 투자, 집, 서울살이, 생활상식"}</p>
           </div>
           <span class="online-status"><span></span> 준비됨</span>
         </header>
@@ -110,7 +110,7 @@ const initialSuggestions = selectedTopic
             <Send size={19} />
           </button>
         </form>
-        <p class="chat-caution">AI 답변은 선택한 콘텐츠를 재구성한 참고 정보입니다. 중요한 결정 전에는 연결된 출처를 확인하세요.</p>
+        <p class="chat-caution">AI 답변은 참고 정보이며 투자 권유가 아닙니다. 개인정보를 입력하지 말고, 중요한 결정 전에는 연결된 출처를 확인하세요.</p>
       </section>
     </div>
   </div>
@@ -234,6 +234,7 @@ const initialSuggestions = selectedTopic
   }
 
   .topic-swatch[data-category="housing"] { background: var(--coral); }
+  .topic-swatch[data-category="investment"] { background: var(--berry); }
   .topic-swatch[data-category="seoul_life"] { background: var(--blue); }
   .topic-swatch[data-category="daily_tips"] { background: var(--yellow); }
   .topic-swatch[data-category="history"] { background: #7b5ca8; }

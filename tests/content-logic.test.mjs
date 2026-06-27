@@ -50,12 +50,13 @@ test("Deep Read contains every Quick Read summary and adds detail", () => {
   assert.throws(() => assertDeepReadCoversCards("적금은 저축 상품입니다.", cards));
 });
 
-test("starter glossary begins with the most basic finance and housing terms", () => {
+test("starter glossary begins with the most basic finance, investment, and housing terms", () => {
   const topics = glossaryTopicsForKstDay(new Date("2026-06-26T15:00:00Z"));
   assert.deepEqual(
     topics.map(({ category, term }) => ({ category, term })),
     [
       { category: "finance", term: "예금과 적금" },
+      { category: "investment", term: "주식과 주주" },
       { category: "housing", term: "전세와 월세" },
     ],
   );
