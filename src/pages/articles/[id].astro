@@ -40,9 +40,13 @@ const paragraphs = item.bodyMd.split("\n\n").filter(Boolean);
     {paragraphs.map((p) => <p>{p}</p>)}
   </article>
 
-  <a class="citation-link" href={item.citationUrl} target="_blank" rel="noopener noreferrer">
-    출처: {item.citationLabel}
-  </a>
+  {item.citationUrl ? (
+    <a class="citation-link" href={item.citationUrl} target="_blank" rel="noopener noreferrer">
+      출처: {item.citationLabel}
+    </a>
+  ) : (
+    <span class="citation-link ai-label">✨ {item.citationLabel}</span>
+  )}
 
   {quizzes.length > 0 && (
     <a class="quiz-cta" href="/review">이 글로 만든 퀴즈, 오늘의 복습에서 풀어보기 →</a>

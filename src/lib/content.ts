@@ -1,8 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { contentItems, quizItems } from "../db/schema";
-
-type Category = "finance" | "housing" | "seoul_life" | "daily_tips";
+import type { Category } from "../lib/categories";
 
 export async function listContentItems(db: AppDb, category?: Category) {
   const query = db

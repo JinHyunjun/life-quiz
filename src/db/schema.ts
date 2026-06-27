@@ -10,7 +10,9 @@ export const users = sqliteTable("users", {
 
 export const sources = sqliteTable("sources", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  originType: text("origin_type", { enum: ["gov", "news", "youtube"] }).notNull(),
+  // "ai_trivia": no external raw source - Gemini generates from its own knowledge (history/humor/
+  // social_skills). url is a synthetic internal:// id for these, used only for bookkeeping.
+  originType: text("origin_type", { enum: ["gov", "news", "youtube", "ai_trivia"] }).notNull(),
   url: text("url").notNull(),
   lastFetchedAt: integer("last_fetched_at", { mode: "timestamp" }),
 });
@@ -29,9 +31,11 @@ export const contentItems = sqliteTable("content_items", {
   // content ingested before this column existed.
   cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
   category: text("category", {
-    enum: ["finance", "housing", "seoul_life", "daily_tips"],
+    enum: ["finance", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
   }).notNull(),
-  citationUrl: text("citation_url").notNull(),
+  // Nullable: ai_trivia content has no real external article to cite. The frontend shows an
+  // "AI가 정리한 상식" badge instead of a citation link when this is null.
+  citationUrl: text("citation_url"),
   citationLabel: text("citation_label").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });

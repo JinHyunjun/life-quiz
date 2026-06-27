@@ -22,8 +22,8 @@ export interface DueReviewCard {
   quizItemId: number;
   contentItemId: number;
   title: string;
-  category: "finance" | "housing" | "seoul_life" | "daily_tips";
-  citationUrl: string;
+  category: "finance" | "housing" | "seoul_life" | "daily_tips" | "history" | "humor" | "social_skills";
+  citationUrl: string | null;
   citationLabel: string;
   question: string;
   choices: string[];

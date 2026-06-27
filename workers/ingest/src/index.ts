@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { createDb, schema, type AppDb } from "./db";
-import { generateArticleAndQuiz } from "./gemini";
+import { generateArticleAndQuiz, generateTrivia } from "./gemini";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed } from "./fetchers/rss";
 import { fetchYoutubeVideoMeta } from "./fetchers/youtube";
@@ -20,12 +20,11 @@ export interface Env {
   YOUTUBE_API_KEY: string;
 }
 
-interface PendingItem {
-  url: string;
-  originType: "gov" | "news" | "youtube";
-  citationLabel: string;
-  sourceText: string;
-}
+type TriviaCategory = "history" | "humor" | "social_skills" | "daily_tips";
+
+type PendingItem =
+  | { kind: "sourced"; url: string; originType: "gov" | "news" | "youtube"; citationLabel: string; sourceText: string }
+  | { kind: "trivia"; category: TriviaCategory; citationLabel: string };
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -43,6 +42,7 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   const rss = await fetchRssFeed("https://www.hankyung.com/feed/economy").catch(() => []);
   for (const item of rss.slice(0, 3)) {
     items.push({
+      kind: "sourced",
       url: item.link,
       originType: "news",
       citationLabel: "한국경제",
@@ -53,6 +53,7 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   const youtube = await fetchYoutubeVideoMeta(["dQw4w9WgXcQ"], env.YOUTUBE_API_KEY).catch(() => []);
   for (const video of youtube) {
     items.push({
+      kind: "sourced",
       url: video.watchUrl,
       originType: "youtube",
       citationLabel: `유튜브 - ${video.channelTitle}`,
@@ -72,6 +73,7 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
       const { url, rows } = await fetchAptTransactions(job.kind, job.key, lawdCd, dealYmd);
       if (rows.length === 0) continue;
       items.push({
+        kind: "sourced",
         url,
         originType: "gov",
         citationLabel: job.label,
@@ -87,6 +89,7 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, sggName);
     if (rows.length > 0) {
       items.push({
+        kind: "sourced",
         url,
         originType: "gov",
         citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
@@ -95,6 +98,18 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     }
   } catch {
     // Skip this source for this run; next scheduled run will retry.
+  }
+
+  // No external data source for these - Gemini generates from its own knowledge (see gemini.ts
+  // TRIVIA_PROMPTS). One per category per run keeps daily Gemini calls within the free tier.
+  const triviaCategories: { category: TriviaCategory; label: string }[] = [
+    { category: "history", label: "AI가 정리한 역사 상식" },
+    { category: "humor", label: "AI가 정리한 유머 상식" },
+    { category: "social_skills", label: "AI가 정리한 사회성·매너 상식" },
+    { category: "daily_tips", label: "AI가 정리한 생활 꿀팁" },
+  ];
+  for (const job of triviaCategories) {
+    items.push({ kind: "trivia", category: job.category, citationLabel: job.label });
   }
 
   return items;
@@ -120,7 +135,17 @@ async function isAlreadyIngested(db: AppDb, url: string) {
   return Boolean(existing);
 }
 
-async function ingestItem(db: AppDb, env: Env, item: PendingItem) {
+async function recentTitlesForCategory(db: AppDb, category: TriviaCategory, limit = 15) {
+  const rows = await db
+    .select({ title: schema.contentItems.title })
+    .from(schema.contentItems)
+    .where(eq(schema.contentItems.category, category))
+    .orderBy(desc(schema.contentItems.createdAt))
+    .limit(limit);
+  return rows.map((r) => r.title);
+}
+
+async function ingestSourcedItem(db: AppDb, env: Env, item: Extract<PendingItem, { kind: "sourced" }>) {
   const generated = await generateArticleAndQuiz({
     sourceText: item.sourceText,
     citationLabel: item.citationLabel,
@@ -133,28 +158,85 @@ async function ingestItem(db: AppDb, env: Env, item: PendingItem) {
     .values({ originType: item.originType, url: item.url, lastFetchedAt: new Date() })
     .returning();
 
+  return insertContentAndQuiz(db, {
+    sourceId: source.id,
+    title: generated.title,
+    bodyMd: generated.bodyMd,
+    cards: generated.cards,
+    category: generated.category,
+    citationUrl: item.url,
+    citationLabel: item.citationLabel,
+    question: generated.question,
+    choices: generated.choices,
+    answer: generated.answer,
+  });
+}
+
+async function ingestTriviaItem(db: AppDb, env: Env, item: Extract<PendingItem, { kind: "trivia" }>) {
+  const avoidTitles = await recentTitlesForCategory(db, item.category);
+  const generated = await generateTrivia({
+    category: item.category,
+    avoidTitles,
+    apiKey: env.GEMINI_API_KEY,
+    model: env.GEMINI_MODEL,
+  });
+
+  const [source] = await db
+    .insert(schema.sources)
+    .values({ originType: "ai_trivia", url: `internal://trivia/${item.category}/${crypto.randomUUID()}`, lastFetchedAt: new Date() })
+    .returning();
+
+  return insertContentAndQuiz(db, {
+    sourceId: source.id,
+    title: generated.title,
+    bodyMd: generated.bodyMd,
+    cards: generated.cards,
+    category: item.category,
+    citationUrl: null,
+    citationLabel: item.citationLabel,
+    question: generated.question,
+    choices: generated.choices,
+    answer: generated.answer,
+  });
+}
+
+async function insertContentAndQuiz(
+  db: AppDb,
+  params: {
+    sourceId: number;
+    title: string;
+    bodyMd: string;
+    cards: { heading: string; body: string }[];
+    category: string;
+    citationUrl: string | null;
+    citationLabel: string;
+    question: string;
+    choices: string[];
+    answer: string;
+  },
+) {
   const [contentItem] = await db
     .insert(schema.contentItems)
     .values({
-      sourceId: source.id,
-      title: generated.title,
-      bodyMd: generated.bodyMd,
-      cards: generated.cards,
-      category: generated.category,
-      citationUrl: item.url,
-      citationLabel: item.citationLabel,
+      sourceId: params.sourceId,
+      title: params.title,
+      bodyMd: params.bodyMd,
+      cards: params.cards,
+      category: params.category as (typeof schema.contentItems.$inferInsert)["category"],
+      citationUrl: params.citationUrl,
+      citationLabel: params.citationLabel,
       createdAt: new Date(),
     })
     .returning();
 
   await db.insert(schema.quizItems).values({
     contentItemId: contentItem.id,
-    question: generated.question,
-    choices: generated.choices,
-    answer: generated.answer,
+    question: params.question,
+    choices: params.choices,
+    answer: params.answer,
   });
 
-  return { contentItemId: contentItem.id, title: generated.title };
+  return { contentItemId: contentItem.id, title: params.title };
 }
 
 async function runIngestion(env: Env) {
@@ -162,18 +244,20 @@ async function runIngestion(env: Env) {
   const pending = await collectPendingItems(env);
   const created: { contentItemId: number; title: string }[] = [];
   const skipped: string[] = [];
-  const failed: { url: string; error: string }[] = [];
+  const failed: { item: string; error: string }[] = [];
 
   for (const item of pending) {
-    if (await isAlreadyIngested(db, item.url)) {
-      skipped.push(item.url);
+    const label = item.kind === "sourced" ? item.url : `trivia:${item.category}`;
+
+    if (item.kind === "sourced" && (await isAlreadyIngested(db, item.url))) {
+      skipped.push(label);
       continue;
     }
 
     try {
-      created.push(await ingestItem(db, env, item));
+      created.push(item.kind === "sourced" ? await ingestSourcedItem(db, env, item) : await ingestTriviaItem(db, env, item));
     } catch (err) {
-      failed.push({ url: item.url, error: String(err) });
+      failed.push({ item: label, error: String(err) });
     }
   }
 
