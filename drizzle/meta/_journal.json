@@ -57,6 +57,13 @@
       "when": 1782550583733,
       "tag": "0007_reflective_namorita",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1782555127613,
+      "tag": "0008_solid_dust",
+      "breakpoints": true
     }
   ]
 }

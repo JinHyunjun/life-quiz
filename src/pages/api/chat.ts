@@ -27,6 +27,10 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     if (!serviceResponse.ok) {
+      if (serviceResponse.status === 429) {
+        const retryAfter = Math.max(1, Number(serviceResponse.headers.get("retry-after") ?? 10));
+        throw new ChatRequestError("질문이 잠시 몰렸어요. 잠시 후 다시 시도해주세요.", 429, retryAfter);
+      }
       const detail = (await serviceResponse.text()).slice(0, 500);
       console.error(JSON.stringify({ message: "chat service failed", status: serviceResponse.status, detail }));
       throw new ChatRequestError("라이프 메이트가 잠시 쉬고 있어요. 잠시 후 다시 질문해주세요.", 502);

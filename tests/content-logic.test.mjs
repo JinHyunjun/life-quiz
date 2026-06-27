@@ -4,6 +4,11 @@ import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } 
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
+import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
+import {
+  ingestionPacingDelayMs,
+  scheduledAiCurriculumForKstRun,
+} from "../workers/ingest/src/schedule.ts";
 
 test("all 25 Seoul districts are selected across 25 consecutive runs", () => {
   const firstRun = new Date("2026-06-26T15:00:00Z");
@@ -65,4 +70,27 @@ test("starter glossary begins with the most basic finance, investment, and housi
 test("same-name districts from outside Seoul are rejected", () => {
   assert.equal(rowMatchesRegion({ CTPV_NM: "서울특별시", SGG_NM: "중구" }, "서울", "중구"), true);
   assert.equal(rowMatchesRegion({ CTPV_NM: "대구광역시", SGG_NM: "중구" }, "서울", "중구"), false);
+});
+
+test("daily AI curriculum is distributed across four six-hour slots", () => {
+  const firstRun = new Date("2026-06-26T15:00:00Z");
+  const schedules = Array.from({ length: 4 }, (_, index) =>
+    scheduledAiCurriculumForKstRun(new Date(firstRun.getTime() + index * 6 * 60 * 60 * 1_000)),
+  );
+
+  assert.deepEqual(
+    schedules.map((schedule) => schedule.glossary?.category ?? null),
+    ["finance", "investment", "housing", null],
+  );
+  assert.deepEqual(
+    schedules.map((schedule) => schedule.trivia.category),
+    ["history", "humor", "social_skills", "daily_tips"],
+  );
+});
+
+test("Gemini safeguards leave quota headroom and pace ingestion", () => {
+  assert.equal(normalizeGeminiRpmBudget(Number.NaN), 12);
+  assert.equal(normalizeGeminiRpmBudget(15), 14);
+  assert.equal(ingestionPacingDelayMs(1_000, 8_000, 4_000), 5_000);
+  assert.equal(ingestionPacingDelayMs(1_000, 8_000, 10_000), 0);
 });

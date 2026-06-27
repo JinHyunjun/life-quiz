@@ -115,3 +115,13 @@ export const chatUsage = sqliteTable(
   },
   (table) => [index("chat_usage_window_idx").on(table.windowStartedAt)],
 );
+
+export const geminiRequestLog = sqliteTable(
+  "gemini_request_log",
+  {
+    requestId: text("request_id").primaryKey(),
+    requestedAtMs: integer("requested_at_ms").notNull(),
+    purpose: text("purpose", { enum: ["ingestion", "chat"] }).notNull(),
+  },
+  (table) => [index("gemini_request_log_requested_at_idx").on(table.requestedAtMs)],
+);

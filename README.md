@@ -13,6 +13,7 @@
 - 선택한 글 또는 최근 콘텐츠 6개를 근거로 답하는 라이프 메이트
 - D1 기반 익명 챗 사용량 제한: IP와 User-Agent의 SHA-256 해시 기준 시간당 8회
 - RSS, YouTube 메타데이터, data.go.kr, AI 상식 수집 Cron
+- Gemini 호출 보호: 8초 배치 간격, 60초 슬라이딩 윈도우 12회 상한, 용어·트리비아의 4개 Cron 슬롯 분산
 
 각 AI 학습 섹션은 `summary`와 `details`로 구성됩니다. Quick Read는 `summary`만 사용하고 Deep Read는 같은 `summary`에 `details`를 이어 붙이므로, 카드에만 있고 본문에는 없는 정보가 저장되지 않습니다.
 
@@ -25,7 +26,7 @@ Astro 7 + Cloudflare Workers Static Assets
 ├─ D1: 콘텐츠, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
    ├─ Hono 수집 API와 KST 00/06/12/18시 Cron
-   └─ Gemini 생성 및 근거형 챗 응답
+   └─ Gemini 생성 및 근거형 챗 응답 (D1 공용 RPM 예산 적용)
 ```
 
 설치된 오픈소스, 서비스 구성, 무료 티어 한도와 운영 기준은 [`docs/TECH_STACK_AND_FREE_TIER.md`](docs/TECH_STACK_AND_FREE_TIER.md)에 정리되어 있습니다.

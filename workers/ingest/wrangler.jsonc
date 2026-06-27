@@ -6,7 +6,9 @@
 	"compatibility_flags": ["nodejs_compat"],
 	"workers_dev": false,
 	"vars": {
-		"GEMINI_MODEL": "gemini-3.1-flash-lite"
+		"GEMINI_MODEL": "gemini-3.1-flash-lite",
+		"GEMINI_RPM_BUDGET": "12",
+		"GEMINI_INGEST_MIN_INTERVAL_MS": "8000"
 	},
 	"d1_databases": [
 		{

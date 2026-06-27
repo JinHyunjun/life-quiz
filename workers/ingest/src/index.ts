@@ -2,17 +2,39 @@ import { Hono } from "hono";
 import { desc, eq, lt } from "drizzle-orm";
 import type { ContentCard } from "../../../src/db/schema";
 import { createDb, schema, type AppDb } from "./db";
-import { answerChat, generateArticleAndQuiz, generateGlossaryGuide, generateTrivia, type ChatMessage } from "./gemini";
+import {
+  answerChat,
+  generateArticleAndQuiz,
+  generateGlossaryGuide,
+  generateTrivia,
+  type BeforeGeminiRequest,
+  type ChatMessage,
+} from "./gemini";
 import { seoulDistrictForKstRun } from "./districts";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed } from "./fetchers/rss";
-import { glossaryTopicsForKstDay, type GlossaryCategory } from "./glossary";
+import type { GlossaryCategory } from "./glossary";
+import {
+  GeminiRateLimitError,
+  normalizeGeminiRpmBudget,
+  pruneGeminiRequestLog,
+  reserveGeminiRequest,
+  type GeminiRequestPurpose,
+} from "./rate-limit";
+import {
+  ingestionPacingDelayMs,
+  normalizeIngestionIntervalMs,
+  scheduledAiCurriculumForKstRun,
+  type ScheduledTriviaCategory,
+} from "./schedule";
 import { searchRecentYoutubeVideos } from "./fetchers/youtube";
 
 export interface Env {
   DB: D1Database;
   GEMINI_API_KEY: string;
   GEMINI_MODEL: string;
+  GEMINI_RPM_BUDGET: string;
+  GEMINI_INGEST_MIN_INTERVAL_MS: string;
   // data.go.kr actually issues one shared account-wide serviceKey reused across all approved
   // datasets (confirmed by comparing the values on each dataset's detail page). Kept as separate
   // secrets per dataset anyway in case that policy ever changes per-dataset.
@@ -23,7 +45,7 @@ export interface Env {
   YOUTUBE_API_KEY: string;
 }
 
-type TriviaCategory = "history" | "humor" | "social_skills" | "daily_tips";
+type TriviaCategory = ScheduledTriviaCategory;
 
 type PendingItem =
   | { kind: "sourced"; url: string; originType: "gov" | "news" | "youtube"; citationLabel: string; sourceText: string }
@@ -56,6 +78,7 @@ app.post("/internal/chat", async (c) => {
     contextItems,
     apiKey: c.env.GEMINI_API_KEY,
     model: c.env.GEMINI_MODEL,
+    beforeRequest: createGeminiRequestGate(c.env, "chat"),
   });
   const citedIds = new Set(generated.citedContentIds);
 
@@ -78,6 +101,14 @@ app.post("/internal/trigger", async (c) => {
 });
 
 app.onError((error, c) => {
+  if (error instanceof GeminiRateLimitError) {
+    return c.json(
+      { error: "AI 요청이 잠시 몰렸습니다. 잠시 후 다시 시도해주세요." },
+      429,
+      { "retry-after": String(error.retryAfterSeconds) },
+    );
+  }
+
   console.error(JSON.stringify({
     message: "ingest worker request failed",
     path: c.req.path,
@@ -205,7 +236,9 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     // Skip this source for this run; next scheduled run will retry.
   }
 
-  for (const topic of glossaryTopicsForKstDay(now)) {
+  const scheduledCurriculum = scheduledAiCurriculumForKstRun(now);
+  if (scheduledCurriculum.glossary) {
+    const topic = scheduledCurriculum.glossary;
     const source = GLOSSARY_SOURCES[topic.category];
     items.push({
       kind: "glossary",
@@ -217,19 +250,15 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     });
   }
 
-  // No external data source for these - Gemini generates from its own knowledge (see gemini.ts
-  // TRIVIA_PROMPTS). One per category per run keeps daily Gemini calls within the free tier.
-  const triviaCategories: { category: TriviaCategory; label: string }[] = [
-    { category: "history", label: "AI가 정리한 역사 상식" },
-    { category: "humor", label: "AI가 정리한 유머 상식" },
-    { category: "social_skills", label: "AI가 정리한 사회성·매너 상식" },
-    { category: "daily_tips", label: "AI가 정리한 생활 꿀팁" },
-  ];
-  for (const job of triviaCategories) {
-    items.push({ kind: "trivia", category: job.category, citationLabel: job.label });
-  }
+  // One category per six-hour slot avoids four back-to-back Gemini calls every run.
+  items.push({
+    kind: "trivia",
+    category: scheduledCurriculum.trivia.category,
+    citationLabel: scheduledCurriculum.trivia.label,
+  });
 
-  return items;
+  const priority: Record<PendingItem["kind"], number> = { glossary: 0, trivia: 1, sourced: 2 };
+  return items.sort((a, b) => priority[a.kind] - priority[b.kind]);
 }
 
 function youtubeQueryForCurrentKstSlot(now = new Date()) {
@@ -258,6 +287,11 @@ function previousYearMonth(now = new Date()) {
   return `${previous.getUTCFullYear()}${String(previous.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function createGeminiRequestGate(env: Env, purpose: GeminiRequestPurpose): BeforeGeminiRequest {
+  const maxRequests = normalizeGeminiRpmBudget(Number(env.GEMINI_RPM_BUDGET));
+  return () => reserveGeminiRequest(env.DB, { purpose, maxRequests }).then(() => undefined);
+}
+
 async function isAlreadyIngested(db: AppDb, url: string) {
   const [existing] = await db.select({ id: schema.sources.id }).from(schema.sources).where(eq(schema.sources.url, url)).limit(1);
   return Boolean(existing);
@@ -277,12 +311,18 @@ async function recentTitlesForCategory(
   return rows.map((r) => r.title);
 }
 
-async function ingestSourcedItem(db: AppDb, env: Env, item: Extract<PendingItem, { kind: "sourced" }>) {
+async function ingestSourcedItem(
+  db: AppDb,
+  env: Env,
+  item: Extract<PendingItem, { kind: "sourced" }>,
+  beforeRequest: BeforeGeminiRequest,
+) {
   const generated = await generateArticleAndQuiz({
     sourceText: item.sourceText,
     citationLabel: item.citationLabel,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
+    beforeRequest,
   });
 
   const [source] = await db
@@ -305,7 +345,12 @@ async function ingestSourcedItem(db: AppDb, env: Env, item: Extract<PendingItem,
   });
 }
 
-async function ingestGlossaryItem(db: AppDb, env: Env, item: Extract<PendingItem, { kind: "glossary" }>) {
+async function ingestGlossaryItem(
+  db: AppDb,
+  env: Env,
+  item: Extract<PendingItem, { kind: "glossary" }>,
+  beforeRequest: BeforeGeminiRequest,
+) {
   const avoidTitles = await recentTitlesForCategory(db, item.category);
   const generated = await generateGlossaryGuide({
     category: item.category,
@@ -313,6 +358,7 @@ async function ingestGlossaryItem(db: AppDb, env: Env, item: Extract<PendingItem
     avoidTitles,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
+    beforeRequest,
   });
 
   const [source] = await db
@@ -335,13 +381,19 @@ async function ingestGlossaryItem(db: AppDb, env: Env, item: Extract<PendingItem
   });
 }
 
-async function ingestTriviaItem(db: AppDb, env: Env, item: Extract<PendingItem, { kind: "trivia" }>) {
+async function ingestTriviaItem(
+  db: AppDb,
+  env: Env,
+  item: Extract<PendingItem, { kind: "trivia" }>,
+  beforeRequest: BeforeGeminiRequest,
+) {
   const avoidTitles = await recentTitlesForCategory(db, item.category);
   const generated = await generateTrivia({
     category: item.category,
     avoidTitles,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
+    beforeRequest,
   });
 
   const [source] = await db
@@ -408,9 +460,13 @@ async function insertContentAndQuiz(
 async function runIngestion(env: Env) {
   const db = createDb(env.DB);
   const pending = await collectPendingItems(env);
+  const beforeRequest = createGeminiRequestGate(env, "ingestion");
+  const minIntervalMs = normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS));
   const created: { contentItemId: number; title: string }[] = [];
   const skipped: string[] = [];
+  const deferred: string[] = [];
   const failed: { item: string; error: string }[] = [];
+  let lastStartedAtMs = 0;
 
   for (const item of pending) {
     const label = item.kind === "sourced" || item.kind === "glossary" ? item.url : `trivia:${item.category}`;
@@ -420,16 +476,24 @@ async function runIngestion(env: Env) {
       continue;
     }
 
+    const delayMs = ingestionPacingDelayMs(lastStartedAtMs, minIntervalMs);
+    if (delayMs > 0) await scheduler.wait(delayMs);
+    lastStartedAtMs = Date.now();
+
     try {
-      if (item.kind === "sourced") created.push(await ingestSourcedItem(db, env, item));
-      else if (item.kind === "glossary") created.push(await ingestGlossaryItem(db, env, item));
-      else created.push(await ingestTriviaItem(db, env, item));
+      if (item.kind === "sourced") created.push(await ingestSourcedItem(db, env, item, beforeRequest));
+      else if (item.kind === "glossary") created.push(await ingestGlossaryItem(db, env, item, beforeRequest));
+      else created.push(await ingestTriviaItem(db, env, item, beforeRequest));
     } catch (err) {
+      if (err instanceof GeminiRateLimitError) {
+        deferred.push(label);
+        break;
+      }
       failed.push({ item: label, error: String(err) });
     }
   }
 
-  return { created, skipped, failed };
+  return { created, skipped, deferred, failed, minIntervalMs };
 }
 
 export default {
@@ -438,7 +502,10 @@ export default {
     const result = await runIngestion(env);
     const db = createDb(env.DB);
     const expiry = new Date(Date.now() - 48 * 60 * 60 * 1_000);
-    await db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry));
+    await Promise.all([
+      db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry)),
+      pruneGeminiRequestLog(env.DB),
+    ]);
     console.log(JSON.stringify({ message: "scheduled ingestion completed", ...result }));
   },
 };

@@ -68,6 +68,8 @@ export interface GeneratedChatAnswer {
   suggestions: string[];
 }
 
+export type BeforeGeminiRequest = () => Promise<void>;
+
 const VISUAL_CUES = [
   "wallet",
   "bank",
@@ -191,8 +193,11 @@ async function callGemini<T>(params: {
   schema: object;
   maxOutputTokens?: number;
   temperature?: number;
+  beforeRequest: BeforeGeminiRequest;
 }): Promise<T> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${params.model}:generateContent?key=${params.apiKey}`;
+
+  await params.beforeRequest();
 
   const res = await fetch(url, {
     method: "POST",
@@ -243,6 +248,7 @@ export async function generateArticleAndQuiz(params: {
   citationLabel: string;
   apiKey: string;
   model: string;
+  beforeRequest: BeforeGeminiRequest;
 }): Promise<GeneratedContent> {
   const prompt = [
     "당신은 사회초년생을 위한 생활상식 큐레이션 서비스의 에디터입니다.",
@@ -263,6 +269,7 @@ export async function generateArticleAndQuiz(params: {
     prompt,
     schema: ARTICLE_RESPONSE_SCHEMA,
     temperature: 0.45,
+    beforeRequest: params.beforeRequest,
   });
   return { ...generated, ...assembleGeneratedSections(generated.sections) };
 }
@@ -279,6 +286,7 @@ export async function generateTrivia(params: {
   avoidTitles: string[];
   apiKey: string;
   model: string;
+  beforeRequest: BeforeGeminiRequest;
 }): Promise<GeneratedTrivia> {
   const prompt = [
     "당신은 사회초년생을 위한 생활상식 큐레이션 서비스의 에디터입니다.",
@@ -299,6 +307,7 @@ export async function generateTrivia(params: {
     prompt,
     schema: TRIVIA_RESPONSE_SCHEMA,
     temperature: 0.6,
+    beforeRequest: params.beforeRequest,
   });
   return { ...generated, ...assembleGeneratedSections(generated.sections) };
 }
@@ -309,6 +318,7 @@ export async function generateGlossaryGuide(params: {
   avoidTitles: string[];
   apiKey: string;
   model: string;
+  beforeRequest: BeforeGeminiRequest;
 }): Promise<GeneratedGlossary> {
   const field = {
     finance: "금융",
@@ -337,6 +347,7 @@ export async function generateGlossaryGuide(params: {
     prompt,
     schema: GLOSSARY_RESPONSE_SCHEMA,
     temperature: 0.4,
+    beforeRequest: params.beforeRequest,
   });
   const assembled = assembleGeneratedSections(generated.sections);
   return {
@@ -351,6 +362,7 @@ export async function answerChat(params: {
   contextItems: ChatContextItem[];
   apiKey: string;
   model: string;
+  beforeRequest: BeforeGeminiRequest;
 }): Promise<GeneratedChatAnswer> {
   const allowedIds = new Set(params.contextItems.map((item) => item.id));
   const context = params.contextItems.map((item) => [
@@ -383,6 +395,7 @@ export async function answerChat(params: {
     schema: CHAT_RESPONSE_SCHEMA,
     maxOutputTokens: 700,
     temperature: 0.25,
+    beforeRequest: params.beforeRequest,
   });
 
   return {
