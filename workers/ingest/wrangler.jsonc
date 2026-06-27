@@ -4,7 +4,7 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-06-26",
 	"vars": {
-		"GEMINI_MODEL": "gemini-3-flash-preview"
+		"GEMINI_MODEL": "gemini-3.1-flash-lite"
 	},
 	"d1_databases": [
 		{
