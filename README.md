@@ -14,6 +14,7 @@
 - D1 기반 익명 챗 사용량 제한: IP와 User-Agent의 SHA-256 해시 기준 시간당 8회
 - RSS, YouTube 메타데이터, data.go.kr, AI 상식 수집 Cron
 - Gemini 호출 보호: 8초 배치 간격, 60초 슬라이딩 윈도우 12회 상한, 용어·트리비아의 4개 Cron 슬롯 분산
+- Notion에서 관리하고 5분 D1 캐시로 동기화하는 공개 릴리즈 노트 (`/changelog`)
 
 각 AI 학습 섹션은 `summary`와 `details`로 구성됩니다. Quick Read는 `summary`만 사용하고 Deep Read는 같은 `summary`에 `details`를 이어 붙이므로, 카드에만 있고 본문에는 없는 정보가 저장되지 않습니다.
 
@@ -21,7 +22,7 @@
 
 ```text
 Astro 7 + Cloudflare Workers Static Assets
-├─ /, /archive, /articles/:id, /review, /chat
+├─ /, /archive, /articles/:id, /review, /chat, /changelog
 ├─ Astro API: /api/reviews/*, /api/chat
 ├─ D1: 콘텐츠, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
@@ -58,6 +59,7 @@ npx wrangler secret put DATA_GO_KR_KEY_LOAN --config workers/ingest/wrangler.jso
 npx wrangler secret put DATA_GO_KR_KEY_APT_SALE --config workers/ingest/wrangler.jsonc
 npx wrangler secret put DATA_GO_KR_KEY_APT_RENT --config workers/ingest/wrangler.jsonc
 npx wrangler secret put YOUTUBE_API_KEY --config workers/ingest/wrangler.jsonc
+npx wrangler secret put NOTION_TOKEN --config workers/ingest/wrangler.jsonc
 ```
 
 ## 검증

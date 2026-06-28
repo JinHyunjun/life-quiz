@@ -8,7 +8,8 @@
 	"vars": {
 		"GEMINI_MODEL": "gemini-3.1-flash-lite",
 		"GEMINI_RPM_BUDGET": "12",
-		"GEMINI_INGEST_MIN_INTERVAL_MS": "8000"
+		"GEMINI_INGEST_MIN_INTERVAL_MS": "8000",
+		"NOTION_PAGE_ID": "38ccb889-5490-8102-93b1-c63f45626a20"
 	},
 	"d1_databases": [
 		{

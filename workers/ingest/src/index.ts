@@ -28,6 +28,7 @@ import {
   type ScheduledTriviaCategory,
 } from "./schedule";
 import { searchRecentYoutubeVideos } from "./fetchers/youtube";
+import { getReleaseFeed } from "./releases";
 
 export interface Env {
   DB: D1Database;
@@ -43,6 +44,8 @@ export interface Env {
   DATA_GO_KR_KEY_APT_SALE: string;
   DATA_GO_KR_KEY_APT_RENT: string;
   YOUTUBE_API_KEY: string;
+  NOTION_TOKEN: string;
+  NOTION_PAGE_ID: string;
 }
 
 type TriviaCategory = ScheduledTriviaCategory;
@@ -64,6 +67,19 @@ const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citati
 const app = new Hono<{ Bindings: Env }>();
 
 app.get("/health", (c) => c.json({ ok: true }));
+
+app.get("/internal/releases", async (c) => {
+  if (c.req.header("x-life-quiz-service") !== "releases") {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const feed = await getReleaseFeed({
+    db: createDb(c.env.DB),
+    token: c.env.NOTION_TOKEN,
+    pageId: c.env.NOTION_PAGE_ID,
+  });
+  return c.json(feed);
+});
 
 app.post("/internal/chat", async (c) => {
   if (c.req.header("x-life-quiz-service") !== "chat") {

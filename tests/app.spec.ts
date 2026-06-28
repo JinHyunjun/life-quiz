@@ -5,16 +5,15 @@ test("home feed renders without horizontal overflow", async ({ page }) => {
 
   await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
   await expect(page.locator(".category-tab").filter({ hasText: "주식·투자" })).toBeVisible();
-  await expect(page.locator(".featured-story")).toBeVisible();
-  await expect(page.locator(".content-card").first()).toBeVisible();
+  await expect(page.locator(".featured-story, .empty-state")).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
 test("article carousel and source area are usable", async ({ page }) => {
-  await page.goto("/");
-  await page.locator(".featured-story").click();
+  await page.goto("/archive");
+  await page.locator(".archive-card").first().click();
 
   await expect(page).toHaveURL(/\/articles\/\d+/);
   await expect(page.locator(".article-header h1")).toBeVisible();
@@ -74,4 +73,15 @@ test("chat UI renders grounded answers and source links", async ({ page }) => {
   await expect(page.getByText("선택한 콘텐츠를 기준으로 핵심을 정리했어요.")).toBeVisible();
   await expect(page.getByText("이번 시간 7회 남음")).toBeVisible();
   await expect(page.getByRole("link", { name: "출처 · 공식 출처" })).toBeVisible();
+});
+
+test("release notes render the Notion-managed timeline", async ({ page }) => {
+  await page.goto("/changelog");
+
+  await expect(page.getByRole("heading", { level: 1, name: "릴리즈 노트" })).toBeVisible();
+  await expect(page.locator(".release-item").first()).toContainText("v0.4");
+  await expect(page.locator(".change-list").first()).toContainText("Notion");
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });

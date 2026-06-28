@@ -1,4 +1,5 @@
 import { index, uniqueIndex, sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import type { ReleaseFeed } from "../lib/releases";
 
 // Placeholder shape; Phase 5 regenerates this via `better-auth` CLI to match its session/account tables.
 export const users = sqliteTable("users", {
@@ -125,3 +126,9 @@ export const geminiRequestLog = sqliteTable(
   },
   (table) => [index("gemini_request_log_requested_at_idx").on(table.requestedAtMs)],
 );
+
+export const releaseCache = sqliteTable("release_cache", {
+  key: text("key").primaryKey(),
+  payload: text("payload", { mode: "json" }).notNull().$type<ReleaseFeed>(),
+  fetchedAt: integer("fetched_at", { mode: "timestamp" }).notNull(),
+});

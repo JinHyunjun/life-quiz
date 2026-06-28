@@ -9,6 +9,7 @@ import {
   ingestionPacingDelayMs,
   scheduledAiCurriculumForKstRun,
 } from "../workers/ingest/src/schedule.ts";
+import { parseNotionReleaseBlocks } from "../src/lib/releases.ts";
 
 test("all 25 Seoul districts are selected across 25 consecutive runs", () => {
   const firstRun = new Date("2026-06-26T15:00:00Z");
@@ -93,4 +94,32 @@ test("Gemini safeguards leave quota headroom and pace ingestion", () => {
   assert.equal(normalizeGeminiRpmBudget(15), 14);
   assert.equal(ingestionPacingDelayMs(1_000, 8_000, 4_000), 5_000);
   assert.equal(ingestionPacingDelayMs(1_000, 8_000, 10_000), 0);
+});
+
+test("Notion release headings, dates, sections, and bullets are parsed", () => {
+  const richText = (plain_text) => [{ plain_text }];
+  const releases = parseNotionReleaseBlocks([
+    { type: "paragraph", paragraph: { rich_text: richText("페이지 소개") } },
+    { type: "heading_2", heading_2: { rich_text: richText("v0.4 — 2026.06.28 릴리즈 노트") } },
+    { type: "heading_3", heading_3: { rich_text: richText("신규 기능") } },
+    { type: "bulleted_list_item", bulleted_list_item: { rich_text: richText("공개 페이지 추가") } },
+    { type: "heading_2", heading_2: { rich_text: richText("v0.3 — 2차 업데이트") } },
+    { type: "paragraph", paragraph: { rich_text: richText("2026-06-27") } },
+    { type: "callout", callout: { rich_text: richText("안정성 개선") } },
+  ]);
+
+  assert.deepEqual(releases, [
+    {
+      version: "v0.4",
+      title: "릴리즈 노트",
+      date: "2026-06-28",
+      changes: [{ type: "bullet", text: "공개 페이지 추가", section: "신규 기능" }],
+    },
+    {
+      version: "v0.3",
+      title: "2차 업데이트",
+      date: "2026-06-27",
+      changes: [{ type: "callout", text: "안정성 개선" }],
+    },
+  ]);
 });
