@@ -78,6 +78,13 @@
       "when": 1782696148857,
       "tag": "0010_eager_scrambler",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1782697473688,
+      "tag": "0011_melted_white_tiger",
+      "breakpoints": true
     }
   ]
 }

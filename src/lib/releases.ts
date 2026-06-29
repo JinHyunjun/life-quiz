@@ -28,6 +28,18 @@ export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
   stale: true,
   releases: [
     {
+      version: "v0.6",
+      title: "출처와 복습 큐 신뢰성",
+      date: "2026-06-29",
+      changes: [
+        { type: "bullet", text: "출처가 없던 기존 AI 상식을 비공개 검수 상태로 전환하고 서비스 범위 밖 콘텐츠 정리" },
+        { type: "bullet", text: "새 AI 상식은 위키백과 원문 안의 사실만 재구성하고 SOURCE에서 실제 외부 페이지로 이동" },
+        { type: "bullet", text: "금융·주거 4컷 가이드에 공식 참고 원문 링크 보강" },
+        { type: "bullet", text: "글 상세에서 복습에 담은 콘텐츠만 브라우저별 오늘의 복습 큐에 표시" },
+        { type: "bullet", text: "숨김 콘텐츠를 홈·보관함·상세·채팅·복습에서 일관되게 제외" },
+      ],
+    },
+    {
       version: "v0.5",
       title: "학습 흐름과 콘텐츠 품질",
       date: "2026-06-29",

@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, isNull, lte, max, or, sql } from "drizzle-orm";
 import { createEmptyCard, fsrs, Rating, State, type Card, type Grade } from "ts-fsrs";
 import type { AppDb } from "../db/client";
-import { contentItems, quizItems, reviewLogs, users } from "../db/schema";
+import { contentItems, learningItems, quizItems, reviewLogs, users } from "../db/schema";
 
 export const LOCAL_DEV_USER_ID = "local-dev";
 
@@ -48,6 +48,7 @@ export interface SubmitReviewInput {
 }
 
 export async function ensureReviewUser(db: AppDb, userId = LOCAL_DEV_USER_ID) {
+  userId = normalizeReviewUserId(userId);
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
 
   if (existing) {
@@ -73,7 +74,7 @@ export async function getDueReviewCards(
   limit = 20,
   now = new Date(),
 ): Promise<DueReviewCard[]> {
-  await ensureReviewUser(db, userId);
+  userId = (await ensureReviewUser(db, userId)).id;
 
   const latestByQuiz = db.$with("latest_by_quiz").as(
     db
@@ -107,9 +108,16 @@ export async function getDueReviewCards(
     })
     .from(quizItems)
     .innerJoin(contentItems, eq(quizItems.contentItemId, contentItems.id))
+    .innerJoin(learningItems, and(
+      eq(learningItems.contentItemId, contentItems.id),
+      eq(learningItems.userId, userId),
+    ))
     .leftJoin(latestByQuiz, eq(latestByQuiz.quizItemId, quizItems.id))
     .leftJoin(reviewLogs, eq(reviewLogs.id, latestByQuiz.latestId))
-    .where(or(isNull(reviewLogs.id), lte(reviewLogs.due, now)))
+    .where(and(
+      eq(contentItems.moderationStatus, "published"),
+      or(isNull(reviewLogs.id), lte(reviewLogs.due, now)),
+    ))
     .orderBy(sql`case when ${reviewLogs.due} is null then 0 else 1 end`, asc(reviewLogs.due), asc(quizItems.id))
     .limit(normalizeLimit(limit));
 
@@ -136,7 +144,7 @@ export async function getDueReviewCards(
 }
 
 export async function submitQuizReview(db: AppDb, input: SubmitReviewInput) {
-  const userId = input.userId ?? LOCAL_DEV_USER_ID;
+  const userId = normalizeReviewUserId(input.userId ?? LOCAL_DEV_USER_ID);
   const now = input.now ?? new Date();
 
   if (!input.answer && input.rating === undefined) {
@@ -152,7 +160,15 @@ export async function submitQuizReview(db: AppDb, input: SubmitReviewInput) {
       explanation: quizItems.explanation,
     })
     .from(quizItems)
-    .where(eq(quizItems.id, input.quizItemId))
+    .innerJoin(contentItems, eq(contentItems.id, quizItems.contentItemId))
+    .innerJoin(learningItems, and(
+      eq(learningItems.contentItemId, contentItems.id),
+      eq(learningItems.userId, userId),
+    ))
+    .where(and(
+      eq(quizItems.id, input.quizItemId),
+      eq(contentItems.moderationStatus, "published"),
+    ))
     .limit(1);
 
   if (!quiz) {
@@ -262,6 +278,14 @@ function normalizeAnswer(answer: string) {
 
 function sanitizeEmailPart(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9._+-]/g, "_").slice(0, 48) || "user";
+}
+
+export function normalizeReviewUserId(value: string) {
+  if (value === LOCAL_DEV_USER_ID) return value;
+  if (/^anon:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    return value.toLowerCase();
+  }
+  throw new ReviewRequestError("Invalid anonymous user id.");
 }
 
 function toIso(date: Date | null | undefined) {

@@ -6,6 +6,7 @@ import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
 import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
+import { triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
   ingestionPacingDelayMs,
   scheduledAiCurriculumForKstRun,
@@ -88,6 +89,16 @@ test("daily AI curriculum is distributed across four six-hour slots", () => {
     schedules.map((schedule) => schedule.trivia.category),
     ["history", "humor", "social_skills", "daily_tips"],
   );
+  assert.ok(schedules.every((schedule) => schedule.trivia.sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
+});
+
+test("AI general knowledge rotates through externally grounded topics", () => {
+  const first = triviaSourceForKstDay("history", new Date("2026-06-28T15:00:00Z"));
+  const second = triviaSourceForKstDay("history", new Date("2026-06-29T15:00:00Z"));
+
+  assert.notEqual(first.wikipediaTitle, second.wikipediaTitle);
+  assert.match(first.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
+  assert.match(second.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
 });
 
 test("Gemini safeguards leave quota headroom and pace ingestion", () => {

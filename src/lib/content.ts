@@ -31,10 +31,11 @@ const summaryFields = {
 };
 
 const countValue = sql<number>`count(*)`.mapWith(Number).as("count");
+const publishedContent = eq(contentItems.moderationStatus, "published");
 
 export async function listTodayContentItems(db: AppDb, category?: Category, now = new Date()) {
   const today = todayKstRange(now);
-  const conditions: SQL[] = [gte(contentItems.createdAt, today.start), lt(contentItems.createdAt, today.end)];
+  const conditions: SQL[] = [publishedContent, gte(contentItems.createdAt, today.start), lt(contentItems.createdAt, today.end)];
   if (category) conditions.push(eq(contentItems.category, category));
 
   const items = await db
@@ -46,7 +47,7 @@ export async function listTodayContentItems(db: AppDb, category?: Category, now 
 }
 
 export async function listRecentVisualGuides(db: AppDb, category?: Category, limit = 2) {
-  const conditions: SQL[] = [eq(contentItems.contentFormat, "visual_guide")];
+  const conditions: SQL[] = [publishedContent, eq(contentItems.contentFormat, "visual_guide")];
   if (category) conditions.push(eq(contentItems.category, category));
 
   const items = await db
@@ -61,12 +62,13 @@ export async function listRecentVisualGuides(db: AppDb, category?: Category, lim
 export async function getContentStats(db: AppDb, now = new Date()) {
   const today = todayKstRange(now);
   const [[total], [todayCount], [archiveCount]] = await Promise.all([
-    db.select({ count: countValue }).from(contentItems),
+    db.select({ count: countValue }).from(contentItems).where(publishedContent),
     db.select({ count: countValue }).from(contentItems).where(and(
+      publishedContent,
       gte(contentItems.createdAt, today.start),
       lt(contentItems.createdAt, today.end),
     )),
-    db.select({ count: countValue }).from(contentItems).where(lt(contentItems.createdAt, today.start)),
+    db.select({ count: countValue }).from(contentItems).where(and(publishedContent, lt(contentItems.createdAt, today.start))),
   ]);
 
   return {
@@ -79,7 +81,7 @@ export async function getContentStats(db: AppDb, now = new Date()) {
 
 export async function listArchivedContentItems(db: AppDb, filters: ArchiveFilters = {}) {
   const today = todayKstRange(filters.now ?? new Date());
-  const conditions: SQL[] = [lt(contentItems.createdAt, today.start)];
+  const conditions: SQL[] = [publishedContent, lt(contentItems.createdAt, today.start)];
   const selectedDay = filters.date ? kstDayRange(filters.date) : null;
 
   if (selectedDay && selectedDay.start < today.start) {
@@ -119,7 +121,7 @@ export async function listArchiveDays(db: AppDb, now = new Date(), limit = 90) {
   return db
     .select({ day: dayExpression, count: countValue })
     .from(contentItems)
-    .where(lt(contentItems.createdAt, today.start))
+    .where(and(publishedContent, lt(contentItems.createdAt, today.start)))
     .groupBy(dayExpression)
     .orderBy(desc(dayExpression))
     .limit(Math.min(Math.max(Math.trunc(limit), 1), 366));
@@ -127,7 +129,7 @@ export async function listArchiveDays(db: AppDb, now = new Date(), limit = 90) {
 
 export async function getArchiveFacets(db: AppDb, now = new Date()) {
   const today = todayKstRange(now);
-  const archived = lt(contentItems.createdAt, today.start);
+  const archived = and(publishedContent, lt(contentItems.createdAt, today.start));
 
   const [categoryCounts, sourceCounts] = await Promise.all([
     db
@@ -149,7 +151,11 @@ export async function getArchiveFacets(db: AppDb, now = new Date()) {
 }
 
 export async function getContentItemWithQuiz(db: AppDb, id: number) {
-  const [item] = await db.select().from(contentItems).where(eq(contentItems.id, id)).limit(1);
+  const [item] = await db
+    .select()
+    .from(contentItems)
+    .where(and(eq(contentItems.id, id), publishedContent))
+    .limit(1);
   if (!item) return null;
 
   const quizzes = await db.select().from(quizItems).where(eq(quizItems.contentItemId, id));
@@ -165,6 +171,7 @@ export async function listChatTopics(db: AppDb, limit = 24) {
       citationLabel: contentItems.citationLabel,
     })
     .from(contentItems)
+    .where(publishedContent)
     .orderBy(desc(contentItems.createdAt))
     .limit(Math.min(Math.max(Math.trunc(limit), 1), 50));
 }

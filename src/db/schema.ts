@@ -13,8 +13,8 @@ export const sources = sqliteTable(
   "sources",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    // "ai_trivia": no external raw source - Gemini generates from its own knowledge (history/humor/
-    // social_skills). url is a synthetic internal:// id for these, used only for bookkeeping.
+    // "ai_trivia": curated evergreen content. Glossaries use a curriculum key and general
+    // knowledge articles store the external source URL used to ground Gemini.
     originType: text("origin_type", { enum: ["gov", "news", "youtube", "ai_trivia"] }).notNull(),
     url: text("url").notNull(),
     lastFetchedAt: integer("last_fetched_at", { mode: "timestamp" }),
@@ -60,11 +60,16 @@ export const contentItems = sqliteTable(
     // "AI가 정리한 상식" badge instead of a citation link when this is null.
     citationUrl: text("citation_url"),
     citationLabel: text("citation_label").notNull(),
+    moderationStatus: text("moderation_status", { enum: ["published", "hidden"] })
+      .notNull()
+      .default("published"),
+    moderationReason: text("moderation_reason"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   },
   (table) => [
     index("content_items_created_at_idx").on(table.createdAt),
     index("content_items_category_created_idx").on(table.category, table.createdAt),
+    index("content_items_status_category_created_idx").on(table.moderationStatus, table.category, table.createdAt),
   ],
 );
 
@@ -80,6 +85,24 @@ export const quizItems = sqliteTable("quiz_items", {
     .notNull()
     .default("관련 글에서 정답의 근거와 핵심 개념을 다시 확인해보세요."),
 });
+
+export const learningItems = sqliteTable(
+  "learning_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    contentItemId: integer("content_item_id")
+      .notNull()
+      .references(() => contentItems.id),
+    enrolledAt: integer("enrolled_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("learning_items_user_content_unique").on(table.userId, table.contentItemId),
+    index("learning_items_user_enrolled_idx").on(table.userId, table.enrolledAt),
+  ],
+);
 
 export const reviewLogs = sqliteTable(
   "review_logs",

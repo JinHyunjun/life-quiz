@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, RotateCcw, ShieldAlert } from "lucide-astro";
+import { ArrowLeft, BookmarkPlus, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, ShieldAlert } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
@@ -175,12 +175,13 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
           <ChevronRight size={18} />
         </a>
         {quizzes.length > 0 && (
-          <a class="action-link review" href="/review">
-            <RotateCcw size={19} />
-            <span><strong>오늘의 복습 풀기</strong><small>FSRS가 다시 볼 때를 계산해요</small></span>
+          <button class="action-link review" id="learning-button" type="button" data-content-id={item.id} disabled>
+            <BookmarkPlus size={19} />
+            <span><strong id="learning-label">복습에 담기</strong><small id="learning-description">이 글의 퀴즈만 내 복습에 추가해요</small></span>
             <ChevronRight size={18} />
-          </a>
+          </button>
         )}
+        <p class="learning-status" id="learning-status" aria-live="polite"></p>
       </aside>
     </div>
   </article>
@@ -616,6 +617,7 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
   }
 
   .action-link {
+    width: 100%;
     min-height: 68px;
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr) 18px;
@@ -627,10 +629,22 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
     color: var(--ink);
     background: white;
     text-decoration: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
   .action-link.review {
     background: var(--yellow-soft);
+  }
+
+  .action-link.review.enrolled {
+    background: var(--green-soft);
+  }
+
+  .action-link:disabled {
+    cursor: wait;
+    opacity: 0.62;
   }
 
   .action-link span {
@@ -648,6 +662,13 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
     font-size: 0.7rem;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .learning-status {
+    min-height: 18px;
+    margin: 7px 2px 0;
+    color: #9eaaa4;
+    font-size: 0.68rem;
   }
 
   @media (max-width: 900px) {
@@ -762,6 +783,67 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
 </style>
 
 <script>
+  import { getAnonymousUserId } from "../../lib/anonymous-user";
+
+  const learningButton = document.querySelector<HTMLButtonElement>("#learning-button");
+  const learningLabel = document.querySelector<HTMLElement>("#learning-label");
+  const learningDescription = document.querySelector<HTMLElement>("#learning-description");
+  const learningStatus = document.querySelector<HTMLElement>("#learning-status");
+  const learningUserId = getAnonymousUserId();
+  let learningEnrolled = false;
+
+  function renderLearningState(enrolled: boolean) {
+    learningEnrolled = enrolled;
+    if (!learningButton || !learningLabel || !learningDescription) return;
+    learningButton.disabled = false;
+    learningButton.classList.toggle("enrolled", enrolled);
+    learningLabel.textContent = enrolled ? "복습으로 이동" : "복습에 담기";
+    learningDescription.textContent = enrolled
+      ? "이 글이 내 복습 카드에 담겨 있어요"
+      : "이 글의 퀴즈만 내 복습에 추가해요";
+  }
+
+  async function initializeLearningState() {
+    const contentItemId = Number(learningButton?.dataset.contentId);
+    if (!learningButton || !Number.isInteger(contentItemId)) return;
+    try {
+      const response = await fetch(`/api/learning/${contentItemId}?userId=${encodeURIComponent(learningUserId)}`);
+      if (!response.ok) throw new Error();
+      const result = await response.json() as { enrolled?: boolean };
+      renderLearningState(result.enrolled === true);
+    } catch {
+      renderLearningState(false);
+      if (learningStatus) learningStatus.textContent = "복습 상태를 확인하지 못했어요. 다시 눌러 시도할 수 있어요.";
+    }
+  }
+
+  learningButton?.addEventListener("click", async () => {
+    if (learningEnrolled) {
+      window.location.href = "/review";
+      return;
+    }
+
+    const contentItemId = Number(learningButton.dataset.contentId);
+    learningButton.disabled = true;
+    if (learningStatus) learningStatus.textContent = "복습 카드에 담는 중이에요.";
+    try {
+      const response = await fetch(`/api/learning/${contentItemId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ userId: learningUserId }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "복습에 담지 못했습니다.");
+      renderLearningState(true);
+      if (learningStatus) learningStatus.textContent = "등록했어요. 이제 이 글의 퀴즈만 복습에 나타납니다.";
+    } catch (error) {
+      renderLearningState(false);
+      if (learningStatus) learningStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+    }
+  });
+
+  void initializeLearningState();
+
   const track = document.querySelector<HTMLElement>("#card-news-track");
 
   if (track) {

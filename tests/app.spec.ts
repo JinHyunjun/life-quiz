@@ -20,6 +20,9 @@ test("article carousel and source area are usable", async ({ page }) => {
   await expect(page.locator(".article-body")).toBeVisible();
   await expect(page.locator(".deep-read-section").first()).toBeVisible();
   await expect(page.locator(".action-takeaway")).toBeVisible();
+  const source = page.locator(".source-note a[target='_blank']");
+  await expect(source).toBeVisible();
+  await expect(source).toHaveAttribute("href", /^https:\/\//);
 
   const next = page.getByRole("button", { name: "다음 카드" });
   if (await next.isVisible()) {
@@ -45,7 +48,16 @@ test("archive separates older content by date and filters", async ({ page }) => 
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test("review flow loads a due card and records an answer", async ({ page }) => {
+test("review queue only includes content explicitly added by this browser", async ({ page }) => {
+  await page.goto("/review");
+
+  await expect(page.locator(".empty-review")).toBeVisible();
+  await page.goto("/archive");
+  await page.locator(".archive-card").first().click();
+  const learningButton = page.locator("#learning-button");
+  await expect(learningButton).toBeEnabled();
+  await learningButton.click();
+  await expect(page.locator("#learning-status")).not.toBeEmpty();
   await page.goto("/review");
 
   const choice = page.locator(".choice").first();
@@ -95,8 +107,8 @@ test("release notes render the Notion-managed timeline", async ({ page }) => {
   await page.goto("/changelog");
 
   await expect(page.getByRole("heading", { level: 1, name: "릴리즈 노트" })).toBeVisible();
-  await expect(page.locator(".release-item").first()).toContainText("v0.4");
-  await expect(page.locator(".change-list").first()).toContainText("Notion");
+  await expect(page.locator(".release-item").first()).toContainText(/v0\.\d+/);
+  await expect(page.locator(".change-list").first().locator("li").first()).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);

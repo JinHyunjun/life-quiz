@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt } from "drizzle-orm";
 import type { ContentCard } from "../../../src/db/schema";
 import { createDb, schema, type AppDb } from "./db";
 import {
@@ -34,6 +34,7 @@ import {
 } from "./schedule";
 import { searchRecentYoutubeVideos } from "./fetchers/youtube";
 import { getReleaseFeed } from "./releases";
+import { fetchWikipediaSummary, type TriviaSourceTopic } from "./trivia-sources";
 
 export interface Env {
   DB: D1Database;
@@ -66,7 +67,7 @@ type PendingItem =
       editorialFocus: string;
     }
   | { kind: "glossary"; url: string; category: GlossaryCategory; term: string; citationLabel: string; citationUrl: string | null }
-  | { kind: "trivia"; category: TriviaCategory; citationLabel: string };
+  | ({ kind: "trivia" } & TriviaSourceTopic);
 
 const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citationUrl: string | null }> = {
   finance: {
@@ -189,13 +190,21 @@ async function loadChatContext(db: AppDb, contentItemId?: number) {
   };
 
   if (contentItemId) {
-    const selected = await db.select(selectFields).from(schema.contentItems).where(eq(schema.contentItems.id, contentItemId)).limit(1);
+    const selected = await db
+      .select(selectFields)
+      .from(schema.contentItems)
+      .where(and(
+        eq(schema.contentItems.id, contentItemId),
+        eq(schema.contentItems.moderationStatus, "published"),
+      ))
+      .limit(1);
     if (selected.length > 0) return selected;
   }
 
   const recent = await db
     .select(selectFields)
     .from(schema.contentItems)
+    .where(eq(schema.contentItems.moderationStatus, "published"))
     .orderBy(desc(schema.contentItems.createdAt))
     .limit(6);
 
@@ -298,11 +307,7 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   }
 
   // One category per six-hour slot avoids four back-to-back Gemini calls every run.
-  items.push({
-    kind: "trivia",
-    category: scheduledCurriculum.trivia.category,
-    citationLabel: scheduledCurriculum.trivia.label,
-  });
+  items.push({ kind: "trivia", ...scheduledCurriculum.trivia });
 
   const priority: Record<PendingItem["kind"], number> = { glossary: 0, trivia: 1, sourced: 2 };
   return items.sort((a, b) => priority[a.kind] - priority[b.kind]);
@@ -341,7 +346,10 @@ async function recentTitlesForCategory(
   const rows = await db
     .select({ title: schema.contentItems.title })
     .from(schema.contentItems)
-    .where(eq(schema.contentItems.category, category))
+    .where(and(
+      eq(schema.contentItems.category, category),
+      eq(schema.contentItems.moderationStatus, "published"),
+    ))
     .orderBy(desc(schema.contentItems.createdAt))
     .limit(limit);
   return rows.map((r) => r.title);
@@ -427,10 +435,12 @@ async function ingestTriviaItem(
   item: Extract<PendingItem, { kind: "trivia" }>,
   beforeRequest: BeforeGeminiRequest,
 ) {
-  const avoidTitles = await recentTitlesForCategory(db, item.category);
+  const sourceMaterial = await fetchWikipediaSummary(item);
   const generated = await generateTrivia({
     category: item.category,
-    avoidTitles,
+    topic: item.topic,
+    sourceText: sourceMaterial.extract,
+    citationLabel: sourceMaterial.citationLabel,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -438,7 +448,7 @@ async function ingestTriviaItem(
 
   const [source] = await db
     .insert(schema.sources)
-    .values({ originType: "ai_trivia", url: `internal://trivia/${item.category}/${crypto.randomUUID()}`, lastFetchedAt: new Date() })
+    .values({ originType: "ai_trivia", url: item.sourceUrl, lastFetchedAt: new Date() })
     .returning();
 
   return insertContentAndQuiz(db, {
@@ -448,8 +458,8 @@ async function ingestTriviaItem(
     cards: generated.cards,
     contentFormat: "article",
     category: item.category,
-    citationUrl: null,
-    citationLabel: item.citationLabel,
+    citationUrl: sourceMaterial.url,
+    citationLabel: sourceMaterial.citationLabel,
     question: generated.question,
     choices: generated.choices,
     answer: generated.answer,
@@ -512,9 +522,9 @@ async function runIngestion(env: Env) {
   let lastStartedAtMs = 0;
 
   for (const item of pending) {
-    const label = item.kind === "sourced" || item.kind === "glossary" ? item.url : `trivia:${item.category}`;
+    const label = item.kind === "trivia" ? item.sourceUrl : item.url;
 
-    if ((item.kind === "sourced" || item.kind === "glossary") && (await isAlreadyIngested(db, item.url))) {
+    if (await isAlreadyIngested(db, label)) {
       skipped.push(label);
       continue;
     }

@@ -408,6 +408,8 @@ import Base from "../layouts/Base.astro";
 </style>
 
 <script>
+  import { getAnonymousUserId } from "../lib/anonymous-user";
+
   interface DueCard {
     quizItemId: number;
     title: string;
@@ -426,6 +428,7 @@ import Base from "../layouts/Base.astro";
   }
 
   const root = document.querySelector<HTMLElement>("#review-root");
+  const reviewUserId = getAnonymousUserId();
   let queue: DueCard[] = [];
   let currentIndex = 0;
 
@@ -446,7 +449,7 @@ import Base from "../layouts/Base.astro";
     if (!root) return;
 
     try {
-      const response = await fetch("/api/reviews/due", { headers: { accept: "application/json" } });
+      const response = await fetch(`/api/reviews/due?userId=${encodeURIComponent(reviewUserId)}`, { headers: { accept: "application/json" } });
       if (!response.ok) throw new Error("복습 카드를 불러오지 못했습니다.");
       const data = (await response.json()) as { cards?: DueCard[] };
       queue = Array.isArray(data.cards) ? data.cards : [];
@@ -473,11 +476,11 @@ import Base from "../layouts/Base.astro";
     if (!root) return;
     root.replaceChildren();
     const state = element("div", "empty-review");
-    state.append(element("h2", "", queue.length === 0 ? "오늘 예정된 복습이 없어요" : "오늘의 복습을 마쳤어요"));
-    state.append(element("p", "", queue.length === 0 ? "새 상식을 읽으면 다음 복습 카드가 준비됩니다." : `${queue.length}개의 기억을 다시 단단하게 만들었습니다.`));
+    state.append(element("h2", "", queue.length === 0 ? "복습에 담긴 카드가 없어요" : "오늘의 복습을 마쳤어요"));
+    state.append(element("p", "", queue.length === 0 ? "관심 있는 글에서 '복습에 담기'를 누르면 그 글의 퀴즈만 준비됩니다." : `${queue.length}개의 기억을 다시 단단하게 만들었습니다.`));
     const actions = element("div", "empty-actions");
-    appendButtonLink(actions, "/", "새 상식 읽기", true);
-    appendButtonLink(actions, "/chat", "궁금한 것 묻기");
+    appendButtonLink(actions, "/start", "시작 코스 고르기", true);
+    appendButtonLink(actions, "/", "새 상식 읽기");
     state.append(actions);
     root.append(state);
   }
@@ -527,7 +530,7 @@ import Base from "../layouts/Base.astro";
       const response = await fetch(`/api/reviews/${card.quizItemId}`, {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ answer: selected.dataset.choice }),
+        body: JSON.stringify({ answer: selected.dataset.choice, userId: reviewUserId }),
       });
       if (!response.ok) throw new Error("답안을 저장하지 못했습니다.");
       const result = (await response.json()) as SubmitResult;
