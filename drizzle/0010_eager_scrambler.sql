@@ -1,0 +1,1 @@
+ALTER TABLE `quiz_items` ADD `explanation` text DEFAULT '관련 글에서 정답의 근거와 핵심 개념을 다시 확인해보세요.' NOT NULL;

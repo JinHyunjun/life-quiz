@@ -82,7 +82,7 @@ function formatDate(value: Date) {
             <p class="eyebrow">STARTER GLOSSARY</p>
             <h2 id="glossary-title">처음 배우는 금융·투자·부동산 용어</h2>
           </div>
-          <span class="glossary-note"><PanelsTopLeft size={16} /> 4컷으로 쉽게</span>
+          <a class="glossary-note" href="/start">전체 시작 코스 <ArrowRight size={16} /></a>
         </div>
         <div class="glossary-grid">
           {visualGuides.map((guide) => (
@@ -369,6 +369,7 @@ function formatDate(value: Date) {
     color: #695a0a;
     font-size: 0.76rem;
     font-weight: 800;
+    text-decoration: none;
   }
 
   .glossary-grid {

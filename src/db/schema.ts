@@ -76,6 +76,9 @@ export const quizItems = sqliteTable("quiz_items", {
   question: text("question").notNull(),
   choices: text("choices", { mode: "json" }).notNull().$type<string[]>(),
   answer: text("answer").notNull(),
+  explanation: text("explanation")
+    .notNull()
+    .default("관련 글에서 정답의 근거와 핵심 개념을 다시 확인해보세요."),
 });
 
 export const reviewLogs = sqliteTable(

@@ -7,12 +7,15 @@
 - KST 00시 기준 오늘 피드와 날짜·분야·출처·페이지별 지난 상식 보관함
 - 서울 25개 자치구를 배치마다 순환하는 부동산·생활 공공데이터 수집
 - 분야별 상식 피드와 출처가 연결된 상세 글
-- Gemini가 하나의 학습 섹션에서 함께 생성하고 의미 중복 검사를 통과한 Quick Read와 Deep Read
+- 금융·투자·주거 기초를 생성 순서대로 묶어 주는 사회초년생 시작 코스 (`/start`)
+- Gemini가 하나의 학습 섹션에서 함께 생성하고 의미 중복 검사를 통과한 Quick Read와 소제목형 Deep Read
+- 마지막 학습 카드를 다시 보여주는 `오늘 바로 확인할 것` 행동 요약
 - 금융·주식 투자·부동산 초보 용어를 정의·구조·사례·체크포인트로 설명하는 4컷 가이드
-- `ts-fsrs` 기반 오늘의 복습 큐와 다음 복습일 계산
+- 정답을 구분하는 해설과 `ts-fsrs` 기반 오늘의 복습 큐·다음 복습일 계산
 - 선택한 글 또는 최근 콘텐츠 6개를 근거로 답하는 라이프 메이트
 - D1 기반 익명 챗 사용량 제한: IP와 User-Agent의 SHA-256 해시 기준 시간당 8회
 - RSS, YouTube 메타데이터, data.go.kr, AI 상식 수집 Cron
+- 사회초년생 관련성 검사와 소스별 고정 카테고리로 일반 뉴스·오분류 차단
 - Gemini 호출 보호: 8초 배치 간격, 60초 슬라이딩 윈도우 12회 상한, 용어·트리비아의 4개 Cron 슬롯 분산
 - Notion에서 관리하고 5분 D1 캐시로 동기화하는 공개 릴리즈 노트 (`/changelog`)
 
@@ -22,7 +25,7 @@
 
 ```text
 Astro 7 + Cloudflare Workers Static Assets
-├─ /, /archive, /articles/:id, /review, /chat, /changelog
+├─ /, /start, /archive, /articles/:id, /review, /chat, /changelog
 ├─ Astro API: /api/reviews/*, /api/chat
 ├─ D1: 콘텐츠, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
@@ -73,7 +76,7 @@ npx wrangler deploy --dry-run
 npx wrangler deploy --dry-run --config workers/ingest/wrangler.jsonc
 ```
 
-Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 홈, 상세, 복습, 챗 흐름을 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
+Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 홈, 시작 코스, 상세, 복습, 챗 흐름을 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
 
 ## 배포 순서
 

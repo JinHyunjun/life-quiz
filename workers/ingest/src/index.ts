@@ -11,6 +11,11 @@ import {
   type ChatMessage,
 } from "./gemini";
 import { seoulDistrictForKstRun } from "./districts";
+import {
+  classifyNewsForBeginners,
+  youtubeEditorialPlanForKstSlot,
+  type SourcedContentCategory,
+} from "./editorial";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed } from "./fetchers/rss";
 import type { GlossaryCategory } from "./glossary";
@@ -51,17 +56,31 @@ export interface Env {
 type TriviaCategory = ScheduledTriviaCategory;
 
 type PendingItem =
-  | { kind: "sourced"; url: string; originType: "gov" | "news" | "youtube"; citationLabel: string; sourceText: string }
+  | {
+      kind: "sourced";
+      url: string;
+      originType: "gov" | "news" | "youtube";
+      citationLabel: string;
+      sourceText: string;
+      category: SourcedContentCategory;
+      editorialFocus: string;
+    }
   | { kind: "glossary"; url: string; category: GlossaryCategory; term: string; citationLabel: string; citationUrl: string | null }
   | { kind: "trivia"; category: TriviaCategory; citationLabel: string };
 
 const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citationUrl: string | null }> = {
-  finance: { citationLabel: "AI가 정리한 금융 기초 용어", citationUrl: null },
+  finance: {
+    citationLabel: "금융감독원 금융교육센터 참고 · AI 재구성",
+    citationUrl: "https://www.fss.or.kr/edu/main/main.do",
+  },
   investment: {
     citationLabel: "전국투자자교육협의회 참고 · AI 재구성",
     citationUrl: "https://www.kcie.or.kr/yeouitv/howtoList",
   },
-  housing: { citationLabel: "AI가 정리한 부동산 기초 용어", citationUrl: null },
+  housing: {
+    citationLabel: "찾기쉬운 생활법령 주택임대차 참고 · AI 재구성",
+    citationUrl: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?ccfNo=2&cciNo=2&cnpClsNo=1&csmSeq=629&popMenu=ov",
+  },
 };
 
 const app = new Hono<{ Bindings: Env }>();
@@ -188,19 +207,25 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   const now = new Date();
 
   const rss = await fetchRssFeed("https://www.hankyung.com/feed/economy").catch(() => []);
-  for (const item of rss.slice(0, 3)) {
+  const relevantNews = rss.flatMap((item) => {
+    const plan = classifyNewsForBeginners(item.title, item.summary);
+    return plan ? [{ item, plan }] : [];
+  }).slice(0, 3);
+  for (const { item, plan } of relevantNews) {
     items.push({
       kind: "sourced",
       url: item.link,
       originType: "news",
       citationLabel: "한국경제",
       sourceText: `${item.title}\n\n${item.summary}`,
+      category: plan.category,
+      editorialFocus: plan.focus,
     });
   }
 
-  const youtubeQuery = youtubeQueryForCurrentKstSlot(now);
+  const youtubePlan = youtubeEditorialPlanForKstSlot(now);
   const youtube = await searchRecentYoutubeVideos({
-    query: youtubeQuery,
+    query: youtubePlan.query,
     apiKey: env.YOUTUBE_API_KEY,
     maxResults: 2,
   }).catch(() => []);
@@ -210,7 +235,9 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
       url: video.watchUrl,
       originType: "youtube",
       citationLabel: `유튜브 - ${video.channelTitle}`,
-      sourceText: `${video.title}\n\n${video.description}\n\n게시일: ${video.publishedAt}\n검색 주제: ${youtubeQuery}`,
+      sourceText: `${video.title}\n\n${video.description}\n\n게시일: ${video.publishedAt}\n검색 주제: ${youtubePlan.query}`,
+      category: youtubePlan.category,
+      editorialFocus: youtubePlan.focus,
     });
   }
 
@@ -231,6 +258,8 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
         originType: "gov",
         citationLabel: job.label,
         sourceText: summarizeAptRows(district.name, job.kind, rows),
+        category: "housing",
+        editorialFocus: `${district.name}의 개별 거래를 단정적으로 해석하지 말고, 실거래가를 읽는 방법과 예산·계약 확인 항목을 설명`,
       });
     } catch {
       // Skip this source for this run; next scheduled run will retry.
@@ -246,6 +275,8 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
         originType: "gov",
         citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
         sourceText: `서울 ${district.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`,
+        category: "seoul_life",
+        editorialFocus: `${district.name} 자취생이 배출 장소·요일·품목을 실제로 확인하고 실수하지 않는 방법`,
       });
     }
   } catch {
@@ -275,17 +306,6 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
 
   const priority: Record<PendingItem["kind"], number> = { glossary: 0, trivia: 1, sourced: 2 };
   return items.sort((a, b) => priority[a.kind] - priority[b.kind]);
-}
-
-function youtubeQueryForCurrentKstSlot(now = new Date()) {
-  const queries = [
-    "사회초년생 금융 투자 기초 상식",
-    "서울 자취 생활 팁",
-    "청년 주거 정책",
-    "직장생활 매너 대화법",
-  ];
-  const kstHour = new Date(now.getTime() + 9 * 60 * 60 * 1_000).getUTCHours();
-  return queries[Math.floor(kstHour / 6) % queries.length];
 }
 
 function summarizeAptRows(districtName: string, kind: "rent" | "sale", rows: AptTransactionRow[]) {
@@ -336,6 +356,8 @@ async function ingestSourcedItem(
   const generated = await generateArticleAndQuiz({
     sourceText: item.sourceText,
     citationLabel: item.citationLabel,
+    category: item.category,
+    editorialFocus: item.editorialFocus,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -358,6 +380,7 @@ async function ingestSourcedItem(
     question: generated.question,
     choices: generated.choices,
     answer: generated.answer,
+    explanation: generated.explanation,
   });
 }
 
@@ -394,6 +417,7 @@ async function ingestGlossaryItem(
     question: generated.question,
     choices: generated.choices,
     answer: generated.answer,
+    explanation: generated.explanation,
   });
 }
 
@@ -429,6 +453,7 @@ async function ingestTriviaItem(
     question: generated.question,
     choices: generated.choices,
     answer: generated.answer,
+    explanation: generated.explanation,
   });
 }
 
@@ -446,6 +471,7 @@ async function insertContentAndQuiz(
     question: string;
     choices: string[];
     answer: string;
+    explanation: string;
   },
 ) {
   const [contentItem] = await db
@@ -468,6 +494,7 @@ async function insertContentAndQuiz(
     question: params.question,
     choices: params.choices,
     answer: params.answer,
+    explanation: params.explanation,
   });
 
   return { contentItemId: contentItem.id, title: params.title };

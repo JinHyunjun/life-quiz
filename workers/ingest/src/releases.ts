@@ -47,12 +47,34 @@ export async function getReleaseFeed(params: {
       pageId: params.pageId,
       error: error instanceof Error ? error.message : String(error),
     }));
-    const fallback: ReleaseFeed = cached
-      ? { ...cached.payload, source: "cache", stale: true }
-      : { ...FALLBACK_RELEASE_FEED, fetchedAt: now.toISOString() };
+    const fallback = releaseFallback(cached?.payload, now);
     await saveReleaseCache(params.db, params.pageId, fallback, now);
     return fallback;
   }
+}
+
+function releaseFallback(cached: ReleaseFeed | undefined, now: Date): ReleaseFeed {
+  const snapshot = { ...FALLBACK_RELEASE_FEED, fetchedAt: now.toISOString() } satisfies ReleaseFeed;
+  if (!cached) return snapshot;
+
+  const cachedVersion = versionParts(cached.releases[0]?.version);
+  const snapshotVersion = versionParts(snapshot.releases[0]?.version);
+  if (compareVersionParts(snapshotVersion, cachedVersion) > 0) return snapshot;
+
+  return { ...cached, source: "cache", stale: true };
+}
+
+function versionParts(value: string | undefined) {
+  return (value?.match(/\d+(?:\.\d+)*/)?.[0] ?? "0").split(".").map(Number);
+}
+
+function compareVersionParts(left: number[], right: number[]) {
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
 }
 
 async function fetchNotionBlocks(pageId: string, token: string) {

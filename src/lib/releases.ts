@@ -23,10 +23,22 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-06-28T00:00:00.000Z",
+  fetchedAt: "2026-06-29T00:00:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.5",
+      title: "학습 흐름과 콘텐츠 품질",
+      date: "2026-06-29",
+      changes: [
+        { type: "bullet", text: "금융·투자·주거 기초 용어를 순서대로 배우는 시작 코스 추가" },
+        { type: "bullet", text: "일반 경제기사 오분류를 막는 사회초년생 관련성 검사와 소스별 고정 카테고리 적용" },
+        { type: "bullet", text: "Deep Read를 4개 소제목으로 구조화하고 오늘 바로 확인할 행동 요약 추가" },
+        { type: "bullet", text: "새 복습 퀴즈에 정답과 오답을 구분하는 해설 추가" },
+        { type: "bullet", text: "금융·주거 기초 용어에 공식 참고 출처 링크 보강" },
+      ],
+    },
     {
       version: "v0.4",
       title: "릴리즈 노트",

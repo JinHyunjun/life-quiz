@@ -1,5 +1,6 @@
 import type { ContentVisualCue } from "../../../src/db/schema";
 import { assertDeepReadCoversCards, assertDistinctCards } from "../../../src/lib/card-quality";
+import type { SourcedContentCategory } from "./editorial";
 
 export interface GeneratedCard {
   heading: string;
@@ -11,10 +12,11 @@ export interface GeneratedContent {
   title: string;
   bodyMd: string;
   cards: GeneratedCard[];
-  category: "finance" | "investment" | "housing" | "seoul_life" | "daily_tips";
+  category: SourcedContentCategory;
   question: string;
   choices: string[];
   answer: string;
+  explanation: string;
 }
 
 export interface GeneratedTrivia {
@@ -24,6 +26,7 @@ export interface GeneratedTrivia {
   question: string;
   choices: string[];
   answer: string;
+  explanation: string;
 }
 
 export interface GeneratedGlossary extends GeneratedTrivia {
@@ -43,11 +46,10 @@ interface GeneratedSectionResponse {
   question: string;
   choices: string[];
   answer: string;
+  explanation: string;
 }
 
-interface GeneratedArticleResponse extends GeneratedSectionResponse {
-  category: GeneratedContent["category"];
-}
+type GeneratedArticleResponse = GeneratedSectionResponse;
 
 export interface ChatContextItem {
   id: number;
@@ -129,6 +131,10 @@ const QUIZ_FIELDS = {
   question: { type: "string" },
   choices: { type: "array", items: { type: "string" }, minItems: 4, maxItems: 4 },
   answer: { type: "string", description: "Must exactly match one of the choices." },
+  explanation: {
+    type: "string",
+    description: "정답인 이유와 오답을 가르는 핵심 기준을 초보자도 이해할 수 있게 설명하는 2문장.",
+  },
 };
 
 const ARTICLE_RESPONSE_SCHEMA = {
@@ -136,10 +142,9 @@ const ARTICLE_RESPONSE_SCHEMA = {
   properties: {
     title: { type: "string" },
     sections: SECTIONS_SCHEMA,
-    category: { type: "string", enum: ["finance", "investment", "housing", "seoul_life", "daily_tips"] },
     ...QUIZ_FIELDS,
   },
-  required: ["title", "sections", "category", "question", "choices", "answer"],
+  required: ["title", "sections", "question", "choices", "answer", "explanation"],
 };
 
 const TRIVIA_RESPONSE_SCHEMA = {
@@ -149,7 +154,7 @@ const TRIVIA_RESPONSE_SCHEMA = {
     sections: SECTIONS_SCHEMA,
     ...QUIZ_FIELDS,
   },
-  required: ["title", "sections", "question", "choices", "answer"],
+  required: ["title", "sections", "question", "choices", "answer", "explanation"],
 };
 
 const GLOSSARY_RESPONSE_SCHEMA = {
@@ -159,7 +164,7 @@ const GLOSSARY_RESPONSE_SCHEMA = {
     sections: VISUAL_SECTIONS_SCHEMA,
     ...QUIZ_FIELDS,
   },
-  required: ["title", "sections", "question", "choices", "answer"],
+  required: ["title", "sections", "question", "choices", "answer", "explanation"],
 };
 
 const CHAT_RESPONSE_SCHEMA = {
@@ -246,6 +251,8 @@ export function assembleGeneratedSections(sections: readonly GeneratedSection[])
 export async function generateArticleAndQuiz(params: {
   sourceText: string;
   citationLabel: string;
+  category: SourcedContentCategory;
+  editorialFocus: string;
   apiKey: string;
   model: string;
   beforeRequest: BeforeGeminiRequest;
@@ -257,7 +264,11 @@ export async function generateArticleAndQuiz(params: {
     "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 같은 summary를 반복하지 말고 이유·원리·맥락·예외를 2~4문장으로 더 깊게 설명하세요.",
     "Deep Read는 코드에서 summary와 details를 합쳐 만듭니다. 따라서 Quick Read에만 있고 Deep Read에는 없는 정보가 생기지 않도록 모든 핵심 정보를 해당 section 안에 배치하세요.",
     "각 섹션은 앞 섹션에 없던 새 정보를 하나 이상 담아야 합니다. 같은 사실, 수치, 결론, 조언을 표현만 바꿔 반복하면 안 됩니다.",
-    "자료가 주식이나 투자에 관한 내용이면 category는 investment를 사용하고, 특정 종목의 매수·매도 추천이나 수익 보장 표현은 쓰지 마세요.",
+    `이 콘텐츠의 분류는 '${params.category}'로 이미 결정되었습니다. 다른 분야의 일반 뉴스로 넓히지 마세요.`,
+    `편집 관점: ${params.editorialFocus}`,
+    "원본에 없는 수치나 제도 내용을 추측해서 채우지 마세요. 사회초년생이 실제로 판단하거나 행동하는 데 도움이 되지 않는 주변 정보는 생략하세요.",
+    "퀴즈 해설에는 정답인 이유와 비슷한 오답을 구분하는 기준을 2문장으로 설명하세요.",
+    "투자 콘텐츠에서는 특정 종목의 매수·매도 추천이나 수익 보장 표현을 쓰지 마세요.",
     `출처: ${params.citationLabel}`,
     "원본 자료:",
     params.sourceText,
@@ -271,7 +282,7 @@ export async function generateArticleAndQuiz(params: {
     temperature: 0.45,
     beforeRequest: params.beforeRequest,
   });
-  return { ...generated, ...assembleGeneratedSections(generated.sections) };
+  return { ...generated, category: params.category, ...assembleGeneratedSections(generated.sections) };
 }
 
 const TRIVIA_PROMPTS = {
@@ -293,6 +304,7 @@ export async function generateTrivia(params: {
     TRIVIA_PROMPTS[params.category],
     "사실에 기반해야 하고, 평이하지 않은 주제를 고르세요.",
     "복습용 4지선다 퀴즈 1개도 작성하세요.",
+    "퀴즈 해설에는 정답인 이유와 오답을 구분하는 핵심 기준을 2문장으로 설명하세요.",
     "학습 섹션은 정확히 4개로 구성하세요. 배경 → 핵심 원리 → 실제 사례 → 기억할 행동 순서이며, 같은 사실이나 조언을 표현만 바꿔 반복하지 마세요.",
     "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 summary를 반복하지 말고 근거·맥락·예외·실천 방법을 2~4문장으로 더 깊게 설명하세요.",
     "Deep Read는 summary와 details를 합쳐 만들므로 Quick Read의 모든 정보가 반드시 Deep Read 안에 포함되어야 합니다.",
@@ -333,6 +345,7 @@ export async function generateGlossaryGuide(params: {
     "각 section의 summary는 4컷 그림의 말풍선에 그대로 노출됩니다. details는 그 내용을 반복하지 말고 초보자가 이해할 수 있도록 이유·계산·주의점을 2~4문장으로 확장하세요.",
     "각 섹션은 다른 사실을 담아야 하며 같은 정의, 예시, 주의점을 반복하면 안 됩니다. 금액이나 비율이 중요한 용어라면 현실적인 숫자 예시를 포함하세요.",
     "각 section의 visual은 내용을 가장 잘 나타내는 그림 기호를 고르세요. 퀴즈는 암기보다 실제 상황 판단을 묻는 4지선다로 만드세요.",
+    "퀴즈 해설에는 정답인 이유와 실제 상황에서 판단할 기준을 2문장으로 설명하세요.",
     params.category === "investment"
       ? "이 자료는 투자 교육용입니다. 특정 종목·상품의 매수나 매도를 권하지 말고, 원금 손실 가능성과 과거 수익률이 미래 수익을 보장하지 않는다는 점을 필요한 맥락에서 분명히 하세요."
       : "",

@@ -71,6 +71,13 @@
       "when": 1782644037210,
       "tag": "0009_tense_madelyne_pryor",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1782696148857,
+      "tag": "0010_eager_scrambler",
+      "breakpoints": true
     }
   ]
 }

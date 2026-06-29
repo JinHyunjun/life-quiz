@@ -149,6 +149,7 @@ export async function submitQuizReview(db: AppDb, input: SubmitReviewInput) {
     .select({
       id: quizItems.id,
       answer: quizItems.answer,
+      explanation: quizItems.explanation,
     })
     .from(quizItems)
     .where(eq(quizItems.id, input.quizItemId))
@@ -195,6 +196,7 @@ export async function submitQuizReview(db: AppDb, input: SubmitReviewInput) {
     quizItemId: input.quizItemId,
     isCorrect,
     correctAnswer: isCorrect === false ? quiz.answer : undefined,
+    explanation: quiz.explanation,
     rating,
     ratingLabel: Rating[rating],
     due: toIso(savedReview.due),

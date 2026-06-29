@@ -1,0 +1,192 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { ArrowRight, BookOpenCheck, ChartLine, Check, House, Landmark, RotateCcw } from "lucide-astro";
+import Base from "../layouts/Base.astro";
+import { createDb } from "../db/client";
+import { listRecentVisualGuides } from "../lib/content";
+
+const db = createDb(env.DB);
+const definitions = [
+  {
+    category: "finance" as const,
+    eyebrow: "MONEY BASICS",
+    title: "월급을 지키는 금융 기초",
+    description: "통장, 금리, 신용과 대출을 내 생활의 숫자로 이해하는 순서예요.",
+    outcome: "상품 이름보다 돈이 움직이는 구조를 먼저 봅니다.",
+    icon: Landmark,
+  },
+  {
+    category: "housing" as const,
+    eyebrow: "HOME BASICS",
+    title: "계약 전에 배우는 집 기초",
+    description: "전월세 구조부터 보증금을 지키는 확인 순서까지 차근차근 익혀요.",
+    outcome: "계약서에 서명하기 전에 확인할 질문을 만듭니다.",
+    icon: House,
+  },
+  {
+    category: "investment" as const,
+    eyebrow: "INVESTING BASICS",
+    title: "잃지 않기 위해 배우는 투자 기초",
+    description: "주식의 구조, 주문, 지표와 분산투자를 위험 중심으로 이해해요.",
+    outcome: "종목 추천보다 스스로 판단할 기준을 먼저 세웁니다.",
+    icon: ChartLine,
+  },
+];
+
+const guideGroups = await Promise.all(
+  definitions.map((definition) => listRecentVisualGuides(db, definition.category, 6)),
+);
+const tracks = definitions.map((definition, index) => ({
+  ...definition,
+  lessons: [...guideGroups[index]].reverse(),
+}));
+
+function excerpt(bodyMd: string, maxLength = 100) {
+  const plain = bodyMd.replace(/[#*_>`\[\]]/g, "").replace(/\s+/g, " ").trim();
+  return plain.length > maxLength ? `${plain.slice(0, maxLength).trim()}...` : plain;
+}
+---
+
+<Base title="사회초년생 시작 코스" description="금융, 주거, 투자를 기초 용어부터 순서대로 배우는 라이프퀴즈 시작 코스입니다.">
+  <div class="start-page">
+    <header class="start-header shell">
+      <div class="start-title">
+        <p class="eyebrow">START HERE</p>
+        <h1>처음이라면,<br />이 순서로 시작해요</h1>
+        <p>뉴스를 따라가기 전에 자주 나오는 말부터 익히면 새로운 정보도 훨씬 빠르게 이해할 수 있어요.</p>
+      </div>
+
+      <ol class="learning-rhythm" aria-label="학습 순서">
+        <li><span>1</span><div><strong>4컷으로 읽기</strong><small>핵심 개념을 1분 안에 파악</small></div></li>
+        <li><span>2</span><div><strong>상황 퀴즈 풀기</strong><small>아는 것과 모르는 것을 구분</small></div></li>
+        <li><span>3</span><div><strong>잊을 때 다시 보기</strong><small>FSRS가 복습 날짜를 계산</small></div></li>
+      </ol>
+    </header>
+
+    <nav class="track-nav shell" aria-label="시작 코스 분야">
+      {tracks.map(({ category, title, icon: Icon }) => (
+        <a href={`#${category}`} data-category={category}><Icon size={18} /><span>{title}</span></a>
+      ))}
+    </nav>
+
+    <div class="track-list">
+      {tracks.map(({ icon: Icon, ...track }, trackIndex) => (
+        <section class="course-track" id={track.category} data-category={track.category} aria-labelledby={`${track.category}-title`}>
+          <div class="shell track-inner">
+            <header class="track-header">
+              <span class="track-index">0{trackIndex + 1}</span>
+              <div class="track-icon" aria-hidden="true"><Icon size={28} /></div>
+              <div>
+                <p class="eyebrow">{track.eyebrow}</p>
+                <h2 id={`${track.category}-title`}>{track.title}</h2>
+                <p>{track.description}</p>
+              </div>
+              <span class="lesson-count">현재 {track.lessons.length}개 공개</span>
+            </header>
+
+            <div class="track-body">
+              <div class="track-outcome">
+                <Check size={18} />
+                <p><strong>이 코스의 기준</strong>{track.outcome}</p>
+              </div>
+
+              {track.lessons.length > 0 ? (
+                <ol class="lesson-list">
+                  {track.lessons.map((lesson, lessonIndex) => (
+                    <li>
+                      <a href={`/articles/${lesson.id}`}>
+                        <span class="lesson-number">{String(lessonIndex + 1).padStart(2, "0")}</span>
+                        <span class="lesson-copy">
+                          <small>{lessonIndex === 0 ? "첫 개념" : `${lessonIndex + 1}번째 개념`}</small>
+                          <strong>{lesson.title}</strong>
+                          <span>{lesson.cards?.[0]?.body ?? excerpt(lesson.bodyMd)}</span>
+                        </span>
+                        <ArrowRight size={19} />
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <div class="course-empty"><BookOpenCheck size={24} /><p>첫 번째 기초 용어를 준비하고 있어요.</p></div>
+              )}
+            </div>
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <section class="next-step shell" aria-labelledby="next-step-title">
+      <RotateCcw size={25} />
+      <div><p class="eyebrow">KEEP IT</p><h2 id="next-step-title">읽은 다음에는 기억으로 남겨요</h2><p>퀴즈를 풀면 FSRS가 기억 상태에 맞춰 다음 복습일을 정합니다.</p></div>
+      <a class="button button-primary" href="/review">오늘의 복습 <ArrowRight size={17} /></a>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .start-page { padding-top: 58px; }
+  .start-header { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr); align-items: end; gap: 60px; padding-bottom: 46px; }
+  .start-title h1 { max-width: 720px; margin: 4px 0 16px; font-size: clamp(2.3rem, 5vw, 4.2rem); line-height: 1.08; }
+  .start-title > p:last-child { max-width: 640px; margin: 0; color: var(--muted-strong); font-size: 1rem; }
+  .learning-rhythm { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+  .learning-rhythm li { min-height: 70px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+  .learning-rhythm li > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-sm); color: white; background: var(--ink); font-size: 0.72rem; font-weight: 850; }
+  .learning-rhythm div { display: grid; gap: 2px; }
+  .learning-rhythm strong { font-size: 0.88rem; }
+  .learning-rhythm small { color: var(--muted); font-size: 0.74rem; }
+  .track-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-bottom: 30px; }
+  .track-nav a { min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 9px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); background: var(--paper); text-decoration: none; font-size: 0.82rem; font-weight: 750; }
+  .track-nav a[data-category="finance"] svg { color: var(--green); }
+  .track-nav a[data-category="housing"] svg { color: var(--coral); }
+  .track-nav a[data-category="investment"] svg { color: var(--berry); }
+  .track-list { border-top: 1px solid var(--line); }
+  .course-track { --track-color: var(--green); --track-soft: var(--green-soft); scroll-margin-top: 86px; border-bottom: 1px solid var(--line); }
+  .course-track[data-category="housing"] { --track-color: var(--coral); --track-soft: var(--coral-soft); }
+  .course-track[data-category="investment"] { --track-color: var(--berry); --track-soft: var(--berry-soft); }
+  .track-inner { padding-top: 46px; padding-bottom: 52px; }
+  .track-header { display: grid; grid-template-columns: 42px 58px minmax(0, 1fr) auto; align-items: center; gap: 16px; margin-bottom: 26px; }
+  .track-index { color: var(--track-color); font-size: 0.8rem; font-weight: 850; }
+  .track-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: var(--radius-md); color: var(--track-color); background: var(--track-soft); }
+  .track-header h2 { margin: 0 0 4px; font-size: 1.45rem; }
+  .track-header > div:nth-child(3) > p:last-child { margin: 0; color: var(--muted); font-size: 0.86rem; }
+  .lesson-count { padding: 7px 10px; border-radius: var(--radius-sm); color: var(--track-color); background: var(--track-soft); font-size: 0.74rem; font-weight: 800; }
+  .track-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 30px; }
+  .track-outcome { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 9px; padding-top: 18px; color: var(--track-color); border-top: 2px solid var(--track-color); }
+  .track-outcome p { display: grid; gap: 4px; margin: 0; color: var(--muted-strong); font-size: 0.78rem; line-height: 1.55; }
+  .track-outcome strong { color: var(--ink); font-size: 0.82rem; }
+  .lesson-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .lesson-list a { min-height: 112px; display: grid; grid-template-columns: 44px minmax(0, 1fr) 22px; align-items: center; gap: 15px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); background: var(--paper); text-decoration: none; transition: border-color 150ms ease, transform 150ms ease; }
+  .lesson-list a:hover { transform: translateX(3px); border-color: var(--track-color); }
+  .lesson-number { color: var(--track-color); font-size: 0.78rem; font-weight: 850; }
+  .lesson-copy { min-width: 0; display: grid; gap: 3px; }
+  .lesson-copy small { color: var(--track-color); font-size: 0.68rem; font-weight: 800; }
+  .lesson-copy strong { font-size: 0.98rem; }
+  .lesson-copy > span { overflow: hidden; color: var(--muted); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .lesson-list a > svg { color: var(--muted); }
+  .course-empty { min-height: 120px; display: grid; place-content: center; justify-items: center; border: 1px dashed var(--line); border-radius: var(--radius-md); color: var(--muted); background: var(--paper); }
+  .course-empty p { margin: 8px 0 0; }
+  .next-step { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 18px; margin-top: 50px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--ink); color: white; }
+  .next-step > svg { color: #9bd0b9; }
+  .next-step h2 { margin: 0 0 3px; font-size: 1.1rem; }
+  .next-step p:last-child { margin: 0; color: #b8c3bd; font-size: 0.8rem; }
+  .next-step .eyebrow { color: #9bd0b9; }
+  @media (max-width: 820px) {
+    .start-header { grid-template-columns: 1fr; gap: 34px; }
+    .track-body { grid-template-columns: 1fr; gap: 18px; }
+    .track-outcome { grid-template-columns: 22px minmax(0, 1fr); }
+  }
+  @media (max-width: 620px) {
+    .start-page { padding-top: 36px; }
+    .start-header { padding-bottom: 32px; }
+    .start-title h1 { font-size: 2.35rem; }
+    .track-nav { grid-template-columns: 1fr; }
+    .track-header { grid-template-columns: 34px 48px minmax(0, 1fr); align-items: start; gap: 11px; }
+    .track-icon { width: 48px; height: 48px; }
+    .lesson-count { grid-column: 2 / -1; justify-self: start; }
+    .lesson-list a { grid-template-columns: 34px minmax(0, 1fr) 18px; padding: 15px 14px; }
+    .next-step { grid-template-columns: 36px minmax(0, 1fr); }
+    .next-step .button { grid-column: 1 / -1; width: 100%; }
+  }
+</style>

@@ -1,5 +1,5 @@
 ---
-import { Archive, BookOpenCheck, History, House, MessageCircle, RotateCcw } from "lucide-astro";
+import { Archive, BookOpenCheck, History, House, Map, MessageCircle, RotateCcw } from "lucide-astro";
 import "../styles/global.css";
 
 interface Props {
@@ -14,12 +14,14 @@ const {
 const pathname = Astro.url.pathname;
 
 const navItems = [
-  { href: "/", label: "홈", mobileLabel: "홈", icon: House, active: pathname === "/" || pathname.startsWith("/articles/") },
-  { href: "/archive", label: "지난 상식", mobileLabel: "지난 상식", icon: Archive, active: pathname.startsWith("/archive") },
-  { href: "/review", label: "오늘의 복습", mobileLabel: "복습", icon: RotateCcw, active: pathname === "/review" },
-  { href: "/chat", label: "라이프 메이트", mobileLabel: "AI 질문", icon: MessageCircle, active: pathname === "/chat" },
-  { href: "/changelog", label: "릴리즈 노트", mobileLabel: "업데이트", icon: History, active: pathname === "/changelog" },
+  { href: "/", label: "홈", mobileLabel: "홈", icon: House, active: pathname === "/" || pathname.startsWith("/articles/"), mobile: true },
+  { href: "/start", label: "시작 코스", mobileLabel: "시작", icon: Map, active: pathname === "/start", mobile: true },
+  { href: "/archive", label: "지난 상식", mobileLabel: "보관함", icon: Archive, active: pathname.startsWith("/archive"), mobile: true },
+  { href: "/review", label: "오늘의 복습", mobileLabel: "복습", icon: RotateCcw, active: pathname === "/review", mobile: true },
+  { href: "/chat", label: "라이프 메이트", mobileLabel: "AI 질문", icon: MessageCircle, active: pathname === "/chat", mobile: true },
+  { href: "/changelog", label: "릴리즈 노트", mobileLabel: "업데이트", icon: History, active: pathname === "/changelog", mobile: false },
 ];
+const mobileNavItems = navItems.filter((item) => item.mobile);
 ---
 
 <!doctype html>
@@ -74,7 +76,7 @@ const navItems = [
     </footer>
 
     <nav class="mobile-nav" aria-label="모바일 주요 메뉴">
-      {navItems.map(({ href, mobileLabel, icon: Icon, active }) => (
+      {mobileNavItems.map(({ href, mobileLabel, icon: Icon, active }) => (
         <a href={href} class:list={["mobile-nav-link", { active }]} aria-current={active ? "page" : undefined}>
           <Icon size={20} strokeWidth={2} />
           <span>{mobileLabel}</span>

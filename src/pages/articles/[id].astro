@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { ArrowLeft, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, RotateCcw, ShieldAlert } from "lucide-astro";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, RotateCcw, ShieldAlert } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
@@ -20,6 +20,11 @@ if (!result) {
 const { item, quizzes } = result;
 const isVisualGuide = item.contentFormat === "visual_guide";
 const paragraphs = item.bodyMd.split(/\n{2,}/).map((paragraph) => paragraph.trim()).filter(Boolean);
+const deepReadSections = paragraphs.map((body, index) => ({
+  heading: item.cards?.[index]?.heading ?? `핵심 ${index + 1}`,
+  body,
+}));
+const actionCard = item.cards?.at(-1) ?? null;
 const publishedAt = new Intl.DateTimeFormat("ko-KR", {
   year: "numeric",
   month: "long",
@@ -119,9 +124,30 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
       <div class="article-main">
         <section class="article-body" aria-labelledby="article-body-title">
           <p class="eyebrow">DEEP READ</p>
-          <h2 id="article-body-title" class="visually-hidden">자세히 읽기</h2>
-          {paragraphs.map((paragraph) => <p>{paragraph}</p>)}
+          <h2 id="article-body-title">카드에서 본 내용을 더 깊게</h2>
+          <div class="deep-read-list">
+            {deepReadSections.map((section, index) => (
+              <section class="deep-read-section">
+                <span aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <h3>{section.heading}</h3>
+                  <p>{section.body}</p>
+                </div>
+              </section>
+            ))}
+          </div>
         </section>
+
+        {actionCard && (
+          <section class="action-takeaway" aria-labelledby="action-takeaway-title">
+            <span class="action-icon" aria-hidden="true"><CheckCircle2 size={22} /></span>
+            <div>
+              <p class="eyebrow">DO THIS NEXT</p>
+              <h2 id="action-takeaway-title">오늘 바로 확인할 것</h2>
+              <p><strong>{actionCard.heading}</strong> {actionCard.body}</p>
+            </div>
+          </section>
+        )}
 
         <section class="source-note" aria-labelledby="source-title">
           <div>
@@ -453,16 +479,78 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
     box-shadow: var(--shadow-sm);
   }
 
-  .article-body > p:not(.eyebrow) {
-    margin: 0 0 1.25em;
+  .article-body > h2 {
+    margin: 2px 0 26px;
+    font-size: 1.3rem;
+  }
+
+  .deep-read-list {
+    display: grid;
+  }
+
+  .deep-read-section {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 14px;
+    padding: 22px 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .deep-read-section > span {
+    padding-top: 3px;
+    color: var(--article-color);
+    font-size: 0.72rem;
+    font-weight: 850;
+  }
+
+  .deep-read-section h3 {
+    margin: 0 0 8px;
+    font-size: 1.04rem;
+  }
+
+  .deep-read-section p {
+    margin: 0;
     color: #2f3b35;
     font-size: 1rem;
     line-height: 1.9;
     word-break: keep-all;
   }
 
-  .article-body > p:last-child {
-    margin-bottom: 0;
+  .action-takeaway {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 16px;
+    margin-top: 18px;
+    padding: 22px 24px;
+    border: 1px solid color-mix(in srgb, var(--article-color) 30%, var(--line));
+    border-radius: var(--radius-md);
+    background: var(--article-soft);
+  }
+
+  .action-icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: white;
+    background: var(--article-color);
+  }
+
+  .action-takeaway h2 {
+    margin: 0 0 7px;
+    font-size: 1.05rem;
+  }
+
+  .action-takeaway > div > p:last-child {
+    margin: 0;
+    color: var(--muted-strong);
+    font-size: 0.88rem;
+    line-height: 1.65;
+  }
+
+  .action-takeaway strong {
+    color: var(--ink);
   }
 
   .source-note {
@@ -645,9 +733,19 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
       padding: 26px 22px;
     }
 
-    .article-body > p:not(.eyebrow) {
+    .deep-read-section p {
       font-size: 0.96rem;
       line-height: 1.82;
+    }
+
+    .action-takeaway {
+      grid-template-columns: 38px minmax(0, 1fr);
+      padding: 18px;
+    }
+
+    .action-icon {
+      width: 38px;
+      height: 38px;
     }
 
     .source-note {

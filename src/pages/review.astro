@@ -308,6 +308,18 @@ import Base from "../layouts/Base.astro";
     font-size: 0.8rem;
   }
 
+  .feedback-copy .feedback-explanation {
+    max-width: 680px;
+    margin: 7px 0 9px;
+    color: var(--muted-strong);
+    font-size: 0.86rem;
+    line-height: 1.6;
+  }
+
+  .feedback-due {
+    font-weight: 700;
+  }
+
   .next-button {
     min-width: 114px;
   }
@@ -409,6 +421,7 @@ import Base from "../layouts/Base.astro";
   interface SubmitResult {
     isCorrect: boolean | null;
     correctAnswer?: string;
+    explanation?: string;
     due: string;
   }
 
@@ -527,8 +540,11 @@ import Base from "../layouts/Base.astro";
       const feedback = element("div", "answer-feedback");
       const copy = element("div", "feedback-copy");
       copy.append(element("strong", "", result.isCorrect ? "정답이에요" : `정답은 '${result.correctAnswer}'예요`));
+      if (result.explanation) {
+        copy.append(element("p", "feedback-explanation", result.explanation));
+      }
       const dueDate = new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric" }).format(new Date(result.due));
-      copy.append(element("p", "", `다음 복습 예정일: ${dueDate}`));
+      copy.append(element("p", "feedback-due", `다음 복습 예정일: ${dueDate}`));
       const next = element("button", "button button-primary next-button", currentIndex + 1 === queue.length ? "복습 마치기" : "다음 카드");
       next.type = "button";
       next.addEventListener("click", () => { currentIndex += 1; renderCurrentCard(); });

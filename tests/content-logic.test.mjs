@@ -4,6 +4,7 @@ import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } 
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
+import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
 import {
   ingestionPacingDelayMs,
@@ -94,6 +95,22 @@ test("Gemini safeguards leave quota headroom and pace ingestion", () => {
   assert.equal(normalizeGeminiRpmBudget(15), 14);
   assert.equal(ingestionPacingDelayMs(1_000, 8_000, 4_000), 5_000);
   assert.equal(ingestionPacingDelayMs(1_000, 8_000, 10_000), 0);
+});
+
+test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", () => {
+  const finance = classifyNewsForBeginners(
+    "예금 금리 하락기에 대출 이자 확인하는 법",
+    "은행의 예금과 대출 금리가 달라지는 배경을 설명한다.",
+  );
+  const offTopic = classifyNewsForBeginners(
+    "BMW 신형 SUV 디자인 공개",
+    "새 자동차의 외관과 출시 색상을 소개한다.",
+  );
+
+  assert.equal(finance?.category, "finance");
+  assert.ok(finance?.matchedTerms.includes("예금"));
+  assert.equal(offTopic, null);
+  assert.equal(youtubeEditorialPlanForKstSlot(new Date("2026-06-26T15:00:00Z")).category, "finance");
 });
 
 test("Notion release headings, dates, sections, and bullets are parsed", () => {

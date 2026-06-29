@@ -18,6 +18,8 @@ test("article carousel and source area are usable", async ({ page }) => {
   await expect(page).toHaveURL(/\/articles\/\d+/);
   await expect(page.locator(".article-header h1")).toBeVisible();
   await expect(page.locator(".article-body")).toBeVisible();
+  await expect(page.locator(".deep-read-section").first()).toBeVisible();
+  await expect(page.locator(".action-takeaway")).toBeVisible();
 
   const next = page.getByRole("button", { name: "다음 카드" });
   if (await next.isVisible()) {
@@ -50,6 +52,20 @@ test("review flow loads a due card and records an answer", async ({ page }) => {
   await expect(choice).toBeVisible();
   await choice.click();
   await expect(page.locator(".answer-feedback")).toBeVisible();
+  await expect(page.locator(".feedback-explanation")).toBeVisible();
+});
+
+test("starter courses organize foundational visual guides", async ({ page }) => {
+  await page.goto("/start");
+
+  await expect(page.getByRole("heading", { level: 1, name: /이 순서로 시작해요/ })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "월급을 지키는 금융 기초" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "계약 전에 배우는 집 기초" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "잃지 않기 위해 배우는 투자 기초" })).toBeVisible();
+  await expect(page.locator(".lesson-list a, .course-empty").first()).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });
 
 test("chat UI renders grounded answers and source links", async ({ page }) => {
