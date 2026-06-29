@@ -28,6 +28,18 @@ export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
   stale: true,
   releases: [
     {
+      version: "v0.7",
+      title: "AI 상식 선별 복구",
+      date: "2026-06-29",
+      changes: [
+        { type: "bullet", text: "검수 대기 AI 상식 중 공식·전문 외부 자료로 확인 가능한 14건을 선별 복구" },
+        { type: "bullet", text: "조선왕조실록, 서울시, NASA, APA, Smithsonian, Kew Gardens 등 실제 SOURCE 링크 연결" },
+        { type: "bullet", text: "복구 콘텐츠의 과장된 표현과 확인되지 않은 수치를 제거하고 카드 4개와 Deep Read 재작성" },
+        { type: "bullet", text: "복구한 14개 퀴즈의 문제, 선택지, 정답 해설도 외부 자료 범위에 맞게 교체" },
+        { type: "bullet", text: "안전성이 불분명하거나 근거가 약한 생활 팁과 중복 콘텐츠는 계속 비공개 유지" },
+      ],
+    },
+    {
       version: "v0.6",
       title: "출처와 복습 큐 신뢰성",
       date: "2026-06-29",

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
@@ -12,6 +13,11 @@ import {
   scheduledAiCurriculumForKstRun,
 } from "../workers/ingest/src/schedule.ts";
 import { parseNotionReleaseBlocks } from "../src/lib/releases.ts";
+
+const verifiedAiRestorationSql = readFileSync(
+  new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
+  "utf8",
+);
 
 test("all 25 Seoul districts are selected across 25 consecutive runs", () => {
   const firstRun = new Date("2026-06-26T15:00:00Z");
@@ -99,6 +105,34 @@ test("AI general knowledge rotates through externally grounded topics", () => {
   assert.notEqual(first.wikipediaTitle, second.wikipediaTitle);
   assert.match(first.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
   assert.match(second.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
+});
+
+test("only verified legacy AI articles are restored with complete learning content", () => {
+  const restoredIds = Array.from(
+    verifiedAiRestorationSql.matchAll(/`moderation_status` = 'published',[\s\S]*?WHERE `id` = (\d+);--> statement-breakpoint/g),
+    (match) => Number(match[1]),
+  ).sort((a, b) => a - b);
+  const cardSets = Array.from(
+    verifiedAiRestorationSql.matchAll(/`cards` = json\('([^']+)'\)/g),
+    (match) => JSON.parse(match[1]),
+  );
+  const choiceSets = Array.from(
+    verifiedAiRestorationSql.matchAll(/`choices` = json\('([^']+)'\)/g),
+    (match) => JSON.parse(match[1]),
+  );
+
+  assert.deepEqual(restoredIds, [21, 22, 24, 26, 28, 32, 35, 47, 51, 59, 61, 69, 70, 108]);
+  assert.equal(cardSets.length, restoredIds.length);
+  assert.equal(choiceSets.length, restoredIds.length);
+  assert.ok(cardSets.every((cards) => cards.length === 4));
+  assert.ok(choiceSets.every((choices) => choices.length === 4));
+  assert.equal((verifiedAiRestorationSql.match(/`citation_url` = 'https:\/\//g) ?? []).length, restoredIds.length);
+
+  for (const cards of cardSets) {
+    for (const card of cards) {
+      assert.ok(verifiedAiRestorationSql.split(card.body).length >= 3, `Deep Read is missing: ${card.body}`);
+    }
+  }
 });
 
 test("Gemini safeguards leave quota headroom and pace ingestion", () => {
