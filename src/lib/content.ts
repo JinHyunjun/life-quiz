@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { contentItems, quizItems, sources, type ContentCard } from "../db/schema";
 import { sanitizeContentCards } from "./card-quality";
@@ -56,6 +56,25 @@ export async function listRecentVisualGuides(db: AppDb, category?: Category, lim
     .where(and(...conditions))
     .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
     .limit(Math.min(Math.max(Math.trunc(limit), 1), 6));
+  return items.map(withQualityCards);
+}
+
+export async function listRecentAiDiscoveries(db: AppDb, category?: Category, limit = 6) {
+  const conditions: SQL[] = [
+    publishedContent,
+    eq(contentItems.contentFormat, "article"),
+    eq(sources.originType, "ai_trivia"),
+  ];
+  if (category) conditions.push(eq(contentItems.category, category));
+  else conditions.push(inArray(contentItems.category, ["history", "humor", "social_skills", "daily_tips", "investment"]));
+
+  const items = await db
+    .select(summaryFields)
+    .from(contentItems)
+    .innerJoin(sources, eq(contentItems.sourceId, sources.id))
+    .where(and(...conditions))
+    .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), 12));
   return items.map(withQualityCards);
 }
 

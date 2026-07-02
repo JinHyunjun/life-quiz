@@ -40,6 +40,16 @@ export function assertDistinctCards<T extends CardText>(cards: readonly T[], exp
   return sanitized;
 }
 
+export function assertReadableCards<T extends CardText>(cards: readonly T[], expectedCount = 4): T[] {
+  const exactBodies = new Set(cards.map((card) => compact(card.body)));
+  const headings = new Set(cards.map((card) => compact(card.heading)));
+  const hasBlank = cards.some((card) => !card.heading.trim() || !card.body.trim());
+  if (cards.length !== expectedCount || hasBlank || exactBodies.size !== expectedCount || headings.size !== expectedCount) {
+    throw new Error(`Trivia card check failed: expected ${expectedCount} readable cards`);
+  }
+  return [...cards];
+}
+
 export function assertDeepReadCoversCards(bodyMd: string, cards: readonly CardText[]) {
   const compactBody = compact(bodyMd);
   const missing = cards.filter((card) => !compactBody.includes(compact(card.body)));

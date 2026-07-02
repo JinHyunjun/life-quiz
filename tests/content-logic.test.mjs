@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
+import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
 import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
-import { triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
+import { isUsableWikipediaExtract, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
   ingestionPacingDelayMs,
   scheduledAiCurriculumForKstRun,
@@ -105,6 +105,21 @@ test("AI general knowledge rotates through externally grounded topics", () => {
   assert.notEqual(first.wikipediaTitle, second.wikipediaTitle);
   assert.match(first.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
   assert.match(second.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
+});
+
+test("AI trivia accepts concise source text and tolerates related but non-identical cards", () => {
+  assert.equal(isUsableWikipediaExtract("가".repeat(70)), true);
+  assert.equal(isUsableWikipediaExtract("가".repeat(69)), false);
+
+  const cards = [
+    { heading: "배경", body: "문어는 바다에 사는 영리한 무척추동물입니다." },
+    { heading: "몸", body: "문어는 바다에서 여덟 팔을 활용하는 영리한 무척추동물입니다." },
+    { heading: "행동", body: "문어는 바다에서 도구를 활용하는 영리한 무척추동물입니다." },
+    { heading: "기억", body: "문어는 바다에서 다른 신경 구조를 가진 영리한 무척추동물입니다." },
+  ];
+
+  assert.throws(() => assertDistinctCards(cards));
+  assert.doesNotThrow(() => assertReadableCards(cards));
 });
 
 test("only verified legacy AI articles are restored with complete learning content", () => {

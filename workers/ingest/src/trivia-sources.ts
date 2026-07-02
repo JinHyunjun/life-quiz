@@ -53,6 +53,12 @@ const CURRICULUM: Record<ScheduledTriviaCategory, readonly { topic: string; wiki
 const KST_OFFSET_MS = 9 * 60 * 60 * 1_000;
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const CURRICULUM_START_DAY = Math.floor(Date.UTC(2026, 5, 29) / DAY_MS);
+const MIN_TRIVIA_EXTRACT_LENGTH = 70;
+
+const WIKIPEDIA_HEADERS = {
+  accept: "application/json",
+  "api-user-agent": "LifeQuiz/0.7 (https://github.com/JinHyunjun/life-quiz)",
+};
 
 export function triviaSourceForKstDay(category: ScheduledTriviaCategory, now = new Date()): TriviaSourceTopic {
   const dayNumber = Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS);
@@ -68,31 +74,69 @@ export function triviaSourceForKstDay(category: ScheduledTriviaCategory, now = n
 export async function fetchWikipediaSummary(topic: TriviaSourceTopic) {
   const url = `https://ko.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic.wikipediaTitle)}`;
   const response = await fetch(url, {
-    headers: {
-      accept: "application/json",
-      "api-user-agent": "LifeQuiz/0.6 (https://github.com/JinHyunjun/life-quiz)",
-    },
+    headers: WIKIPEDIA_HEADERS,
   });
-  if (!response.ok) throw new Error(`Wikipedia summary failed: ${response.status} ${topic.wikipediaTitle}`);
 
-  const body = (await response.json()) as {
-    title?: string;
-    type?: string;
-    extract?: string;
-    content_urls?: { desktop?: { page?: string } };
-  };
-  const extract = body.extract?.replace(/\s+/g, " ").trim() ?? "";
-  if (body.type !== "standard" || extract.length < 120) {
-    throw new Error(`Wikipedia summary was too short: ${topic.wikipediaTitle}`);
+  if (response.ok) {
+    const body = (await response.json()) as {
+      title?: string;
+      type?: string;
+      extract?: string;
+      content_urls?: { desktop?: { page?: string } };
+    };
+    const extract = normalizeExtract(body.extract);
+    if (body.type !== "disambiguation" && isUsableWikipediaExtract(extract)) {
+      const title = body.title?.trim() || topic.wikipediaTitle;
+      return wikipediaSource(topic, title, extract, body.content_urls?.desktop?.page);
+    }
   }
 
-  const title = body.title?.trim() || topic.wikipediaTitle;
+  return fetchWikipediaIntro(topic);
+}
+
+export function isUsableWikipediaExtract(extract: string) {
+  return normalizeExtract(extract).length >= MIN_TRIVIA_EXTRACT_LENGTH;
+}
+
+async function fetchWikipediaIntro(topic: TriviaSourceTopic) {
+  const url = new URL("https://ko.wikipedia.org/w/api.php");
+  url.searchParams.set("action", "query");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("formatversion", "2");
+  url.searchParams.set("prop", "extracts|info");
+  url.searchParams.set("titles", topic.wikipediaTitle);
+  url.searchParams.set("redirects", "1");
+  url.searchParams.set("exintro", "1");
+  url.searchParams.set("explaintext", "1");
+  url.searchParams.set("exchars", "1600");
+  url.searchParams.set("inprop", "url");
+
+  const response = await fetch(url, { headers: WIKIPEDIA_HEADERS });
+  if (!response.ok) throw new Error(`Wikipedia intro failed: ${response.status} ${topic.wikipediaTitle}`);
+
+  const body = (await response.json()) as {
+    query?: { pages?: Array<{ title?: string; extract?: string; fullurl?: string; missing?: boolean }> };
+  };
+  const page = body.query?.pages?.[0];
+  const extract = normalizeExtract(page?.extract);
+  if (!page || page.missing || !isUsableWikipediaExtract(extract)) {
+    throw new Error(`Wikipedia article had too little source text: ${topic.wikipediaTitle}`);
+  }
+
+  return wikipediaSource(topic, page.title?.trim() || topic.wikipediaTitle, extract, page.fullurl);
+}
+
+function wikipediaSource(topic: TriviaSourceTopic, title: string, extract: string, url?: string) {
   return {
     title,
     extract,
-    url: body.content_urls?.desktop?.page ?? topic.sourceUrl,
+    url: url ?? topic.sourceUrl,
     citationLabel: `위키백과 '${title}' · CC BY-SA`,
   };
+}
+
+function normalizeExtract(value: string | undefined) {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
 }
 
 function wikipediaPageUrl(title: string) {

@@ -1,5 +1,5 @@
 import type { ContentVisualCue } from "../../../src/db/schema";
-import { assertDeepReadCoversCards, assertDistinctCards } from "../../../src/lib/card-quality";
+import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards } from "../../../src/lib/card-quality";
 import type { SourcedContentCategory } from "./editorial";
 
 export interface GeneratedCard {
@@ -232,14 +232,16 @@ async function callGemini<T>(params: {
   return JSON.parse(text) as T;
 }
 
-export function assembleGeneratedSections(sections: readonly GeneratedSection[]) {
-  const cards = assertDistinctCards(
-    sections.map((section) => ({
-      heading: section.heading.trim(),
-      body: section.summary.trim(),
-      ...(section.visual ? { visual: section.visual } : {}),
-    })),
-  );
+export function assembleGeneratedSections(
+  sections: readonly GeneratedSection[],
+  options: { allowSemanticOverlap?: boolean } = {},
+) {
+  const candidates = sections.map((section) => ({
+    heading: section.heading.trim(),
+    body: section.summary.trim(),
+    ...(section.visual ? { visual: section.visual } : {}),
+  }));
+  const cards = options.allowSemanticOverlap ? assertReadableCards(candidates) : assertDistinctCards(candidates);
   const bodyMd = sections
     .map((section) => `${section.summary.trim()} ${section.details.trim()}`.trim())
     .join("\n\n");
@@ -326,7 +328,7 @@ export async function generateTrivia(params: {
     temperature: 0.6,
     beforeRequest: params.beforeRequest,
   });
-  return { ...generated, ...assembleGeneratedSections(generated.sections) };
+  return { ...generated, ...assembleGeneratedSections(generated.sections, { allowSemanticOverlap: true }) };
 }
 
 export async function generateGlossaryGuide(params: {
