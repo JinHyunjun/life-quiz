@@ -35,9 +35,15 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1_000;
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 export function seoulDistrictForKstRun(now = new Date()): SeoulDistrict {
+  return seoulDistrictsForKstRun(now, 1)[0];
+}
+
+export function seoulDistrictsForKstRun(now = new Date(), count = 1): SeoulDistrict[] {
   const kstTimestamp = now.getTime() + KST_OFFSET_MS;
   const dayNumber = Math.floor(kstTimestamp / DAY_MS);
   const kstHour = new Date(kstTimestamp).getUTCHours();
   const slot = Math.floor(kstHour / 6);
-  return SEOUL_DISTRICTS[(dayNumber * 4 + slot) % SEOUL_DISTRICTS.length];
+  const start = (dayNumber * 4 + slot) % SEOUL_DISTRICTS.length;
+  const normalizedCount = Math.min(Math.max(Math.trunc(count), 1), SEOUL_DISTRICTS.length);
+  return Array.from({ length: normalizedCount }, (_, index) => SEOUL_DISTRICTS[(start + index) % SEOUL_DISTRICTS.length]);
 }

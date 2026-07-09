@@ -97,35 +97,41 @@ export function classifyNewsForBeginners(title: string, summary = ""): Editorial
   };
 }
 
+const YOUTUBE_EDITORIAL_PLANS: readonly (EditorialPlan & { query: string })[] = [
+  {
+    query: "사회초년생 금융 기초 신용 대출",
+    category: "finance",
+    focus: "사회초년생이 월급과 신용을 관리할 때 바로 적용할 수 있는 금융 기초",
+    matchedTerms: [],
+  },
+  {
+    query: "서울 자취 1인가구 생활 행정 팁",
+    category: "seoul_life",
+    focus: "서울 자취생이 실제 생활에서 확인할 수 있는 행정 절차와 비용 절약 방법",
+    matchedTerms: [],
+  },
+  {
+    query: "청년 전월세 계약 주거 기초",
+    category: "housing",
+    focus: "청년 임차인이 계약 전후에 확인할 권리, 비용, 위험 신호",
+    matchedTerms: [],
+  },
+  {
+    query: "직장생활 매너 대화 갈등 해결",
+    category: "social_skills",
+    focus: "첫 직장에서 오해를 줄이는 구체적인 대화와 갈등 대응 방법",
+    matchedTerms: [],
+  },
+];
+
 export function youtubeEditorialPlanForKstSlot(now = new Date()) {
-  const plans: readonly (EditorialPlan & { query: string })[] = [
-    {
-      query: "사회초년생 금융 기초 신용 대출",
-      category: "finance",
-      focus: "사회초년생이 월급과 신용을 관리할 때 바로 적용할 수 있는 금융 기초",
-      matchedTerms: [],
-    },
-    {
-      query: "서울 자취 1인가구 생활 행정 팁",
-      category: "seoul_life",
-      focus: "서울 자취생이 실제 생활에서 확인할 수 있는 행정 절차와 비용 절약 방법",
-      matchedTerms: [],
-    },
-    {
-      query: "청년 전월세 계약 주거 기초",
-      category: "housing",
-      focus: "청년 임차인이 계약 전후에 확인할 권리, 비용, 위험 신호",
-      matchedTerms: [],
-    },
-    {
-      query: "직장생활 매너 대화 갈등 해결",
-      category: "social_skills",
-      focus: "첫 직장에서 오해를 줄이는 구체적인 대화와 갈등 대응 방법",
-      matchedTerms: [],
-    },
-  ];
+  return youtubeEditorialPlansForKstRun(now)[0];
+}
+
+export function youtubeEditorialPlansForKstRun(now = new Date()) {
   const kstHour = new Date(now.getTime() + 9 * 60 * 60 * 1_000).getUTCHours();
-  return plans[Math.floor(kstHour / 6) % plans.length];
+  const slot = Math.floor(kstHour / 6) % YOUTUBE_EDITORIAL_PLANS.length;
+  return YOUTUBE_EDITORIAL_PLANS.map((_, index) => YOUTUBE_EDITORIAL_PLANS[(slot + index) % YOUTUBE_EDITORIAL_PLANS.length]);
 }
 
 function normalize(value: string) {

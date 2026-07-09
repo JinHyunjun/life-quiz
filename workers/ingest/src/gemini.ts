@@ -94,7 +94,7 @@ const SECTION_ITEM_SCHEMA = {
     summary: { type: "string", description: "Quick Read 카드에 그대로 넣을 핵심 정보 1~2문장." },
     details: {
       type: "string",
-      description: "summary의 이유, 원리, 맥락, 주의점을 더 깊게 설명하는 2~4문장. summary 문장을 반복하지 않는다.",
+      description: "summary의 이유, 원리, 용어 풀이, 맥락, 주의점을 더 깊게 설명하는 3~5문장. summary 문장을 반복하지 않는다.",
     },
   },
   required: ["heading", "summary", "details"],
@@ -255,20 +255,25 @@ export async function generateArticleAndQuiz(params: {
   citationLabel: string;
   category: SourcedContentCategory;
   editorialFocus: string;
+  matchedTerms?: string[];
   apiKey: string;
   model: string;
   beforeRequest: BeforeGeminiRequest;
 }): Promise<GeneratedContent> {
+  const beginnerTerms = [...new Set(params.matchedTerms ?? [])].slice(0, 6);
   const prompt = [
     "당신은 사회초년생을 위한 생활상식 큐레이션 서비스의 에디터입니다.",
     "아래 원본 자료를 바탕으로, 원문을 그대로 베끼지 말고 사회초년생이 이해하기 쉽게 새로 풀어 쓴 글과 복습용 4지선다 퀴즈 1개를 작성하세요.",
     "학습 섹션은 정확히 4개로 만드세요. 1번은 핵심 상황, 2번은 원인·구조, 3번은 구체적인 수치나 사례, 4번은 독자가 확인할 행동 또는 주의점만 다룹니다.",
-    "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 같은 summary를 반복하지 말고 이유·원리·맥락·예외를 2~4문장으로 더 깊게 설명하세요.",
+    "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 같은 summary를 반복하지 말고 이유·원리·맥락·예외·초보자용 용어 풀이를 3~5문장으로 더 깊게 설명하세요.",
     "Deep Read는 코드에서 summary와 details를 합쳐 만듭니다. 따라서 Quick Read에만 있고 Deep Read에는 없는 정보가 생기지 않도록 모든 핵심 정보를 해당 section 안에 배치하세요.",
     "각 섹션은 앞 섹션에 없던 새 정보를 하나 이상 담아야 합니다. 같은 사실, 수치, 결론, 조언을 표현만 바꿔 반복하면 안 됩니다.",
     `이 콘텐츠의 분류는 '${params.category}'로 이미 결정되었습니다. 다른 분야의 일반 뉴스로 넓히지 마세요.`,
+    `분야별 학습 목표: ${categoryLearningGoal(params.category)}`,
     `편집 관점: ${params.editorialFocus}`,
+    beginnerTerms.length > 0 ? `초보자가 헷갈릴 수 있는 용어 후보: ${beginnerTerms.join(", ")}. 원본 맥락에 맞는 용어만 쉬운 말로 풀어 쓰세요.` : "",
     "원본에 없는 수치나 제도 내용을 추측해서 채우지 마세요. 사회초년생이 실제로 판단하거나 행동하는 데 도움이 되지 않는 주변 정보는 생략하세요.",
+    "본문은 짧은 뉴스 요약이 아니라 학습 콘텐츠입니다. 각 details에는 독자가 다음에 무엇을 확인해야 하는지 최소 1개씩 넣으세요.",
     "퀴즈 해설에는 정답인 이유와 비슷한 오답을 구분하는 기준을 2문장으로 설명하세요.",
     "투자 콘텐츠에서는 특정 종목의 매수·매도 추천이나 수익 보장 표현을 쓰지 마세요.",
     `출처: ${params.citationLabel}`,
@@ -285,6 +290,18 @@ export async function generateArticleAndQuiz(params: {
     beforeRequest: params.beforeRequest,
   });
   return { ...generated, category: params.category, ...assembleGeneratedSections(generated.sections) };
+}
+
+function categoryLearningGoal(category: SourcedContentCategory) {
+  const goals: Record<SourcedContentCategory, string> = {
+    finance: "월급, 신용, 대출, 세금, 보험처럼 개인 돈 관리에 바로 영향을 주는 용어와 확인 행동을 설명합니다.",
+    investment: "투자 판단을 대신하지 말고 지표, 위험, 손실 가능성, 확인해야 할 공시나 기준을 초보자 관점으로 설명합니다.",
+    housing: "계약 전후의 비용, 권리 보호, 문서 확인 순서, 위험 신호를 실제 임차인 상황에 맞춰 설명합니다.",
+    seoul_life: "서울 자취생이 어디서, 언제, 무엇을 확인해야 하는지 행정 절차와 생활 동선을 중심으로 설명합니다.",
+    daily_tips: "자취와 소비 생활에서 비용과 실수를 줄이는 절차, 준비물, 예외 상황을 설명합니다.",
+    social_skills: "첫 직장과 대인관계에서 오해를 줄이는 말하기 방식, 경계선, 후속 행동을 구체적으로 설명합니다.",
+  };
+  return goals[category];
 }
 
 const TRIVIA_PROMPTS = {
@@ -311,7 +328,7 @@ export async function generateTrivia(params: {
     "복습용 4지선다 퀴즈 1개도 작성하세요.",
     "퀴즈 해설에는 정답인 이유와 오답을 구분하는 핵심 기준을 2문장으로 설명하세요.",
     "학습 섹션은 정확히 4개로 구성하세요. 배경 → 핵심 원리 → 실제 사례 → 기억할 행동 순서이며, 같은 사실이나 조언을 표현만 바꿔 반복하지 마세요.",
-    "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 summary를 반복하지 말고 근거·맥락·예외·실천 방법을 2~4문장으로 더 깊게 설명하세요.",
+    "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 summary를 반복하지 말고 근거·맥락·예외·실천 방법을 3~5문장으로 더 깊게 설명하세요.",
     "Deep Read는 summary와 details를 합쳐 만들므로 Quick Read의 모든 정보가 반드시 Deep Read 안에 포함되어야 합니다.",
     `출처: ${params.citationLabel}`,
     "참고 문서:",
@@ -349,7 +366,7 @@ export async function generateGlossaryGuide(params: {
     `오늘 설명할 ${field} 기초 용어는 '${params.term}'입니다. 이 용어를 처음 듣는 사람도 실제 생활에서 알아볼 수 있게 설명하세요.`,
     "어려운 말을 다시 어려운 말로 정의하지 마세요. 불가피한 전문용어는 바로 뒤에서 쉬운 말로 풀어 쓰세요.",
     "4개 학습 섹션은 정확히 다음 역할로 구성하세요: 1번 한 문장 정의, 2번 돈이나 계약이 움직이는 구조, 3번 사회초년생의 구체적 상황 예시, 4번 실수하지 않기 위한 확인 항목.",
-    "각 section의 summary는 4컷 그림의 말풍선에 그대로 노출됩니다. details는 그 내용을 반복하지 말고 초보자가 이해할 수 있도록 이유·계산·주의점을 2~4문장으로 확장하세요.",
+    "각 section의 summary는 4컷 그림의 말풍선에 그대로 노출됩니다. details는 그 내용을 반복하지 말고 초보자가 이해할 수 있도록 이유·계산·주의점·다음 확인 행동을 3~5문장으로 확장하세요.",
     "각 섹션은 다른 사실을 담아야 하며 같은 정의, 예시, 주의점을 반복하면 안 됩니다. 금액이나 비율이 중요한 용어라면 현실적인 숫자 예시를 포함하세요.",
     "각 section의 visual은 내용을 가장 잘 나타내는 그림 기호를 고르세요. 퀴즈는 암기보다 실제 상황 판단을 묻는 4지선다로 만드세요.",
     "퀴즈 해설에는 정답인 이유와 실제 상황에서 판단할 기준을 2문장으로 설명하세요.",

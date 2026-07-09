@@ -21,6 +21,14 @@ export function scheduledAiCurriculumForKstRun(now = new Date()) {
   };
 }
 
+export function scheduledAiCurriculumBatchForKstRun(now = new Date()) {
+  const slot = kstSixHourSlot(now);
+  return {
+    glossary: rotateBySlot(glossaryTopicsForKstDay(now), slot),
+    trivia: rotateBySlot(TRIVIA_CATEGORIES, slot).map((category) => triviaSourceForKstDay(category, now)),
+  };
+}
+
 export function normalizeIngestionIntervalMs(value: number) {
   return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value), 5_000), 30_000) : 8_000;
 }
@@ -28,4 +36,9 @@ export function normalizeIngestionIntervalMs(value: number) {
 export function ingestionPacingDelayMs(lastStartedAtMs: number, intervalMs: number, nowMs = Date.now()) {
   if (lastStartedAtMs <= 0) return 0;
   return Math.max(0, normalizeIngestionIntervalMs(intervalMs) - (nowMs - lastStartedAtMs));
+}
+
+function rotateBySlot<T>(items: readonly T[], slot: number): T[] {
+  if (items.length === 0) return [];
+  return items.map((_, index) => items[(slot + index) % items.length]);
 }

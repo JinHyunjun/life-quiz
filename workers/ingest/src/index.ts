@@ -10,14 +10,15 @@ import {
   type BeforeGeminiRequest,
   type ChatMessage,
 } from "./gemini";
-import { seoulDistrictForKstRun } from "./districts";
+import { seoulDistrictsForKstRun } from "./districts";
 import {
   classifyNewsForBeginners,
-  youtubeEditorialPlanForKstSlot,
+  youtubeEditorialPlansForKstRun,
+  type EditorialPlan,
   type SourcedContentCategory,
 } from "./editorial";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
-import { fetchRssFeed } from "./fetchers/rss";
+import { fetchRssFeed, type RssItem } from "./fetchers/rss";
 import type { GlossaryCategory } from "./glossary";
 import {
   GeminiRateLimitError,
@@ -29,8 +30,7 @@ import {
 import {
   ingestionPacingDelayMs,
   normalizeIngestionIntervalMs,
-  scheduledAiCurriculumForKstRun,
-  type ScheduledTriviaCategory,
+  scheduledAiCurriculumBatchForKstRun,
 } from "./schedule";
 import { searchRecentYoutubeVideos } from "./fetchers/youtube";
 import { getReleaseFeed } from "./releases";
@@ -42,6 +42,7 @@ export interface Env {
   GEMINI_MODEL: string;
   GEMINI_RPM_BUDGET: string;
   GEMINI_INGEST_MIN_INTERVAL_MS: string;
+  GEMINI_INGEST_MAX_ITEMS: string;
   // data.go.kr actually issues one shared account-wide serviceKey reused across all approved
   // datasets (confirmed by comparing the values on each dataset's detail page). Kept as separate
   // secrets per dataset anyway in case that policy ever changes per-dataset.
@@ -54,8 +55,6 @@ export interface Env {
   NOTION_PAGE_ID: string;
 }
 
-type TriviaCategory = ScheduledTriviaCategory;
-
 type PendingItem =
   | {
       kind: "sourced";
@@ -65,9 +64,12 @@ type PendingItem =
       sourceText: string;
       category: SourcedContentCategory;
       editorialFocus: string;
+      matchedTerms: string[];
     }
   | { kind: "glossary"; url: string; category: GlossaryCategory; term: string; citationLabel: string; citationUrl: string | null }
   | ({ kind: "trivia" } & TriviaSourceTopic);
+
+type BalancedContentCategory = SourcedContentCategory | TriviaSourceTopic["category"];
 
 const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citationUrl: string | null }> = {
   finance: {
@@ -83,6 +85,27 @@ const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citati
     citationUrl: "https://www.easylaw.go.kr/CSP/CnpClsMain.laf?ccfNo=2&cciNo=2&cnpClsNo=1&csmSeq=629&popMenu=ov",
   },
 };
+
+const NEWS_FEEDS = [
+  { url: "https://www.hankyung.com/feed/economy", citationLabel: "한국경제" },
+] as const;
+
+const CATEGORY_ORDER: readonly BalancedContentCategory[] = [
+  "finance",
+  "investment",
+  "housing",
+  "seoul_life",
+  "daily_tips",
+  "social_skills",
+  "history",
+  "humor",
+];
+
+const DEFAULT_MAX_INGEST_ITEMS = 12;
+const MAX_NEWS_ITEMS_PER_RUN = 6;
+const MAX_NEWS_ITEMS_PER_CATEGORY = 2;
+const MAX_YOUTUBE_RESULTS_PER_TOPIC = 1;
+const MAX_REAL_ESTATE_DISTRICTS_PER_RUN = 2;
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -215,86 +238,101 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   const items: PendingItem[] = [];
   const now = new Date();
 
-  const rss = await fetchRssFeed("https://www.hankyung.com/feed/economy").catch(() => []);
-  const relevantNews = rss.flatMap((item) => {
-    const plan = classifyNewsForBeginners(item.title, item.summary);
-    return plan ? [{ item, plan }] : [];
-  }).slice(0, 3);
-  for (const { item, plan } of relevantNews) {
+  const newsCandidates = (
+    await Promise.all(
+      NEWS_FEEDS.map(async (feed) => {
+        const rss = await fetchRssFeed(feed.url).catch(() => []);
+        return rss.flatMap((item) => {
+          const plan = classifyNewsForBeginners(item.title, item.summary);
+          return plan ? [{ item, plan, citationLabel: feed.citationLabel }] : [];
+        });
+      }),
+    )
+  ).flat();
+  for (const { item, plan, citationLabel } of selectBalancedNews(newsCandidates)) {
     items.push({
       kind: "sourced",
       url: item.link,
       originType: "news",
-      citationLabel: "한국경제",
+      citationLabel,
       sourceText: `${item.title}\n\n${item.summary}`,
       category: plan.category,
       editorialFocus: plan.focus,
+      matchedTerms: plan.matchedTerms,
     });
   }
 
-  const youtubePlan = youtubeEditorialPlanForKstSlot(now);
-  const youtube = await searchRecentYoutubeVideos({
-    query: youtubePlan.query,
-    apiKey: env.YOUTUBE_API_KEY,
-    maxResults: 2,
-  }).catch(() => []);
-  for (const video of youtube) {
-    items.push({
-      kind: "sourced",
-      url: video.watchUrl,
-      originType: "youtube",
-      citationLabel: `유튜브 - ${video.channelTitle}`,
-      sourceText: `${video.title}\n\n${video.description}\n\n게시일: ${video.publishedAt}\n검색 주제: ${youtubePlan.query}`,
-      category: youtubePlan.category,
-      editorialFocus: youtubePlan.focus,
-    });
+  for (const youtubePlan of youtubeEditorialPlansForKstRun(now)) {
+    const youtube = await searchRecentYoutubeVideos({
+      query: youtubePlan.query,
+      apiKey: env.YOUTUBE_API_KEY,
+      maxResults: MAX_YOUTUBE_RESULTS_PER_TOPIC,
+    }).catch(() => []);
+    for (const video of youtube) {
+      items.push({
+        kind: "sourced",
+        url: video.watchUrl,
+        originType: "youtube",
+        citationLabel: `유튜브 - ${video.channelTitle}`,
+        sourceText: `${video.title}\n\n${video.description}\n\n게시일: ${video.publishedAt}\n검색 주제: ${youtubePlan.query}`,
+        category: youtubePlan.category,
+        editorialFocus: youtubePlan.focus,
+        matchedTerms: youtubePlan.matchedTerms,
+      });
+    }
   }
 
   const aptJobs: { kind: "rent" | "sale"; key: string; label: string }[] = [
     { kind: "rent", key: env.DATA_GO_KR_KEY_APT_RENT, label: "국토교통부 아파트 전월세 실거래가" },
     { kind: "sale", key: env.DATA_GO_KR_KEY_APT_SALE, label: "국토교통부 아파트 매매 실거래가" },
   ];
-  const district = seoulDistrictForKstRun(now);
+  const districts = seoulDistrictsForKstRun(now, MAX_REAL_ESTATE_DISTRICTS_PER_RUN);
+  const primaryDistrict = districts[0];
   const dealYmd = previousYearMonth(now);
 
-  for (const job of aptJobs) {
+  for (const district of districts) {
+    for (const job of aptJobs) {
+      try {
+        const { url, rows } = await fetchAptTransactions(job.kind, job.key, district.lawdCd, dealYmd);
+        if (rows.length === 0) continue;
+        items.push({
+          kind: "sourced",
+          url,
+          originType: "gov",
+          citationLabel: job.label,
+          sourceText: summarizeAptRows(district.name, job.kind, rows),
+          category: "housing",
+          editorialFocus: `${district.name}의 개별 거래를 단정적으로 해석하지 말고, 실거래가를 읽는 방법과 예산·계약 확인 항목을 설명`,
+          matchedTerms: ["실거래가", "전월세", "매매", "계약"],
+        });
+      } catch {
+        // Skip this source for this run; next scheduled run will retry.
+      }
+    }
+  }
+
+  if (primaryDistrict) {
     try {
-      const { url, rows } = await fetchAptTransactions(job.kind, job.key, district.lawdCd, dealYmd);
-      if (rows.length === 0) continue;
-      items.push({
-        kind: "sourced",
-        url,
-        originType: "gov",
-        citationLabel: job.label,
-        sourceText: summarizeAptRows(district.name, job.kind, rows),
-        category: "housing",
-        editorialFocus: `${district.name}의 개별 거래를 단정적으로 해석하지 말고, 실거래가를 읽는 방법과 예산·계약 확인 항목을 설명`,
-      });
+      const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, primaryDistrict.name);
+      if (rows.length > 0) {
+        items.push({
+          kind: "sourced",
+          url,
+          originType: "gov",
+          citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
+          sourceText: `서울 ${primaryDistrict.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`,
+          category: "seoul_life",
+          editorialFocus: `${primaryDistrict.name} 자취생이 배출 장소·요일·품목을 실제로 확인하고 실수하지 않는 방법`,
+          matchedTerms: ["생활쓰레기", "배출", "요일", "품목"],
+        });
+      }
     } catch {
       // Skip this source for this run; next scheduled run will retry.
     }
   }
 
-  try {
-    const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, district.name);
-    if (rows.length > 0) {
-      items.push({
-        kind: "sourced",
-        url,
-        originType: "gov",
-        citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
-        sourceText: `서울 ${district.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`,
-        category: "seoul_life",
-        editorialFocus: `${district.name} 자취생이 배출 장소·요일·품목을 실제로 확인하고 실수하지 않는 방법`,
-      });
-    }
-  } catch {
-    // Skip this source for this run; next scheduled run will retry.
-  }
-
-  const scheduledCurriculum = scheduledAiCurriculumForKstRun(now);
-  if (scheduledCurriculum.glossary) {
-    const topic = scheduledCurriculum.glossary;
+  const scheduledCurriculum = scheduledAiCurriculumBatchForKstRun(now);
+  for (const topic of scheduledCurriculum.glossary) {
     const source = GLOSSARY_SOURCES[topic.category];
     items.push({
       kind: "glossary",
@@ -306,11 +344,72 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     });
   }
 
-  // One category per six-hour slot avoids four back-to-back Gemini calls every run.
-  items.push({ kind: "trivia", ...scheduledCurriculum.trivia });
+  for (const trivia of scheduledCurriculum.trivia) {
+    items.push({ kind: "trivia", ...trivia });
+  }
 
-  const priority: Record<PendingItem["kind"], number> = { glossary: 0, trivia: 1, sourced: 2 };
-  return items.sort((a, b) => priority[a.kind] - priority[b.kind]);
+  return sortPendingItemsByCategory(items);
+}
+
+function selectBalancedNews(candidates: Array<{ item: RssItem; plan: EditorialPlan; citationLabel: string }>) {
+  const selected: typeof candidates = [];
+  const counts = new Map<SourcedContentCategory, number>();
+
+  for (const candidate of candidates) {
+    const count = counts.get(candidate.plan.category) ?? 0;
+    if (count >= MAX_NEWS_ITEMS_PER_CATEGORY) continue;
+    selected.push(candidate);
+    counts.set(candidate.plan.category, count + 1);
+    if (selected.length >= MAX_NEWS_ITEMS_PER_RUN) return selected;
+  }
+
+  for (const candidate of candidates) {
+    if (selected.includes(candidate)) continue;
+    selected.push(candidate);
+    if (selected.length >= MAX_NEWS_ITEMS_PER_RUN) break;
+  }
+
+  return selected;
+}
+
+function sortPendingItemsByCategory(items: PendingItem[]) {
+  const buckets = new Map<BalancedContentCategory, PendingItem[]>();
+  for (const item of items) {
+    const category = pendingItemCategory(item);
+    const bucket = buckets.get(category) ?? [];
+    bucket.push(item);
+    buckets.set(category, bucket);
+  }
+
+  for (const bucket of buckets.values()) {
+    bucket.sort((a, b) => pendingKindPriority(a) - pendingKindPriority(b));
+  }
+
+  const sorted: PendingItem[] = [];
+  let consumed = 0;
+  while (consumed < items.length) {
+    const before = consumed;
+    for (const category of CATEGORY_ORDER) {
+      const next = buckets.get(category)?.shift();
+      if (!next) continue;
+      sorted.push(next);
+      consumed += 1;
+    }
+    if (consumed === before) break;
+  }
+
+  return sorted.concat([...buckets.values()].flat());
+}
+
+function pendingItemCategory(item: PendingItem): BalancedContentCategory {
+  if (item.kind === "trivia") return item.category;
+  return item.category;
+}
+
+function pendingKindPriority(item: PendingItem) {
+  if (item.kind === "glossary") return 0;
+  if (item.kind === "trivia") return 1;
+  return 2;
 }
 
 function summarizeAptRows(districtName: string, kind: "rent" | "sale", rows: AptTransactionRow[]) {
@@ -331,6 +430,10 @@ function previousYearMonth(now = new Date()) {
 function createGeminiRequestGate(env: Env, purpose: GeminiRequestPurpose): BeforeGeminiRequest {
   const maxRequests = normalizeGeminiRpmBudget(Number(env.GEMINI_RPM_BUDGET));
   return () => reserveGeminiRequest(env.DB, { purpose, maxRequests }).then(() => undefined);
+}
+
+function normalizeIngestionBatchLimit(value: number) {
+  return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value), 4), 24) : DEFAULT_MAX_INGEST_ITEMS;
 }
 
 async function isAlreadyIngested(db: AppDb, url: string) {
@@ -366,6 +469,7 @@ async function ingestSourcedItem(
     citationLabel: item.citationLabel,
     category: item.category,
     editorialFocus: item.editorialFocus,
+    matchedTerms: item.matchedTerms,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -515,6 +619,7 @@ async function runIngestion(env: Env) {
   const pending = await collectPendingItems(env);
   const beforeRequest = createGeminiRequestGate(env, "ingestion");
   const minIntervalMs = normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS));
+  const maxItems = normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS));
   const created: { contentItemId: number; title: string }[] = [];
   const skipped: string[] = [];
   const deferred: string[] = [];
@@ -526,6 +631,11 @@ async function runIngestion(env: Env) {
 
     if (await isAlreadyIngested(db, label)) {
       skipped.push(label);
+      continue;
+    }
+
+    if (created.length >= maxItems) {
+      deferred.push(label);
       continue;
     }
 
@@ -546,7 +656,7 @@ async function runIngestion(env: Env) {
     }
   }
 
-  return { created, skipped, deferred, failed, minIntervalMs };
+  return { created, skipped, deferred, failed, minIntervalMs, maxItems };
 }
 
 export default {

@@ -5,11 +5,12 @@ import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards, sa
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
-import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot } from "../workers/ingest/src/editorial.ts";
+import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot, youtubeEditorialPlansForKstRun } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
 import { isUsableWikipediaExtract, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
   ingestionPacingDelayMs,
+  scheduledAiCurriculumBatchForKstRun,
   scheduledAiCurriculumForKstRun,
 } from "../workers/ingest/src/schedule.ts";
 import { parseNotionReleaseBlocks } from "../src/lib/releases.ts";
@@ -98,6 +99,19 @@ test("daily AI curriculum is distributed across four six-hour slots", () => {
   assert.ok(schedules.every((schedule) => schedule.trivia.sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
 });
 
+test("daily AI curriculum batch covers all core categories in one run", () => {
+  const schedule = scheduledAiCurriculumBatchForKstRun(new Date("2026-06-26T15:00:00Z"));
+
+  assert.deepEqual(
+    schedule.glossary.map((topic) => topic.category).sort(),
+    ["finance", "housing", "investment"],
+  );
+  assert.deepEqual(
+    schedule.trivia.map((topic) => topic.category).sort(),
+    ["daily_tips", "history", "humor", "social_skills"],
+  );
+});
+
 test("AI general knowledge rotates through externally grounded topics", () => {
   const first = triviaSourceForKstDay("history", new Date("2026-06-28T15:00:00Z"));
   const second = triviaSourceForKstDay("history", new Date("2026-06-29T15:00:00Z"));
@@ -171,6 +185,10 @@ test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", 
   assert.ok(finance?.matchedTerms.includes("예금"));
   assert.equal(offTopic, null);
   assert.equal(youtubeEditorialPlanForKstSlot(new Date("2026-06-26T15:00:00Z")).category, "finance");
+  assert.deepEqual(
+    youtubeEditorialPlansForKstRun(new Date("2026-06-26T15:00:00Z")).map((plan) => plan.category),
+    ["finance", "seoul_life", "housing", "social_skills"],
+  );
 });
 
 test("Notion release headings, dates, sections, and bullets are parsed", () => {
