@@ -34,7 +34,7 @@ Astro 7 + Cloudflare Workers Static Assets
 ├─ Astro API: /api/learning/*, /api/reviews/*, /api/chat
 ├─ D1: 콘텐츠 검수 상태, 학습 목록, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
-   ├─ Hono 수집 API와 KST 00/06/12/18시 Cron
+   ├─ Hono 수집 API와 KST 00/06/12/18시 통합 Cron
    └─ Gemini 생성 및 근거형 챗 응답 (D1 공용 RPM 예산 적용)
 ```
 
@@ -84,6 +84,8 @@ npx wrangler secret put YOUTUBE_API_KEY --config workers/ingest/wrangler.jsonc
 npx wrangler secret put NOTION_TOKEN --config workers/ingest/wrangler.jsonc
 ```
 
+`NOTION_TOKEN`이 있어도 Notion 페이지가 해당 integration에 공유되지 않으면 Notion API는 404를 반환합니다. 이 경우 `/changelog`는 저장소의 최신 스냅샷을 표시하므로 페이지는 유지되지만, Notion에서 새 항목을 자동 반영하려면 릴리즈 노트 페이지를 같은 integration에 다시 공유해야 합니다.
+
 ## 검증
 
 ```sh
@@ -106,7 +108,7 @@ npm run build
 npm run deploy:app
 ```
 
-Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이므로 설정에는 `0 15`, `0 21`, `0 3`, `0 9`가 등록됩니다. 각 배치는 서울 자치구 2곳의 실거래가, 대표 자치구 생활 정보, 분야 균형 RSS 뉴스, YouTube 4개 주제, 금융·투자·부동산 용어, 역사·유머·사회성·생활상식 후보를 모은 뒤 중복과 Gemini 예산을 통과한 항목만 최대 12개 생성합니다.
+Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이고, 무료 계정의 Trigger 수를 아끼기 위해 설정에는 `0 3,9,15,21 * * *` 하나만 등록합니다. 각 배치는 서울 자치구 2곳의 실거래가, 대표 자치구 생활 정보, 분야 균형 RSS 뉴스, YouTube 4개 주제, 금융·투자·부동산 용어, 역사·유머·사회성·생활상식 후보를 모은 뒤 중복과 Gemini 예산을 통과한 항목만 최대 12개 생성합니다.
 
 ## 남은 큰 작업
 

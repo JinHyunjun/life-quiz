@@ -23,10 +23,22 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-06-29T00:00:00.000Z",
+  fetchedAt: "2026-07-09T00:00:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.8",
+      title: "무료 한도와 수집 안정화",
+      date: "2026-07-09",
+      changes: [
+        { type: "bullet", text: "KST 00/06/12/18시 수집을 Cloudflare Cron 표현식 하나로 통합해 Life Quiz Trigger 사용량을 4개에서 1개로 축소" },
+        { type: "bullet", text: "같은 Cloudflare 계정의 Soccer Cron까지 합산해 현재 Trigger 사용량을 2/5로 재산정" },
+        { type: "bullet", text: "README와 무료 운영 문서에 통합 Cron, 실제 D1 사용량, Gemini 3.1 Flash Lite 운영 기준을 반영" },
+        { type: "bullet", text: "릴리즈 노트 날짜가 서버 시간대에 따라 하루 밀리지 않도록 KST 표시로 고정" },
+        { type: "bullet", text: "릴리즈 노트 원본과 웹 표시용 스냅샷을 최신 운영 상태에 맞게 업데이트" },
+      ],
+    },
     {
       version: "v0.7",
       title: "AI 상식 선별 복구",
