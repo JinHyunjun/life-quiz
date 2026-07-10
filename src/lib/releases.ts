@@ -23,10 +23,22 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-09T00:00:00.000Z",
+  fetchedAt: "2026-07-10T07:00:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.9",
+      title: "수집량 회복과 진단 로그",
+      date: "2026-07-10",
+      changes: [
+        { type: "bullet", text: "원격 D1 기준 오늘 생성량이 3건까지 줄어든 상태를 확인하고, 최근 일자별 생성량과 소스별 중단 시점을 점검" },
+        { type: "bullet", text: "Cloudflare Cron을 `0 3/6 * * *` 한 표현식으로 정리해 KST 00/06/12/18시 실행 의도를 더 명확히 반영" },
+        { type: "bullet", text: "수집 회차마다 생성·중복·지연·실패 건수를 D1 `ingestion_runs`에 저장해 다음 급감 원인을 바로 추적" },
+        { type: "bullet", text: "YouTube는 주제별 후보를 3개까지 받아 이미 수집한 최신 영상만 반복 선택되는 문제를 완화" },
+        { type: "bullet", text: "짧은 위키백과 요약은 문서 도입부로 보강해 일반 상식 콘텐츠가 근거 부족으로 사라지는 문제를 줄임" },
+      ],
+    },
     {
       version: "v0.8",
       title: "무료 한도와 수집 안정화",

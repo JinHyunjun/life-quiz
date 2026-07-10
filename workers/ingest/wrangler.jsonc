@@ -21,7 +21,7 @@
 	],
 	"triggers": {
 		"crons": [
-			"0 3,9,15,21 * * *"
+			"0 3/6 * * *"
 		]
 	},
 	"observability": {

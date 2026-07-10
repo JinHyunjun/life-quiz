@@ -87,6 +87,13 @@ export async function fetchWikipediaSummary(topic: TriviaSourceTopic) {
     const extract = normalizeExtract(body.extract);
     if (body.type !== "disambiguation" && isUsableWikipediaExtract(extract)) {
       const title = body.title?.trim() || topic.wikipediaTitle;
+      if (extract.length < 500) {
+        try {
+          return await fetchWikipediaIntro(topic);
+        } catch {
+          // The short REST summary is still better than dropping this topic entirely.
+        }
+      }
       return wikipediaSource(topic, title, extract, body.content_urls?.desktop?.page);
     }
   }

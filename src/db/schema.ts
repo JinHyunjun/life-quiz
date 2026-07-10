@@ -153,6 +153,43 @@ export const geminiRequestLog = sqliteTable(
   (table) => [index("gemini_request_log_requested_at_idx").on(table.requestedAtMs)],
 );
 
+export interface IngestionRunCreatedItem {
+  contentItemId: number;
+  title: string;
+}
+
+export interface IngestionRunFailure {
+  item: string;
+  error: string;
+}
+
+export const ingestionRuns = sqliteTable(
+  "ingestion_runs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    trigger: text("trigger", { enum: ["scheduled", "manual"] }).notNull(),
+    status: text("status", { enum: ["success", "error"] }).notNull(),
+    pendingCount: integer("pending_count").notNull().default(0),
+    createdCount: integer("created_count").notNull().default(0),
+    skippedCount: integer("skipped_count").notNull().default(0),
+    deferredCount: integer("deferred_count").notNull().default(0),
+    failedCount: integer("failed_count").notNull().default(0),
+    minIntervalMs: integer("min_interval_ms").notNull().default(0),
+    maxItems: integer("max_items").notNull().default(0),
+    createdItems: text("created_items", { mode: "json" }).notNull().$type<IngestionRunCreatedItem[]>(),
+    skippedItems: text("skipped_items", { mode: "json" }).notNull().$type<string[]>(),
+    deferredItems: text("deferred_items", { mode: "json" }).notNull().$type<string[]>(),
+    failedItems: text("failed_items", { mode: "json" }).notNull().$type<IngestionRunFailure[]>(),
+    error: text("error"),
+    startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+    finishedAt: integer("finished_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("ingestion_runs_started_at_idx").on(table.startedAt),
+    index("ingestion_runs_status_started_idx").on(table.status, table.startedAt),
+  ],
+);
+
 export const releaseCache = sqliteTable("release_cache", {
   key: text("key").primaryKey(),
   payload: text("payload", { mode: "json" }).notNull().$type<ReleaseFeed>(),

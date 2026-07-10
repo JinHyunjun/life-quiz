@@ -104,7 +104,7 @@ const CATEGORY_ORDER: readonly BalancedContentCategory[] = [
 const DEFAULT_MAX_INGEST_ITEMS = 12;
 const MAX_NEWS_ITEMS_PER_RUN = 6;
 const MAX_NEWS_ITEMS_PER_CATEGORY = 2;
-const MAX_YOUTUBE_RESULTS_PER_TOPIC = 1;
+const MAX_YOUTUBE_RESULTS_PER_TOPIC = 3;
 const MAX_REAL_ESTATE_DISTRICTS_PER_RUN = 2;
 
 const app = new Hono<{ Bindings: Env }>();
@@ -155,7 +155,16 @@ app.post("/internal/trigger", async (c) => {
   if (c.req.header("x-life-quiz-service") !== "ingest") {
     return c.json({ error: "Not found" }, 404);
   }
+  const startedAt = new Date();
+  const db = createDb(c.env.DB);
   const result = await runIngestion(c.env);
+  await saveIngestionRun(db, {
+    trigger: "manual",
+    status: "success",
+    result,
+    startedAt,
+    finishedAt: new Date(),
+  });
   return c.json(result);
 });
 
@@ -656,19 +665,86 @@ async function runIngestion(env: Env) {
     }
   }
 
-  return { created, skipped, deferred, failed, minIntervalMs, maxItems };
+  return { pendingCount: pending.length, created, skipped, deferred, failed, minIntervalMs, maxItems };
+}
+
+type IngestionResult = Awaited<ReturnType<typeof runIngestion>>;
+type IngestionTrigger = "scheduled" | "manual";
+
+function failedIngestionResult(env: Env, error: unknown): IngestionResult {
+  return {
+    pendingCount: 0,
+    created: [],
+    skipped: [],
+    deferred: [],
+    failed: [{ item: "run", error: error instanceof Error ? error.message : String(error) }],
+    minIntervalMs: normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS)),
+    maxItems: normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS)),
+  };
+}
+
+async function saveIngestionRun(
+  db: AppDb,
+  params: {
+    trigger: IngestionTrigger;
+    status: "success" | "error";
+    result: IngestionResult;
+    startedAt: Date;
+    finishedAt: Date;
+    error?: string;
+  },
+) {
+  await db.insert(schema.ingestionRuns).values({
+    trigger: params.trigger,
+    status: params.status,
+    pendingCount: params.result.pendingCount,
+    createdCount: params.result.created.length,
+    skippedCount: params.result.skipped.length,
+    deferredCount: params.result.deferred.length,
+    failedCount: params.result.failed.length,
+    minIntervalMs: params.result.minIntervalMs,
+    maxItems: params.result.maxItems,
+    createdItems: params.result.created,
+    skippedItems: params.result.skipped,
+    deferredItems: params.result.deferred,
+    failedItems: params.result.failed,
+    error: params.error,
+    startedAt: params.startedAt,
+    finishedAt: params.finishedAt,
+  });
 }
 
 export default {
   fetch: app.fetch,
   async scheduled(_event: ScheduledEvent, env: Env) {
-    const result = await runIngestion(env);
+    const startedAt = new Date();
     const db = createDb(env.DB);
-    const expiry = new Date(Date.now() - 48 * 60 * 60 * 1_000);
-    await Promise.all([
-      db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry)),
-      pruneGeminiRequestLog(env.DB),
-    ]);
-    console.log(JSON.stringify({ message: "scheduled ingestion completed", ...result }));
+    let result: IngestionResult;
+    let status: "success" | "error" = "success";
+    let errorMessage: string | undefined;
+
+    try {
+      result = await runIngestion(env);
+      const expiry = new Date(Date.now() - 48 * 60 * 60 * 1_000);
+      await Promise.all([
+        db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry)),
+        pruneGeminiRequestLog(env.DB),
+      ]);
+    } catch (error) {
+      status = "error";
+      errorMessage = error instanceof Error ? error.message : String(error);
+      result = failedIngestionResult(env, error);
+      console.error(JSON.stringify({ message: "scheduled ingestion failed", error: errorMessage }));
+    }
+
+    await saveIngestionRun(db, {
+      trigger: "scheduled",
+      status,
+      result,
+      startedAt,
+      finishedAt: new Date(),
+      error: errorMessage,
+    });
+    console.log(JSON.stringify({ message: "scheduled ingestion completed", status, ...result }));
   },
 };
