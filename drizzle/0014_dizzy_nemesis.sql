@@ -1,0 +1,1 @@
+ALTER TABLE `ingestion_runs` ADD `collector_diagnostics` text;

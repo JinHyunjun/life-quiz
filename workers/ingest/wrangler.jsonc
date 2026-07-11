@@ -2,7 +2,7 @@
 	"$schema": "../../node_modules/wrangler/config-schema.json",
 	"name": "life-quiz-ingest",
 	"main": "src/index.ts",
-	"compatibility_date": "2026-06-27",
+	"compatibility_date": "2026-07-11",
 	"compatibility_flags": ["nodejs_compat"],
 	"workers_dev": false,
 	"vars": {
@@ -11,6 +11,17 @@
 		"GEMINI_INGEST_MIN_INTERVAL_MS": "8000",
 		"GEMINI_INGEST_MAX_ITEMS": "12",
 		"NOTION_PAGE_ID": "38ccb889-5490-8102-93b1-c63f45626a20"
+	},
+	"secrets": {
+		"required": [
+			"GEMINI_API_KEY",
+			"DATA_GO_KR_KEY_TRASH",
+			"DATA_GO_KR_KEY_LOAN",
+			"DATA_GO_KR_KEY_APT_SALE",
+			"DATA_GO_KR_KEY_APT_RENT",
+			"YOUTUBE_API_KEY",
+			"NOTION_TOKEN"
+		]
 	},
 	"d1_databases": [
 		{

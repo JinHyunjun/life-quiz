@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, desc, eq, lt } from "drizzle-orm";
-import type { ContentCard } from "../../../src/db/schema";
+import type { ContentCard, IngestionCollectorDiagnostic } from "../../../src/db/schema";
 import { createDb, schema, type AppDb } from "./db";
 import {
   answerChat,
@@ -19,6 +19,7 @@ import {
 } from "./editorial";
 import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransactionRow } from "./fetchers/gov";
 import { fetchRssFeed, type RssItem } from "./fetchers/rss";
+import { contentFingerprint } from "./fingerprint";
 import type { GlossaryCategory } from "./glossary";
 import {
   GeminiRateLimitError,
@@ -36,29 +37,13 @@ import { searchRecentYoutubeVideos } from "./fetchers/youtube";
 import { getReleaseFeed } from "./releases";
 import { fetchWikipediaSummary, type TriviaSourceTopic } from "./trivia-sources";
 
-export interface Env {
-  DB: D1Database;
-  GEMINI_API_KEY: string;
-  GEMINI_MODEL: string;
-  GEMINI_RPM_BUDGET: string;
-  GEMINI_INGEST_MIN_INTERVAL_MS: string;
-  GEMINI_INGEST_MAX_ITEMS: string;
-  // data.go.kr actually issues one shared account-wide serviceKey reused across all approved
-  // datasets (confirmed by comparing the values on each dataset's detail page). Kept as separate
-  // secrets per dataset anyway in case that policy ever changes per-dataset.
-  DATA_GO_KR_KEY_TRASH: string;
-  DATA_GO_KR_KEY_LOAN: string;
-  DATA_GO_KR_KEY_APT_SALE: string;
-  DATA_GO_KR_KEY_APT_RENT: string;
-  YOUTUBE_API_KEY: string;
-  NOTION_TOKEN: string;
-  NOTION_PAGE_ID: string;
-}
+type Env = IngestEnv;
 
 type PendingItem =
   | {
       kind: "sourced";
       url: string;
+      dedupeKey: string;
       originType: "gov" | "news" | "youtube";
       citationLabel: string;
       sourceText: string;
@@ -87,7 +72,8 @@ const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citati
 };
 
 const NEWS_FEEDS = [
-  { url: "https://www.hankyung.com/feed/economy", citationLabel: "한국경제" },
+  { url: "https://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111", citationLabel: "금융위원회 보도자료" },
+  { url: "https://www.fsc.go.kr/about/fsc_card_rss/?fid=0411", citationLabel: "금융위원회 카드뉴스" },
 ] as const;
 
 const CATEGORY_ORDER: readonly BalancedContentCategory[] = [
@@ -106,6 +92,23 @@ const MAX_NEWS_ITEMS_PER_RUN = 6;
 const MAX_NEWS_ITEMS_PER_CATEGORY = 2;
 const MAX_YOUTUBE_RESULTS_PER_TOPIC = 3;
 const MAX_REAL_ESTATE_DISTRICTS_PER_RUN = 2;
+
+interface CollectionResult {
+  items: PendingItem[];
+  diagnostics: IngestionCollectorDiagnostic[];
+}
+
+function collectorDiagnostic(source: string, candidateCount: number, error?: unknown): IngestionCollectorDiagnostic {
+  if (error !== undefined) {
+    return {
+      source,
+      status: "error",
+      candidateCount: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  return { source, status: candidateCount > 0 ? "success" : "empty", candidateCount };
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -243,25 +246,38 @@ async function loadChatContext(db: AppDb, contentItemId?: number) {
   return recent.map((item) => ({ ...item, bodyMd: item.bodyMd.slice(0, 1_200) }));
 }
 
-async function collectPendingItems(env: Env): Promise<PendingItem[]> {
+async function collectPendingItems(env: Env): Promise<CollectionResult> {
   const items: PendingItem[] = [];
+  const diagnostics: IngestionCollectorDiagnostic[] = [];
   const now = new Date();
 
-  const newsCandidates = (
-    await Promise.all(
-      NEWS_FEEDS.map(async (feed) => {
-        const rss = await fetchRssFeed(feed.url).catch(() => []);
-        return rss.flatMap((item) => {
+  const rssCollections = await Promise.all(
+    NEWS_FEEDS.map(async (feed) => {
+      try {
+        const rss = await fetchRssFeed(feed.url);
+        const candidates = rss.flatMap((item) => {
           const plan = classifyNewsForBeginners(item.title, item.summary);
           return plan ? [{ item, plan, citationLabel: feed.citationLabel }] : [];
         });
-      }),
-    )
-  ).flat();
+        return {
+          candidates,
+          diagnostic: collectorDiagnostic(`rss:${feed.citationLabel}`, candidates.length),
+        };
+      } catch (error) {
+        return {
+          candidates: [] as Array<{ item: RssItem; plan: EditorialPlan; citationLabel: string }>,
+          diagnostic: collectorDiagnostic(`rss:${feed.citationLabel}`, 0, error),
+        };
+      }
+    }),
+  );
+  diagnostics.push(...rssCollections.map(({ diagnostic }) => diagnostic));
+  const newsCandidates = interleaveCandidates(rssCollections.map(({ candidates }) => candidates));
   for (const { item, plan, citationLabel } of selectBalancedNews(newsCandidates)) {
     items.push({
       kind: "sourced",
       url: item.link,
+      dedupeKey: item.link,
       originType: "news",
       citationLabel,
       sourceText: `${item.title}\n\n${item.summary}`,
@@ -272,15 +288,23 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   }
 
   for (const youtubePlan of youtubeEditorialPlansForKstRun(now)) {
-    const youtube = await searchRecentYoutubeVideos({
-      query: youtubePlan.query,
-      apiKey: env.YOUTUBE_API_KEY,
-      maxResults: MAX_YOUTUBE_RESULTS_PER_TOPIC,
-    }).catch(() => []);
+    let youtube;
+    try {
+      youtube = await searchRecentYoutubeVideos({
+        query: youtubePlan.query,
+        apiKey: env.YOUTUBE_API_KEY,
+        maxResults: MAX_YOUTUBE_RESULTS_PER_TOPIC,
+      });
+      diagnostics.push(collectorDiagnostic(`youtube:${youtubePlan.category}`, youtube.length));
+    } catch (error) {
+      diagnostics.push(collectorDiagnostic(`youtube:${youtubePlan.category}`, 0, error));
+      continue;
+    }
     for (const video of youtube) {
       items.push({
         kind: "sourced",
         url: video.watchUrl,
+        dedupeKey: video.watchUrl,
         originType: "youtube",
         citationLabel: `유튜브 - ${video.channelTitle}`,
         sourceText: `${video.title}\n\n${video.description}\n\n게시일: ${video.publishedAt}\n검색 주제: ${youtubePlan.query}`,
@@ -303,19 +327,23 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
     for (const job of aptJobs) {
       try {
         const { url, rows } = await fetchAptTransactions(job.kind, job.key, district.lawdCd, dealYmd);
+        const diagnosticSource = `gov:apt-${job.kind}:${district.name}`;
+        diagnostics.push(collectorDiagnostic(diagnosticSource, rows.length));
         if (rows.length === 0) continue;
+        const sourceText = summarizeAptRows(district.name, job.kind, rows);
         items.push({
           kind: "sourced",
           url,
+          dedupeKey: `${url}#snapshot=${await contentFingerprint(sourceText)}`,
           originType: "gov",
           citationLabel: job.label,
-          sourceText: summarizeAptRows(district.name, job.kind, rows),
+          sourceText,
           category: "housing",
           editorialFocus: `${district.name}의 개별 거래를 단정적으로 해석하지 말고, 실거래가를 읽는 방법과 예산·계약 확인 항목을 설명`,
           matchedTerms: ["실거래가", "전월세", "매매", "계약"],
         });
-      } catch {
-        // Skip this source for this run; next scheduled run will retry.
+      } catch (error) {
+        diagnostics.push(collectorDiagnostic(`gov:apt-${job.kind}:${district.name}`, 0, error));
       }
     }
   }
@@ -323,20 +351,23 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   if (primaryDistrict) {
     try {
       const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, primaryDistrict.name);
+      diagnostics.push(collectorDiagnostic(`gov:trash:${primaryDistrict.name}`, rows.length));
       if (rows.length > 0) {
+        const sourceText = `서울 ${primaryDistrict.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`;
         items.push({
           kind: "sourced",
           url,
+          dedupeKey: `${url}#snapshot=${await contentFingerprint(sourceText)}`,
           originType: "gov",
           citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
-          sourceText: `서울 ${primaryDistrict.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`,
+          sourceText,
           category: "seoul_life",
           editorialFocus: `${primaryDistrict.name} 자취생이 배출 장소·요일·품목을 실제로 확인하고 실수하지 않는 방법`,
           matchedTerms: ["생활쓰레기", "배출", "요일", "품목"],
         });
       }
-    } catch {
-      // Skip this source for this run; next scheduled run will retry.
+    } catch (error) {
+      diagnostics.push(collectorDiagnostic(`gov:trash:${primaryDistrict.name}`, 0, error));
     }
   }
 
@@ -356,8 +387,10 @@ async function collectPendingItems(env: Env): Promise<PendingItem[]> {
   for (const trivia of scheduledCurriculum.trivia) {
     items.push({ kind: "trivia", ...trivia });
   }
+  diagnostics.push(collectorDiagnostic("curriculum:glossary", scheduledCurriculum.glossary.length));
+  diagnostics.push(collectorDiagnostic("curriculum:trivia", scheduledCurriculum.trivia.length));
 
-  return sortPendingItemsByCategory(items);
+  return { items: sortPendingItemsByCategory(items), diagnostics };
 }
 
 function selectBalancedNews(candidates: Array<{ item: RssItem; plan: EditorialPlan; citationLabel: string }>) {
@@ -379,6 +412,17 @@ function selectBalancedNews(candidates: Array<{ item: RssItem; plan: EditorialPl
   }
 
   return selected;
+}
+
+function interleaveCandidates<T>(groups: readonly T[][]) {
+  const interleaved: T[] = [];
+  const maxLength = Math.max(0, ...groups.map((group) => group.length));
+  for (let index = 0; index < maxLength; index += 1) {
+    for (const group of groups) {
+      if (group[index]) interleaved.push(group[index]);
+    }
+  }
+  return interleaved;
 }
 
 function sortPendingItemsByCategory(items: PendingItem[]) {
@@ -473,12 +517,14 @@ async function ingestSourcedItem(
   item: Extract<PendingItem, { kind: "sourced" }>,
   beforeRequest: BeforeGeminiRequest,
 ) {
+  const avoidTitles = await recentTitlesForCategory(db, item.category);
   const generated = await generateArticleAndQuiz({
     sourceText: item.sourceText,
     citationLabel: item.citationLabel,
     category: item.category,
     editorialFocus: item.editorialFocus,
     matchedTerms: item.matchedTerms,
+    avoidTitles,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -486,7 +532,7 @@ async function ingestSourcedItem(
 
   const [source] = await db
     .insert(schema.sources)
-    .values({ originType: item.originType, url: item.url, lastFetchedAt: new Date() })
+    .values({ originType: item.originType, url: item.dedupeKey, lastFetchedAt: new Date() })
     .returning();
 
   return insertContentAndQuiz(db, {
@@ -548,12 +594,26 @@ async function ingestTriviaItem(
   item: Extract<PendingItem, { kind: "trivia" }>,
   beforeRequest: BeforeGeminiRequest,
 ) {
-  const sourceMaterial = await fetchWikipediaSummary(item);
+  let sourceMaterial: Awaited<ReturnType<typeof fetchWikipediaSummary>>;
+  let useUrlContext = false;
+  try {
+    sourceMaterial = await fetchWikipediaSummary(item);
+  } catch {
+    useUrlContext = true;
+    sourceMaterial = {
+      title: item.wikipediaTitle,
+      extract: "",
+      url: item.sourceUrl,
+      citationLabel: `위키백과 '${item.wikipediaTitle}' · CC BY-SA · Gemini URL Context 확인`,
+    };
+  }
   const generated = await generateTrivia({
     category: item.category,
     topic: item.topic,
     sourceText: sourceMaterial.extract,
     citationLabel: sourceMaterial.citationLabel,
+    sourceUrl: sourceMaterial.url,
+    useUrlContext,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -625,7 +685,8 @@ async function insertContentAndQuiz(
 
 async function runIngestion(env: Env) {
   const db = createDb(env.DB);
-  const pending = await collectPendingItems(env);
+  const collection = await collectPendingItems(env);
+  const pending = collection.items;
   const beforeRequest = createGeminiRequestGate(env, "ingestion");
   const minIntervalMs = normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS));
   const maxItems = normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS));
@@ -635,8 +696,9 @@ async function runIngestion(env: Env) {
   const failed: { item: string; error: string }[] = [];
   let lastStartedAtMs = 0;
 
-  for (const item of pending) {
-    const label = item.kind === "trivia" ? item.sourceUrl : item.url;
+  for (let itemIndex = 0; itemIndex < pending.length; itemIndex += 1) {
+    const item = pending[itemIndex];
+    const label = pendingItemKey(item);
 
     if (await isAlreadyIngested(db, label)) {
       skipped.push(label);
@@ -659,13 +721,29 @@ async function runIngestion(env: Env) {
     } catch (err) {
       if (err instanceof GeminiRateLimitError) {
         deferred.push(label);
+        deferred.push(...pending.slice(itemIndex + 1).map(pendingItemKey));
         break;
       }
       failed.push({ item: label, error: String(err) });
     }
   }
 
-  return { pendingCount: pending.length, created, skipped, deferred, failed, minIntervalMs, maxItems };
+  return {
+    pendingCount: pending.length,
+    created,
+    skipped,
+    deferred,
+    failed,
+    collectorDiagnostics: collection.diagnostics,
+    minIntervalMs,
+    maxItems,
+  };
+}
+
+function pendingItemKey(item: PendingItem) {
+  if (item.kind === "trivia") return item.sourceUrl;
+  if (item.kind === "sourced") return item.dedupeKey;
+  return item.url;
 }
 
 type IngestionResult = Awaited<ReturnType<typeof runIngestion>>;
@@ -678,6 +756,7 @@ function failedIngestionResult(env: Env, error: unknown): IngestionResult {
     skipped: [],
     deferred: [],
     failed: [{ item: "run", error: error instanceof Error ? error.message : String(error) }],
+    collectorDiagnostics: [],
     minIntervalMs: normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS)),
     maxItems: normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS)),
   };
@@ -708,6 +787,7 @@ async function saveIngestionRun(
     skippedItems: params.result.skipped,
     deferredItems: params.result.deferred,
     failedItems: params.result.failed,
+    collectorDiagnostics: params.result.collectorDiagnostics,
     error: params.error,
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,

@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
+import { isAuthorizedAdminRequest } from "../src/lib/admin.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
 import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot, youtubeEditorialPlansForKstRun } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
-import { isUsableWikipediaExtract, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
+import { hasSuccessfulUrlContext } from "../workers/ingest/src/gemini-url-context.ts";
+import { contentFingerprint } from "../workers/ingest/src/fingerprint.ts";
+import { isUsableWikipediaExtract, normalizeWikitextLead, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
   ingestionPacingDelayMs,
   scheduledAiCurriculumBatchForKstRun,
@@ -121,6 +124,36 @@ test("AI general knowledge rotates through externally grounded topics", () => {
   assert.match(second.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
 });
 
+test("AI general knowledge does not repeat a source during a 32-day curriculum", () => {
+  const firstDay = new Date("2026-06-28T15:00:00Z");
+  for (const category of ["history", "humor", "social_skills", "daily_tips"]) {
+    const urls = new Set(
+      Array.from({ length: 32 }, (_, index) =>
+        triviaSourceForKstDay(category, new Date(firstDay.getTime() + index * 24 * 60 * 60 * 1_000)).sourceUrl,
+      ),
+    );
+    assert.equal(urls.size, 32, `${category} repeated before 32 days`);
+  }
+});
+
+test("public-data snapshots deduplicate identical responses but allow changed data", async () => {
+  assert.equal(await contentFingerprint("same rows"), await contentFingerprint("same rows"));
+  assert.notEqual(await contentFingerprint("same rows"), await contentFingerprint("updated rows"));
+});
+
+test("manual ingestion requires the exact bearer token", async () => {
+  const token = "test-admin-token";
+  assert.equal(
+    await isAuthorizedAdminRequest(new Request("https://example.com", { headers: { authorization: `Bearer ${token}` } }), token),
+    true,
+  );
+  assert.equal(
+    await isAuthorizedAdminRequest(new Request("https://example.com", { headers: { authorization: "Bearer wrong" } }), token),
+    false,
+  );
+  assert.equal(await isAuthorizedAdminRequest(new Request("https://example.com"), token), false);
+});
+
 test("AI trivia accepts concise source text and tolerates related but non-identical cards", () => {
   assert.equal(isUsableWikipediaExtract("가".repeat(70)), true);
   assert.equal(isUsableWikipediaExtract("가".repeat(69)), false);
@@ -134,6 +167,26 @@ test("AI trivia accepts concise source text and tolerates related but non-identi
 
   assert.throws(() => assertDistinctCards(cards));
   assert.doesNotThrow(() => assertReadableCards(cards));
+});
+
+test("Wikimedia source fallback keeps readable lead facts", () => {
+  const source = "{{정보|이름=테스트}}\n'''독립신문'''은 [[1896년]]에 창간된 [[신문]]이다.<ref>근거</ref> 쉬운 한글을 사용했다.\n\n== 역사 ==\n뒷부분";
+  assert.equal(normalizeWikitextLead(source), "독립신문은 1896년에 창간된 신문이다. 쉬운 한글을 사용했다.");
+});
+
+test("Gemini URL context fallback requires successful retrieval metadata", () => {
+  assert.equal(
+    hasSuccessfulUrlContext({
+      urlContextMetadata: { urlMetadata: [{ urlRetrievalStatus: "URL_RETRIEVAL_STATUS_SUCCESS" }] },
+    }),
+    true,
+  );
+  assert.equal(
+    hasSuccessfulUrlContext({
+      url_context_metadata: { url_metadata: [{ url_retrieval_status: "URL_RETRIEVAL_STATUS_ERROR" }] },
+    }),
+    false,
+  );
 });
 
 test("only verified legacy AI articles are restored with complete learning content", () => {
@@ -180,10 +233,15 @@ test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", 
     "BMW 신형 SUV 디자인 공개",
     "새 자동차의 외관과 출시 색상을 소개한다.",
   );
+  const social = classifyNewsForBeginners(
+    "사회초년생이 알아야 할 직장 피드백 대화법",
+    "신입과 동료가 조직문화 안에서 갈등을 줄이는 방법을 소개한다.",
+  );
 
   assert.equal(finance?.category, "finance");
   assert.ok(finance?.matchedTerms.includes("예금"));
   assert.equal(offTopic, null);
+  assert.equal(social?.category, "social_skills");
   assert.equal(youtubeEditorialPlanForKstSlot(new Date("2026-06-26T15:00:00Z")).category, "finance");
   assert.deepEqual(
     youtubeEditorialPlansForKstRun(new Date("2026-06-26T15:00:00Z")).map((plan) => plan.category),

@@ -7,6 +7,9 @@
 	"vars": {
 		"CHAT_HOURLY_LIMIT": "8"
 	},
+	"secrets": {
+		"required": ["INGEST_ADMIN_TOKEN"]
+	},
 	"assets": {
 		"directory": "./dist",
 		"binding": "ASSETS"

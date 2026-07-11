@@ -1,6 +1,7 @@
 import type { ContentVisualCue } from "../../../src/db/schema";
 import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards } from "../../../src/lib/card-quality";
 import type { SourcedContentCategory } from "./editorial";
+import { hasSuccessfulUrlContext, type GeminiCandidate } from "./gemini-url-context";
 
 export interface GeneratedCard {
   heading: string;
@@ -198,6 +199,7 @@ async function callGemini<T>(params: {
   schema: object;
   maxOutputTokens?: number;
   temperature?: number;
+  urlContextUrl?: string;
   beforeRequest: BeforeGeminiRequest;
 }): Promise<T> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${params.model}:generateContent?key=${params.apiKey}`;
@@ -209,6 +211,7 @@ async function callGemini<T>(params: {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: params.prompt }] }],
+      ...(params.urlContextUrl ? { tools: [{ url_context: {} }] } : {}),
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: params.schema,
@@ -223,8 +226,12 @@ async function callGemini<T>(params: {
     throw new Error(`Gemini request failed: ${res.status} ${detail}`);
   }
 
-  const data = (await res.json()) as { candidates: { content: { parts: { text: string }[] } }[] };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const data = (await res.json()) as { candidates: GeminiCandidate[] };
+  const candidate = data.candidates?.[0];
+  if (params.urlContextUrl && !hasSuccessfulUrlContext(candidate)) {
+    throw new Error(`Gemini URL context could not retrieve source: ${params.urlContextUrl}`);
+  }
+  const text = candidate?.content?.parts?.[0]?.text;
   if (!text) {
     throw new Error("Gemini response had no content");
   }
@@ -256,6 +263,7 @@ export async function generateArticleAndQuiz(params: {
   category: SourcedContentCategory;
   editorialFocus: string;
   matchedTerms?: string[];
+  avoidTitles?: string[];
   apiKey: string;
   model: string;
   beforeRequest: BeforeGeminiRequest;
@@ -274,6 +282,8 @@ export async function generateArticleAndQuiz(params: {
     beginnerTerms.length > 0 ? `초보자가 헷갈릴 수 있는 용어 후보: ${beginnerTerms.join(", ")}. 원본 맥락에 맞는 용어만 쉬운 말로 풀어 쓰세요.` : "",
     "원본에 없는 수치나 제도 내용을 추측해서 채우지 마세요. 사회초년생이 실제로 판단하거나 행동하는 데 도움이 되지 않는 주변 정보는 생략하세요.",
     "본문은 짧은 뉴스 요약이 아니라 학습 콘텐츠입니다. 각 details에는 독자가 다음에 무엇을 확인해야 하는지 최소 1개씩 넣으세요.",
+    "제목은 원본의 구체적인 제도·지역·상황을 드러내고, '완벽 가이드', '바로 알기', '읽는 법'처럼 어느 글에나 붙일 수 있는 표현만으로 만들지 마세요.",
+    params.avoidTitles?.length ? `최근 같은 분야 제목과 겹치지 않게 만드세요: ${params.avoidTitles.join(", ")}` : "",
     "퀴즈 해설에는 정답인 이유와 비슷한 오답을 구분하는 기준을 2문장으로 설명하세요.",
     "투자 콘텐츠에서는 특정 종목의 매수·매도 추천이나 수익 보장 표현을 쓰지 마세요.",
     `출처: ${params.citationLabel}`,
@@ -316,6 +326,8 @@ export async function generateTrivia(params: {
   topic: string;
   sourceText: string;
   citationLabel: string;
+  sourceUrl?: string;
+  useUrlContext?: boolean;
   apiKey: string;
   model: string;
   beforeRequest: BeforeGeminiRequest;
@@ -324,15 +336,17 @@ export async function generateTrivia(params: {
     "당신은 사회초년생을 위한 생활상식 큐레이션 서비스의 에디터입니다.",
     TRIVIA_PROMPTS[params.category],
     `오늘 다룰 주제는 '${params.topic}'입니다. 다른 주제로 바꾸지 마세요.`,
-    "아래 참고 문서에 적힌 사실만 사용하세요. 참고 문서에 없는 수치, 일화, 원인, 행동 요령은 추측하거나 보태지 마세요.",
+    params.useUrlContext
+      ? "URL Context 도구로 아래 참고 URL을 직접 읽고, 그 문서에서 확인한 사실만 사용하세요. URL 조회가 되지 않으면 내용을 만들지 마세요."
+      : "아래 참고 문서에 적힌 사실만 사용하세요. 참고 문서에 없는 수치, 일화, 원인, 행동 요령은 추측하거나 보태지 마세요.",
     "복습용 4지선다 퀴즈 1개도 작성하세요.",
     "퀴즈 해설에는 정답인 이유와 오답을 구분하는 핵심 기준을 2문장으로 설명하세요.",
     "학습 섹션은 정확히 4개로 구성하세요. 배경 → 핵심 원리 → 실제 사례 → 기억할 행동 순서이며, 같은 사실이나 조언을 표현만 바꿔 반복하지 마세요.",
     "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 summary를 반복하지 말고 근거·맥락·예외·실천 방법을 3~5문장으로 더 깊게 설명하세요.",
     "Deep Read는 summary와 details를 합쳐 만들므로 Quick Read의 모든 정보가 반드시 Deep Read 안에 포함되어야 합니다.",
     `출처: ${params.citationLabel}`,
-    "참고 문서:",
-    params.sourceText,
+    params.useUrlContext ? "참고 URL:" : "참고 문서:",
+    params.useUrlContext ? params.sourceUrl ?? "" : params.sourceText,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -343,6 +357,7 @@ export async function generateTrivia(params: {
     prompt,
     schema: TRIVIA_RESPONSE_SCHEMA,
     temperature: 0.6,
+    urlContextUrl: params.useUrlContext ? params.sourceUrl : undefined,
     beforeRequest: params.beforeRequest,
   });
   return { ...generated, ...assembleGeneratedSections(generated.sections, { allowSemanticOverlap: true }) };

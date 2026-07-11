@@ -163,6 +163,13 @@ export interface IngestionRunFailure {
   error: string;
 }
 
+export interface IngestionCollectorDiagnostic {
+  source: string;
+  status: "success" | "empty" | "error";
+  candidateCount: number;
+  error?: string;
+}
+
 export const ingestionRuns = sqliteTable(
   "ingestion_runs",
   {
@@ -180,6 +187,7 @@ export const ingestionRuns = sqliteTable(
     skippedItems: text("skipped_items", { mode: "json" }).notNull().$type<string[]>(),
     deferredItems: text("deferred_items", { mode: "json" }).notNull().$type<string[]>(),
     failedItems: text("failed_items", { mode: "json" }).notNull().$type<IngestionRunFailure[]>(),
+    collectorDiagnostics: text("collector_diagnostics", { mode: "json" }).$type<IngestionCollectorDiagnostic[]>(),
     error: text("error"),
     startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
     finishedAt: integer("finished_at", { mode: "timestamp" }).notNull(),

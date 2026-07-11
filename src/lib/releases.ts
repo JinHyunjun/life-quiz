@@ -23,10 +23,22 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-10T07:00:00.000Z",
+  fetchedAt: "2026-07-11T04:30:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.10",
+      title: "콘텐츠 수집 전면 복구",
+      date: "2026-07-11",
+      changes: [
+        { type: "bullet", text: "오늘 수집 3건의 원인을 원격 실행 로그로 확인: 공공데이터 URL 영구 중복 처리, 위키백과 403, RSS·YouTube 오류 은폐" },
+        { type: "bullet", text: "공공데이터 중복 기준을 조회 URL에서 실제 응답 지문으로 바꿔 거래 내역이 갱신되면 다시 콘텐츠 생성" },
+        { type: "bullet", text: "위키백과 직접 API 차단 시 Wikimedia 공식 원문과 Gemini URL Context 성공 검증을 순서대로 사용하고 일반상식 커리큘럼을 분야별 32개로 확대" },
+        { type: "bullet", text: "Cloudflare에서 차단된 민간·Google·서울 미디어 RSS를 실제 응답이 검증된 금융위원회 공식 RSS로 교체하고 수집원별 결과를 D1에 저장" },
+        { type: "bullet", text: "Gemini 모델은 `gemini-3.1-flash-lite`를 유지하고 최근 제목 회피와 구체적 제목 규칙을 강화" },
+      ],
+    },
     {
       version: "v0.9",
       title: "수집량 회복과 진단 로그",

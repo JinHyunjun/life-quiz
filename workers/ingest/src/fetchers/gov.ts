@@ -1,3 +1,5 @@
+import { readTextLimited } from "./http.ts";
+
 export interface GovApiParams {
   endpoint: string;
   serviceKey: string;
@@ -21,7 +23,7 @@ export async function fetchGovApi({ endpoint, serviceKey, query = {} }: GovApiPa
     throw new Error(`data.go.kr request failed: ${res.status} ${publicDataUrl(url)}`);
   }
 
-  return { raw: await res.text(), url: publicDataUrl(url) };
+  return { raw: await readTextLimited(res, 512_000), url: publicDataUrl(url) };
 }
 
 export interface AptTransactionRow {

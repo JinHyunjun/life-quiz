@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { readTextLimited } from "./http.ts";
 
 export interface RssItem {
   title: string;
@@ -15,7 +16,7 @@ export async function fetchRssFeed(feedUrl: string): Promise<RssItem[]> {
     throw new Error(`RSS fetch failed: ${res.status} ${feedUrl}`);
   }
 
-  const xml = parser.parse(await res.text());
+  const xml = parser.parse(await readTextLimited(res, 512_000));
   const items = xml?.rss?.channel?.item ?? [];
   const list = Array.isArray(items) ? items : [items];
 
