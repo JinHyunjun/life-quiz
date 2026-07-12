@@ -22,7 +22,19 @@ export interface DueReviewCard {
   quizItemId: number;
   contentItemId: number;
   title: string;
-  category: "finance" | "investment" | "housing" | "seoul_life" | "daily_tips" | "history" | "humor" | "social_skills";
+  category:
+    | "finance"
+    | "investment"
+    | "housing"
+    | "seoul_life"
+    | "career"
+    | "rights"
+    | "digital_safety"
+    | "health"
+    | "daily_tips"
+    | "history"
+    | "humor"
+    | "social_skills";
   citationUrl: string | null;
   citationLabel: string;
   question: string;

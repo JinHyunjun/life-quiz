@@ -81,8 +81,12 @@ const CATEGORY_ORDER: readonly BalancedContentCategory[] = [
   "investment",
   "housing",
   "seoul_life",
-  "daily_tips",
+  "career",
+  "rights",
   "social_skills",
+  "digital_safety",
+  "health",
+  "daily_tips",
   "history",
   "humor",
 ];
@@ -91,7 +95,7 @@ const DEFAULT_MAX_INGEST_ITEMS = 12;
 const MAX_NEWS_ITEMS_PER_RUN = 6;
 const MAX_NEWS_ITEMS_PER_CATEGORY = 2;
 const MAX_YOUTUBE_RESULTS_PER_TOPIC = 3;
-const MAX_REAL_ESTATE_DISTRICTS_PER_RUN = 2;
+const MAX_DISTRICTS_PER_BRIEF = 4;
 
 interface CollectionResult {
   items: PendingItem[];
@@ -319,56 +323,77 @@ async function collectPendingItems(env: Env): Promise<CollectionResult> {
     { kind: "rent", key: env.DATA_GO_KR_KEY_APT_RENT, label: "국토교통부 아파트 전월세 실거래가" },
     { kind: "sale", key: env.DATA_GO_KR_KEY_APT_SALE, label: "국토교통부 아파트 매매 실거래가" },
   ];
-  const districts = seoulDistrictsForKstRun(now, MAX_REAL_ESTATE_DISTRICTS_PER_RUN);
-  const primaryDistrict = districts[0];
+  const districts = seoulDistrictsForKstRun(now, MAX_DISTRICTS_PER_BRIEF);
   const dealYmd = previousYearMonth(now);
 
-  for (const district of districts) {
-    for (const job of aptJobs) {
+  for (const job of aptJobs) {
+    const results = await Promise.all(districts.map(async (district) => {
       try {
         const { url, rows } = await fetchAptTransactions(job.kind, job.key, district.lawdCd, dealYmd);
-        const diagnosticSource = `gov:apt-${job.kind}:${district.name}`;
-        diagnostics.push(collectorDiagnostic(diagnosticSource, rows.length));
-        if (rows.length === 0) continue;
-        const sourceText = summarizeAptRows(district.name, job.kind, rows);
-        items.push({
-          kind: "sourced",
-          url,
-          dedupeKey: `${url}#snapshot=${await contentFingerprint(sourceText)}`,
-          originType: "gov",
-          citationLabel: job.label,
-          sourceText,
-          category: "housing",
-          editorialFocus: `${district.name}의 개별 거래를 단정적으로 해석하지 말고, 실거래가를 읽는 방법과 예산·계약 확인 항목을 설명`,
-          matchedTerms: ["실거래가", "전월세", "매매", "계약"],
-        });
+        return {
+          snapshot: rows.length > 0 ? { district, url, rows } : null,
+          diagnostic: collectorDiagnostic(`gov:apt-${job.kind}:${district.name}`, rows.length),
+        };
       } catch (error) {
-        diagnostics.push(collectorDiagnostic(`gov:apt-${job.kind}:${district.name}`, 0, error));
+        return {
+          snapshot: null,
+          diagnostic: collectorDiagnostic(`gov:apt-${job.kind}:${district.name}`, 0, error),
+        };
       }
-    }
+    }));
+    diagnostics.push(...results.map(({ diagnostic }) => diagnostic));
+    const snapshots = results.flatMap(({ snapshot }) => snapshot ? [snapshot] : []);
+    if (snapshots.length === 0) continue;
+
+    const sourceText = summarizeAptDistricts(job.kind, snapshots);
+    const districtNames = snapshots.map(({ district }) => district.name);
+    const sourceUrl = snapshots[0].url;
+    items.push({
+      kind: "sourced",
+      url: sourceUrl,
+      dedupeKey: `${sourceUrl}#district-brief=${await contentFingerprint(sourceText)}`,
+      originType: "gov",
+      citationLabel: `${job.label} · ${districtNames.join("·")} 비교`,
+      sourceText,
+      category: "housing",
+      editorialFocus: `${districtNames.join(", ")}의 거래를 한 건씩 나열하지 말고 자치구 비교 브리핑으로 구성하세요. 가격을 단정적으로 평가하지 말고 면적, 거래 유형, 계약 시점과 예산 확인 기준의 차이를 설명하세요. 제목에 비교한 자치구를 자연스럽게 드러내세요.`,
+      matchedTerms: ["자치구 비교", "실거래가", job.kind === "rent" ? "전월세" : "매매", "계약"],
+    });
   }
 
-  if (primaryDistrict) {
+  const trashResults = await Promise.all(districts.map(async (district) => {
     try {
-      const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, primaryDistrict.name);
-      diagnostics.push(collectorDiagnostic(`gov:trash:${primaryDistrict.name}`, rows.length));
-      if (rows.length > 0) {
-        const sourceText = `서울 ${primaryDistrict.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 5))}`;
-        items.push({
-          kind: "sourced",
-          url,
-          dedupeKey: `${url}#snapshot=${await contentFingerprint(sourceText)}`,
-          originType: "gov",
-          citationLabel: "행정안전부 생활쓰레기배출정보 조회서비스",
-          sourceText,
-          category: "seoul_life",
-          editorialFocus: `${primaryDistrict.name} 자취생이 배출 장소·요일·품목을 실제로 확인하고 실수하지 않는 방법`,
-          matchedTerms: ["생활쓰레기", "배출", "요일", "품목"],
-        });
-      }
+      const { url, rows } = await fetchTrashInfo(env.DATA_GO_KR_KEY_TRASH, district.name);
+      return {
+        snapshot: rows.length > 0 ? { district, url, rows } : null,
+        diagnostic: collectorDiagnostic(`gov:trash:${district.name}`, rows.length),
+      };
     } catch (error) {
-      diagnostics.push(collectorDiagnostic(`gov:trash:${primaryDistrict.name}`, 0, error));
+      return {
+        snapshot: null,
+        diagnostic: collectorDiagnostic(`gov:trash:${district.name}`, 0, error),
+      };
     }
+  }));
+  diagnostics.push(...trashResults.map(({ diagnostic }) => diagnostic));
+  const trashSnapshots = trashResults.flatMap(({ snapshot }) => snapshot ? [snapshot] : []);
+  if (trashSnapshots.length > 0) {
+    const sourceText = trashSnapshots
+      .map(({ district, rows }) => `서울 ${district.name} 생활쓰레기 배출 안내:\n${flattenRowsToText(rows.slice(0, 4))}`)
+      .join("\n\n");
+    const districtNames = trashSnapshots.map(({ district }) => district.name);
+    const sourceUrl = trashSnapshots[0].url;
+    items.push({
+      kind: "sourced",
+      url: sourceUrl,
+      dedupeKey: `${sourceUrl}#district-brief=${await contentFingerprint(sourceText)}`,
+      originType: "gov",
+      citationLabel: `행정안전부 생활쓰레기배출정보 · ${districtNames.join("·")} 비교`,
+      sourceText,
+      category: "seoul_life",
+      editorialFocus: `${districtNames.join(", ")}의 정보를 자치구별 카드로 반복하지 말고 한 번에 비교할 수 있는 생활 브리핑으로 구성하세요. 공통 규칙과 구별 차이, 이사 직후 확인할 행동을 구분해서 설명하세요.`,
+      matchedTerms: ["자치구 비교", "생활쓰레기", "배출", "요일", "품목"],
+    });
   }
 
   const scheduledCurriculum = scheduledAiCurriculumBatchForKstRun(now);
@@ -460,17 +485,25 @@ function pendingItemCategory(item: PendingItem): BalancedContentCategory {
 }
 
 function pendingKindPriority(item: PendingItem) {
-  if (item.kind === "glossary") return 0;
-  if (item.kind === "trivia") return 1;
+  if (item.kind === "sourced") return 0;
+  if (item.kind === "glossary") return 1;
   return 2;
 }
 
-function summarizeAptRows(districtName: string, kind: "rent" | "sale", rows: AptTransactionRow[]) {
-  const lines = rows.slice(0, 10).map((row) => {
-    const price = kind === "rent" ? `보증금 ${row.deposit}만원` : `거래금액 ${row.dealAmount}만원`;
-    return `${row.umdNm} ${row.aptNm} | 전용 ${row.excluUseAr}㎡ | ${price} | ${row.dealYear}-${row.dealMonth}-${row.dealDay}`;
+function summarizeAptDistricts(
+  kind: "rent" | "sale",
+  snapshots: Array<{ district: { name: string }; rows: AptTransactionRow[] }>,
+) {
+  const sections = snapshots.map(({ district, rows }) => {
+    const lines = rows.slice(0, 4).map((row) => {
+      const price = kind === "rent"
+        ? `보증금 ${row.deposit}만원${row.monthlyRent && row.monthlyRent !== "0" ? ` · 월세 ${row.monthlyRent}만원` : ""}`
+        : `거래금액 ${row.dealAmount}만원`;
+      return `${row.umdNm} ${row.aptNm} | 전용 ${row.excluUseAr}㎡ | ${price} | ${row.dealYear}-${row.dealMonth}-${row.dealDay}`;
+    });
+    return `[${district.name}]\n${lines.join("\n")}`;
   });
-  return `서울 ${districtName} ${kind === "rent" ? "전월세" : "매매"} 실거래가 최근 내역:\n${lines.join("\n")}`;
+  return `서울 자치구 ${kind === "rent" ? "전월세" : "매매"} 실거래가 비교 자료:\n\n${sections.join("\n\n")}`;
 }
 
 // Real-estate transaction reports typically lag ~1 month, so the current month rarely has data yet.

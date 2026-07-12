@@ -40,7 +40,11 @@ export type ContentVisualCue =
   | "key"
   | "contract"
   | "search"
-  | "alert";
+  | "alert"
+  | "briefcase"
+  | "scale"
+  | "lock"
+  | "heart";
 
 export const contentItems = sqliteTable(
   "content_items",
@@ -54,7 +58,20 @@ export const contentItems = sqliteTable(
     cards: text("cards", { mode: "json" }).$type<ContentCard[]>(),
     contentFormat: text("content_format", { enum: ["article", "visual_guide"] }).notNull().default("article"),
     category: text("category", {
-      enum: ["finance", "investment", "housing", "seoul_life", "daily_tips", "history", "humor", "social_skills"],
+      enum: [
+        "finance",
+        "investment",
+        "housing",
+        "seoul_life",
+        "career",
+        "rights",
+        "digital_safety",
+        "health",
+        "daily_tips",
+        "history",
+        "humor",
+        "social_skills",
+      ],
     }).notNull(),
     // Nullable: ai_trivia content has no real external article to cite. The frontend shows an
     // "AI가 정리한 상식" badge instead of a citation link when this is null.

@@ -2,25 +2,37 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Archive, ArrowRight, BookOpen, CalendarDays, MessageCircle, PanelsTopLeft, RotateCcw, Sparkles } from "lucide-astro";
+import { Archive, ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, HeartPulse, Landmark, MapPinned, MessageCircle, PanelsTopLeft, RotateCcw, ShieldCheck, Sparkles } from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import { createDb } from "../db/client";
-import { getContentStats, listArchiveDays, listRecentAiDiscoveries, listRecentVisualGuides, listTodayContentItems } from "../lib/content";
-import { CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
+import { getContentStats, getTodayCategoryCounts, listArchiveDays, listRecentAiDiscoveries, listRecentDistrictBriefs, listRecentVisualGuides, listTodayContentItems } from "../lib/content";
+import { CATEGORY_DESCRIPTIONS, CATEGORY_GROUPS, CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
 import { formatKstDate } from "../lib/dates";
 
 const db = createDb(env.DB);
 const categoryParam = Astro.url.searchParams.get("category");
 const activeCategory = (categoryParam && categoryParam in CATEGORY_LABELS ? categoryParam : undefined) as Category | undefined;
-const [items, stats, archiveDays, visualGuides, aiDiscoveries] = await Promise.all([
+const [items, stats, archiveDays, visualGuides, aiDiscoveries, categoryCountRows, districtBriefs] = await Promise.all([
   listTodayContentItems(db, activeCategory),
   getContentStats(db),
   listArchiveDays(db, new Date(), 3),
   listRecentVisualGuides(db, activeCategory, 3),
   listRecentAiDiscoveries(db, activeCategory, 6),
+  getTodayCategoryCounts(db),
+  listRecentDistrictBriefs(db, 3),
 ]);
-const featured = items[0];
-const feedItems = items.slice(1);
+const todayCategoryCounts = new Map(categoryCountRows.map(({ category, count }) => [category, count]));
+const groupIcons = {
+  "money-home": Landmark,
+  "work-rights": BriefcaseBusiness,
+  "safe-life": ShieldCheck,
+  "culture-break": Sparkles,
+};
+const promotedIds = new Set([...visualGuides, ...aiDiscoveries, ...districtBriefs].map(({ id }) => id));
+const unpromotedItems = items.filter(({ id }) => !promotedIds.has(id));
+const featured = unpromotedItems[0];
+const feedItems = unpromotedItems.slice(1);
+const hasTodayItems = items.length > 0;
 
 function excerpt(bodyMd: string, maxLength = 110) {
   const plain = bodyMd.replace(/[#*_>`\[\]]/g, "").replace(/\s+/g, " ").trim();
@@ -54,25 +66,43 @@ function formatDate(value: Date) {
     <section class="category-section" aria-labelledby="category-title">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">EXPLORE</p>
-          <h2 id="category-title">지금 필요한 분야부터</h2>
+          <p class="eyebrow">KNOWLEDGE MAP</p>
+          <h2 id="category-title">오늘의 지식 지도</h2>
         </div>
         <span class="content-count">오늘 {stats.today}개 · 누적 {stats.total}개</span>
       </div>
 
-      <nav class="category-tabs" aria-label="콘텐츠 분야">
-        <a class:list={["category-tab", { active: !activeCategory }]} href="/" aria-current={!activeCategory ? "page" : undefined}>
-          전체
+      <nav class="topic-map" aria-label="콘텐츠 분야">
+        <a class:list={["all-topics", { active: !activeCategory }]} href="/" aria-current={!activeCategory ? "page" : undefined}>
+          <span>모든 주제</span><strong>{stats.today}</strong>
         </a>
-        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-          <a
-            class:list={["category-tab", { active: activeCategory === key }]}
-            href={`/?category=${key}`}
-            aria-current={activeCategory === key ? "page" : undefined}
-          >
-            <span class="tab-swatch" data-category={key}></span>{label}
-          </a>
-        ))}
+        {CATEGORY_GROUPS.map((group) => {
+          const GroupIcon = groupIcons[group.id];
+          return (
+            <section class="topic-group" aria-labelledby={`group-${group.id}`}>
+              <header>
+                <span class="topic-group-icon" aria-hidden="true"><GroupIcon size={19} /></span>
+                <span>
+                  <strong id={`group-${group.id}`}>{group.label}</strong>
+                  <small>{group.description}</small>
+                </span>
+              </header>
+              <div class="topic-links">
+                {group.categories.map((category) => (
+                  <a
+                    class:list={["topic-link", { active: activeCategory === category }]}
+                    href={`/?category=${category}`}
+                    aria-current={activeCategory === category ? "page" : undefined}
+                  >
+                    <span class="tab-swatch" data-category={category}></span>
+                    <span><strong>{CATEGORY_LABELS[category]}</strong><small>{CATEGORY_DESCRIPTIONS[category]}</small></span>
+                    <b>{todayCategoryCounts.get(category) ?? 0}</b>
+                  </a>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </nav>
     </section>
 
@@ -98,6 +128,33 @@ function formatDate(value: Date) {
             </a>
           ))}
         </div>
+      </section>
+    )}
+
+    {!activeCategory && districtBriefs.length > 0 && (
+      <section class="district-section" aria-labelledby="district-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow"><MapPinned size={14} /> SEOUL DISTRICT BRIEF</p>
+            <h2 id="district-title">자치구를 한눈에 비교하는 서울 브리핑</h2>
+          </div>
+          <a class="discovery-more" href="/archive?category=seoul_life">서울살이 더 보기 <ArrowRight size={16} /></a>
+        </div>
+        <ul class="district-grid">
+          {districtBriefs.map((item) => (
+            <li>
+              <a class="district-card" href={`/articles/${item.id}`} data-category={item.category}>
+                <span class="district-card-icon" aria-hidden="true"><MapPinned size={24} /></span>
+                <span class="district-card-copy">
+                  <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                  <strong>{item.title}</strong>
+                  <small>{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 95)}</small>
+                </span>
+                <ArrowRight size={18} />
+              </a>
+            </li>
+          ))}
+        </ul>
       </section>
     )}
 
@@ -186,14 +243,14 @@ function formatDate(value: Date) {
           </section>
         )}
       </>
-    ) : (
+    ) : !hasTodayItems ? (
       <section class="empty-state" aria-labelledby="empty-title">
         <BookOpen size={34} strokeWidth={1.7} />
         <h2 id="empty-title">오늘 이 분야에 도착한 상식은 아직 없어요</h2>
         <p>지난 상식 보관함에서 이전 자료를 찾아볼 수 있어요.</p>
         <a class="button button-primary" href="/archive"><Archive size={17} /> 지난 상식 보기</a>
       </section>
-    )}
+    ) : null}
 
     <section class="archive-band" aria-labelledby="archive-title">
       <div class="archive-band-icon" aria-hidden="true"><Archive size={26} /></div>
@@ -293,6 +350,117 @@ function formatDate(value: Date) {
     font-weight: 700;
   }
 
+  .topic-map {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--line);
+  }
+
+  .all-topics {
+    grid-column: 1 / -1;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    color: var(--ink);
+    background: var(--paper);
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 800;
+  }
+
+  .all-topics strong {
+    min-width: 28px;
+    color: var(--green);
+    text-align: right;
+  }
+
+  .all-topics.active {
+    color: white;
+    background: var(--ink);
+  }
+
+  .all-topics.active strong { color: #c5ddd2; }
+
+  .topic-group {
+    min-width: 0;
+    padding: 18px;
+    background: var(--paper);
+  }
+
+  .topic-group > header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .topic-group-icon {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 36px;
+    border-radius: var(--radius-sm);
+    color: var(--green-deep);
+    background: var(--green-soft);
+  }
+
+  .topic-group > header > span:last-child {
+    min-width: 0;
+    display: grid;
+  }
+
+  .topic-group > header strong { font-size: 0.92rem; }
+  .topic-group > header small { color: var(--muted); font-size: 0.72rem; }
+
+  .topic-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .topic-link {
+    min-width: 0;
+    min-height: 54px;
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) 24px;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    background: var(--surface);
+    text-decoration: none;
+  }
+
+  .topic-link:hover,
+  .topic-link.active {
+    background: var(--surface-strong);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 25%, var(--line));
+  }
+
+  .topic-link > span:nth-child(2) {
+    min-width: 0;
+    display: grid;
+  }
+
+  .topic-link strong,
+  .topic-link small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topic-link strong { font-size: 0.79rem; }
+  .topic-link small { color: var(--muted); font-size: 0.67rem; }
+  .topic-link b { color: var(--muted); font-size: 0.73rem; text-align: right; }
+
   .category-tabs {
     display: flex;
     gap: 8px;
@@ -338,6 +506,10 @@ function formatDate(value: Date) {
   .tab-swatch[data-category="housing"] { background: var(--coral); }
   .tab-swatch[data-category="investment"] { background: var(--berry); }
   .tab-swatch[data-category="seoul_life"] { background: var(--blue); }
+  .tab-swatch[data-category="career"] { background: #6b5c36; }
+  .tab-swatch[data-category="rights"] { background: #8a4c32; }
+  .tab-swatch[data-category="digital_safety"] { background: #356b85; }
+  .tab-swatch[data-category="health"] { background: #b64d5f; }
   .tab-swatch[data-category="daily_tips"] { background: var(--yellow); }
   .tab-swatch[data-category="history"] { background: #7b5ca8; }
   .tab-swatch[data-category="humor"] { background: #d66a29; }
@@ -462,6 +634,79 @@ function formatDate(value: Date) {
 
   .discovery-section {
     margin-bottom: 52px;
+  }
+
+  .district-section {
+    margin-bottom: 52px;
+    padding: 24px 0;
+    border-block: 1px solid var(--line);
+  }
+
+  .district-section .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .district-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .district-grid li { min-width: 0; }
+
+  .district-card {
+    min-height: 150px;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--ink);
+    background: var(--paper);
+    text-decoration: none;
+  }
+
+  .district-card:hover { border-color: var(--blue); }
+
+  .district-card-icon {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--blue);
+    background: var(--blue-soft);
+  }
+
+  .district-card-copy {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+  }
+
+  .district-card-copy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.9rem;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .district-card-copy small {
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .discovery-section .eyebrow {
@@ -776,6 +1021,10 @@ function formatDate(value: Date) {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .district-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .archive-band {
       grid-template-columns: 52px minmax(0, 1fr) auto;
     }
@@ -786,6 +1035,22 @@ function formatDate(value: Date) {
   }
 
   @media (max-width: 620px) {
+    .topic-map {
+      grid-template-columns: 1fr;
+    }
+
+    .topic-group {
+      padding: 15px;
+    }
+
+    .topic-links {
+      grid-template-columns: 1fr;
+    }
+
+    .topic-link {
+      min-height: 50px;
+    }
+
     .glossary-section {
       padding: 18px;
     }
@@ -827,6 +1092,7 @@ function formatDate(value: Date) {
     }
 
     .category-section,
+    .district-section,
     .discovery-section,
     .featured-section,
     .feed-section {
@@ -860,6 +1126,14 @@ function formatDate(value: Date) {
 
     .discovery-grid {
       grid-template-columns: 1fr;
+    }
+
+    .district-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .district-card {
+      min-height: 128px;
     }
 
     .discovery-more {

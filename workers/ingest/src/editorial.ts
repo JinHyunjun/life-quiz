@@ -3,6 +3,10 @@ export type SourcedContentCategory =
   | "investment"
   | "housing"
   | "seoul_life"
+  | "career"
+  | "rights"
+  | "digital_safety"
+  | "health"
   | "daily_tips"
   | "social_skills";
 
@@ -55,6 +59,42 @@ const CATEGORY_RULES: readonly CategoryRule[] = [
       "자치구", "1인가구",
     ],
     strongKeywords: ["청년정책", "기후동행카드", "생활쓰레기", "1인가구", "서울청년"],
+  },
+  {
+    category: "career",
+    focus: "첫 직장에서 일을 정리하고 배우며 성장하기 위한 업무 기본기와 커리어 판단 기준",
+    keywords: [
+      "채용", "취업", "이직", "직무", "커리어", "면접", "이력서", "자기소개서", "업무", "생산성",
+      "성과평가", "온보딩", "신입", "교육훈련", "직업",
+    ],
+    strongKeywords: ["채용", "이직", "커리어", "면접", "이력서", "온보딩"],
+  },
+  {
+    category: "rights",
+    focus: "근로계약, 임금, 휴가, 해고와 소비 생활에서 스스로 확인해야 할 권리와 대응 절차",
+    keywords: [
+      "근로계약", "최저임금", "연차", "퇴직금", "해고", "임금체불", "노동", "근로기준법", "산재",
+      "고용보험", "실업급여", "직장 내 괴롭힘", "소비자 권리", "분쟁조정",
+    ],
+    strongKeywords: ["근로계약서", "최저임금", "임금체불", "부당해고", "퇴직금", "실업급여"],
+  },
+  {
+    category: "digital_safety",
+    focus: "계정, 개인정보와 돈을 노리는 디지털 위험을 알아보고 바로 실행할 예방·신고 절차",
+    keywords: [
+      "보이스피싱", "스미싱", "피싱", "악성코드", "랜섬웨어", "개인정보", "해킹", "비밀번호", "계정",
+      "명의도용", "사이버", "딥페이크", "정보보호",
+    ],
+    strongKeywords: ["보이스피싱", "스미싱", "랜섬웨어", "명의도용", "개인정보 유출", "해킹"],
+  },
+  {
+    category: "health",
+    focus: "사회초년생이 일상에서 알아차릴 수 있는 몸과 마음의 신호, 예방 습관과 진료 판단 기준",
+    keywords: [
+      "건강검진", "수면", "스트레스", "번아웃", "우울", "불안", "운동", "영양", "금연", "절주",
+      "정신건강", "응급", "질병", "건강보험",
+    ],
+    strongKeywords: ["건강검진", "번아웃", "정신건강", "우울증", "수면장애", "응급"],
   },
   {
     category: "daily_tips",
@@ -130,6 +170,30 @@ const YOUTUBE_EDITORIAL_PLANS: readonly (EditorialPlan & { query: string })[] = 
     query: "직장생활 매너 대화 갈등 해결",
     category: "social_skills",
     focus: "첫 직장에서 오해를 줄이는 구체적인 대화와 갈등 대응 방법",
+    matchedTerms: [],
+  },
+  {
+    query: "사회초년생 근로계약 연차 퇴직금",
+    category: "rights",
+    focus: "첫 직장에서 계약서, 임금, 휴가와 퇴직 조건을 스스로 확인하는 방법",
+    matchedTerms: [],
+  },
+  {
+    query: "스미싱 피싱 개인정보 계정 보안 예방",
+    category: "digital_safety",
+    focus: "사회초년생이 자주 마주치는 디지털 사기와 계정 침해를 예방하고 대응하는 방법",
+    matchedTerms: [],
+  },
+  {
+    query: "직장인 수면 스트레스 건강관리 기초",
+    category: "health",
+    focus: "일상에서 몸과 마음의 신호를 알아차리고 건강 습관과 진료 시점을 판단하는 법",
+    matchedTerms: [],
+  },
+  {
+    query: "신입사원 업무 정리 시간관리 커리어",
+    category: "career",
+    focus: "첫 직장에서 일을 구조화하고 피드백을 성장으로 연결하는 실용적인 업무 기본기",
     matchedTerms: [],
   },
 ];

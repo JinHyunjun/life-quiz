@@ -1,9 +1,26 @@
 import { glossaryTopicsForKstDay } from "./glossary.ts";
 import { triviaSourceForKstDay } from "./trivia-sources.ts";
 
-export type ScheduledTriviaCategory = "history" | "humor" | "social_skills" | "daily_tips";
+export type ScheduledTriviaCategory =
+  | "history"
+  | "humor"
+  | "social_skills"
+  | "daily_tips"
+  | "career"
+  | "rights"
+  | "digital_safety"
+  | "health";
 
-const TRIVIA_CATEGORIES: readonly ScheduledTriviaCategory[] = ["history", "humor", "social_skills", "daily_tips"];
+export const TRIVIA_CATEGORIES: readonly ScheduledTriviaCategory[] = [
+  "history",
+  "humor",
+  "social_skills",
+  "daily_tips",
+  "career",
+  "rights",
+  "digital_safety",
+  "health",
+];
 
 export function kstSixHourSlot(now = new Date()) {
   const kstHour = new Date(now.getTime() + 9 * 60 * 60 * 1_000).getUTCHours();

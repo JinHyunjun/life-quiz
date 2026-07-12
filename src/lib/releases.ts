@@ -23,10 +23,22 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-11T04:30:00.000Z",
+  fetchedAt: "2026-07-12T04:30:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.11",
+      title: "주제 지도와 자치구 비교 브리핑",
+      date: "2026-07-12",
+      changes: [
+        { type: "bullet", text: "직장·커리어, 노동·생활법, 디지털 안전, 건강·마음 4개 분야를 추가해 전체 콘텐츠 체계를 12개 주제로 확장" },
+        { type: "bullet", text: "새 분야마다 외부 출처로 확인하는 20일 커리큘럼을 추가하고 Gemini가 사회초년생의 실제 행동 기준을 설명하도록 편집 지침 보강" },
+        { type: "bullet", text: "자치구별 매매·전월세·생활정보를 각각 반복 노출하던 방식을 4개 구 비교 브리핑으로 통합" },
+        { type: "bullet", text: "홈에 네 묶음의 지식 지도, 분야별 오늘 생성 수, 자치구 비교 전용 영역과 분야 교차 피드를 추가" },
+        { type: "bullet", text: "지난 상식 보관함에 제목·본문·출처 통합 검색을 추가하고 새 12개 주제 필터를 전체 화면에 반영" },
+      ],
+    },
     {
       version: "v0.10",
       title: "콘텐츠 수집 전면 복구",

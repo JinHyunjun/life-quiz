@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { contentItems, quizItems, sources, type ContentCard } from "../db/schema";
 import { sanitizeContentCards } from "./card-quality";
@@ -13,6 +13,7 @@ export interface ArchiveFilters {
   category?: Category;
   date?: string;
   originType?: OriginType;
+  query?: string;
   page?: number;
   pageSize?: number;
   now?: Date;
@@ -43,7 +44,8 @@ export async function listTodayContentItems(db: AppDb, category?: Category, now 
     .from(contentItems)
     .where(and(...conditions))
     .orderBy(desc(contentItems.createdAt));
-  return items.map(withQualityCards);
+  const qualityItems = items.map(withQualityCards);
+  return category ? qualityItems : interleaveCategories(qualityItems);
 }
 
 export async function listRecentVisualGuides(db: AppDb, category?: Category, limit = 2) {
@@ -66,7 +68,17 @@ export async function listRecentAiDiscoveries(db: AppDb, category?: Category, li
     eq(sources.originType, "ai_trivia"),
   ];
   if (category) conditions.push(eq(contentItems.category, category));
-  else conditions.push(inArray(contentItems.category, ["history", "humor", "social_skills", "daily_tips", "investment"]));
+  else conditions.push(inArray(contentItems.category, [
+    "history",
+    "humor",
+    "social_skills",
+    "daily_tips",
+    "career",
+    "rights",
+    "digital_safety",
+    "health",
+    "investment",
+  ]));
 
   const items = await db
     .select(summaryFields)
@@ -75,7 +87,35 @@ export async function listRecentAiDiscoveries(db: AppDb, category?: Category, li
     .where(and(...conditions))
     .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
     .limit(Math.min(Math.max(Math.trunc(limit), 1), 12));
+  return interleaveCategories(items.map(withQualityCards));
+}
+
+export async function listRecentDistrictBriefs(db: AppDb, limit = 3) {
+  const items = await db
+    .select(summaryFields)
+    .from(contentItems)
+    .where(and(
+      publishedContent,
+      inArray(contentItems.category, ["housing", "seoul_life"]),
+      sql`${contentItems.citationLabel} LIKE ${"%비교%"}`,
+    ))
+    .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), 6));
   return items.map(withQualityCards);
+}
+
+export async function getTodayCategoryCounts(db: AppDb, now = new Date()) {
+  const today = todayKstRange(now);
+  return db
+    .select({ category: contentItems.category, count: countValue })
+    .from(contentItems)
+    .where(and(
+      publishedContent,
+      gte(contentItems.createdAt, today.start),
+      lt(contentItems.createdAt, today.end),
+    ))
+    .groupBy(contentItems.category)
+    .orderBy(desc(countValue));
 }
 
 export async function getContentStats(db: AppDb, now = new Date()) {
@@ -108,6 +148,15 @@ export async function listArchivedContentItems(db: AppDb, filters: ArchiveFilter
   }
   if (filters.category) conditions.push(eq(contentItems.category, filters.category));
   if (filters.originType) conditions.push(eq(sources.originType, filters.originType));
+  const query = normalizeSearchQuery(filters.query);
+  if (query) {
+    const pattern = `%${escapeLikePattern(query)}%`;
+    conditions.push(or(
+      sql`${contentItems.title} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${contentItems.bodyMd} LIKE ${pattern} ESCAPE '\\'`,
+      sql`${contentItems.citationLabel} LIKE ${pattern} ESCAPE '\\'`,
+    )!);
+  }
 
   const where = and(...conditions);
   const pageSize = normalizePageSize(filters.pageSize);
@@ -202,6 +251,36 @@ function normalizePage(value: number | undefined) {
 function normalizePageSize(value: number | undefined) {
   if (!Number.isFinite(value)) return ARCHIVE_PAGE_SIZE;
   return Math.min(Math.max(Math.trunc(value!), 6), 36);
+}
+
+function normalizeSearchQuery(value: string | undefined) {
+  return value?.replace(/\s+/g, " ").trim().slice(0, 60) || undefined;
+}
+
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function interleaveCategories<T extends { category: string }>(items: T[]) {
+  const buckets = new Map<string, T[]>();
+  const categoryOrder: string[] = [];
+  for (const item of items) {
+    if (!buckets.has(item.category)) categoryOrder.push(item.category);
+    const bucket = buckets.get(item.category) ?? [];
+    bucket.push(item);
+    buckets.set(item.category, bucket);
+  }
+
+  const result: T[] = [];
+  while (result.length < items.length) {
+    const before = result.length;
+    for (const category of categoryOrder) {
+      const item = buckets.get(category)?.shift();
+      if (item) result.push(item);
+    }
+    if (result.length === before) break;
+  }
+  return result;
 }
 
 function withQualityCards<T extends { cards: ContentCard[] | null }>(item: T): T {

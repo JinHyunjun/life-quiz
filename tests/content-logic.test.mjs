@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
 import { isAuthorizedAdminRequest } from "../src/lib/admin.ts";
-import { SEOUL_DISTRICTS, seoulDistrictForKstRun } from "../workers/ingest/src/districts.ts";
+import { SEOUL_DISTRICTS, seoulDistrictForKstRun, seoulDistrictsForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
 import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot, youtubeEditorialPlansForKstRun } from "../workers/ingest/src/editorial.ts";
@@ -102,6 +102,12 @@ test("daily AI curriculum is distributed across four six-hour slots", () => {
   assert.ok(schedules.every((schedule) => schedule.trivia.sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
 });
 
+test("district briefing compares four distinct districts per run", () => {
+  const districts = seoulDistrictsForKstRun(new Date("2026-07-12T03:00:00Z"), 4);
+  assert.equal(districts.length, 4);
+  assert.equal(new Set(districts.map(({ name }) => name)).size, 4);
+});
+
 test("daily AI curriculum batch covers all core categories in one run", () => {
   const schedule = scheduledAiCurriculumBatchForKstRun(new Date("2026-06-26T15:00:00Z"));
 
@@ -111,7 +117,7 @@ test("daily AI curriculum batch covers all core categories in one run", () => {
   );
   assert.deepEqual(
     schedule.trivia.map((topic) => topic.category).sort(),
-    ["daily_tips", "history", "humor", "social_skills"],
+    ["career", "daily_tips", "digital_safety", "health", "history", "humor", "rights", "social_skills"],
   );
 });
 
@@ -133,6 +139,18 @@ test("AI general knowledge does not repeat a source during a 32-day curriculum",
       ),
     );
     assert.equal(urls.size, 32, `${category} repeated before 32 days`);
+  }
+});
+
+test("new practical curricula cover four additional subjects without early repetition", () => {
+  const firstDay = new Date("2026-07-12T00:00:00Z");
+  for (const category of ["career", "rights", "digital_safety", "health"]) {
+    const urls = new Set(
+      Array.from({ length: 20 }, (_, index) =>
+        triviaSourceForKstDay(category, new Date(firstDay.getTime() + index * 24 * 60 * 60 * 1_000)).sourceUrl,
+      ),
+    );
+    assert.equal(urls.size, 20, `${category} repeated before 20 days`);
   }
 });
 
@@ -245,7 +263,7 @@ test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", 
   assert.equal(youtubeEditorialPlanForKstSlot(new Date("2026-06-26T15:00:00Z")).category, "finance");
   assert.deepEqual(
     youtubeEditorialPlansForKstRun(new Date("2026-06-26T15:00:00Z")).map((plan) => plan.category),
-    ["finance", "seoul_life", "housing", "social_skills"],
+    ["finance", "seoul_life", "housing", "social_skills", "rights", "digital_safety", "health", "career"],
   );
 });
 

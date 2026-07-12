@@ -185,6 +185,10 @@ img {
 .category-label[data-category="investment"] { --category-color: var(--berry); }
 .category-label[data-category="housing"] { --category-color: var(--coral); }
 .category-label[data-category="seoul_life"] { --category-color: var(--blue); }
+.category-label[data-category="career"] { --category-color: #6b5c36; }
+.category-label[data-category="rights"] { --category-color: #8a4c32; }
+.category-label[data-category="digital_safety"] { --category-color: #356b85; }
+.category-label[data-category="health"] { --category-color: #b64d5f; }
 .category-label[data-category="daily_tips"] { --category-color: var(--yellow); }
 .category-label[data-category="history"] { --category-color: #7b5ca8; }
 .category-label[data-category="humor"] { --category-color: #d66a29; }

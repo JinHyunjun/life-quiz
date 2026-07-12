@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Archive, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Database, Filter, House, Layers3, PanelsTopLeft } from "lucide-astro";
+import { Archive, ArrowRight, CalendarDays, ChevronLeft, ChevronRight, Database, Filter, House, Layers3, PanelsTopLeft, Search } from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import { CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
 import {
@@ -32,6 +32,7 @@ const dateParam = params.get("date");
 const parsedDate = dateParam ? kstDayRange(dateParam) : null;
 const today = todayKstRange();
 const activeDate = parsedDate && parsedDate.start < today.start ? parsedDate.key : undefined;
+const activeQuery = params.get("q")?.replace(/\s+/g, " ").trim().slice(0, 60) || undefined;
 const pageParam = Number(params.get("page") ?? 1);
 
 const [archive, days, facets, stats] = await Promise.all([
@@ -39,6 +40,7 @@ const [archive, days, facets, stats] = await Promise.all([
     category: activeCategory,
     date: activeDate,
     originType: activeSource,
+    query: activeQuery,
     page: pageParam,
   }),
   listArchiveDays(db),
@@ -49,17 +51,19 @@ const [archive, days, facets, stats] = await Promise.all([
 const categoryCounts = new Map(facets.categoryCounts.map((facet) => [facet.category, facet.count]));
 const sourceCounts = new Map(facets.sourceCounts.map((facet) => [facet.originType, facet.count]));
 
-function archiveHref(overrides: { category?: string | null; date?: string | null; source?: string | null; page?: number | null }) {
+function archiveHref(overrides: { category?: string | null; date?: string | null; source?: string | null; query?: string | null; page?: number | null }) {
   const next = new URLSearchParams();
   const values = {
     category: overrides.category === undefined ? activeCategory : overrides.category,
     date: overrides.date === undefined ? activeDate : overrides.date,
     source: overrides.source === undefined ? activeSource : overrides.source,
+    query: overrides.query === undefined ? activeQuery : overrides.query,
   };
 
   if (values.category) next.set("category", values.category);
   if (values.date) next.set("date", values.date);
   if (values.source) next.set("source", values.source);
+  if (values.query) next.set("q", values.query);
   const page = overrides.page ?? 1;
   if (page > 1) next.set("page", String(page));
   const query = next.toString();
@@ -122,10 +126,20 @@ function formatItemDate(value: Date) {
       <div class="section-heading filter-heading">
         <div>
           <p class="eyebrow">FILTER</p>
-          <h2 id="filter-title">분야와 출처로 나누기</h2>
+          <h2 id="filter-title">검색하고 분야별로 나누기</h2>
         </div>
-        {(activeCategory || activeSource || activeDate) && <a class="reset-link" href="/archive">필터 초기화</a>}
+        {(activeCategory || activeSource || activeDate || activeQuery) && <a class="reset-link" href="/archive">필터 초기화</a>}
       </div>
+
+      <form class="archive-search" method="get" action="/archive" role="search">
+        {activeDate && <input type="hidden" name="date" value={activeDate} />}
+        {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
+        {activeSource && <input type="hidden" name="source" value={activeSource} />}
+        <Search size={18} aria-hidden="true" />
+        <label class="visually-hidden" for="archive-query">지난 상식 검색</label>
+        <input id="archive-query" name="q" type="search" value={activeQuery} maxlength="60" placeholder="제목, 내용, 출처 검색" />
+        <button class="button button-primary" type="submit"><Search size={16} /> 검색</button>
+      </form>
 
       <nav class="category-tabs archive-categories" aria-label="보관함 분야">
         <a class:list={["category-tab", { active: !activeCategory }]} href={archiveHref({ category: null, page: 1 })} aria-current={!activeCategory ? "page" : undefined}>
@@ -143,6 +157,7 @@ function formatItemDate(value: Date) {
       <form class="source-filter" method="get" action="/archive">
         {activeDate && <input type="hidden" name="date" value={activeDate} />}
         {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
+        {activeQuery && <input type="hidden" name="q" value={activeQuery} />}
         <label for="source-select"><Filter size={16} /> 출처 유형</label>
         <select id="source-select" name="source">
           <option value="">모든 출처</option>
@@ -343,10 +358,37 @@ function formatItemDate(value: Date) {
   .tab-swatch[data-category="housing"] { background: var(--coral); }
   .tab-swatch[data-category="investment"] { background: var(--berry); }
   .tab-swatch[data-category="seoul_life"] { background: var(--blue); }
+  .tab-swatch[data-category="career"] { background: #6b5c36; }
+  .tab-swatch[data-category="rights"] { background: #8a4c32; }
+  .tab-swatch[data-category="digital_safety"] { background: #356b85; }
+  .tab-swatch[data-category="health"] { background: #b64d5f; }
   .tab-swatch[data-category="daily_tips"] { background: var(--yellow); }
   .tab-swatch[data-category="history"] { background: #7b5ca8; }
   .tab-swatch[data-category="humor"] { background: #d66a29; }
   .tab-swatch[data-category="social_skills"] { background: #277e8e; }
+
+  .archive-search {
+    min-height: 56px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 6px 7px 6px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--muted);
+    background: var(--paper);
+  }
+
+  .archive-search input {
+    min-width: 0;
+    width: 100%;
+    border: 0;
+    background: transparent;
+  }
+
+  .archive-search input::placeholder { color: #8b9791; }
 
   .source-filter {
     display: flex;
@@ -534,6 +576,11 @@ function formatItemDate(value: Date) {
     .source-filter label { margin-right: 0; }
     .source-filter select,
     .source-filter .button { width: 100%; }
+    .archive-search {
+      grid-template-columns: 20px minmax(0, 1fr);
+      padding: 12px 14px;
+    }
+    .archive-search .button { grid-column: 1 / -1; width: 100%; }
     .archive-grid { grid-template-columns: 1fr; }
     .archive-card { min-height: 220px; }
     .pagination { gap: 8px; }
