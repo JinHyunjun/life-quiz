@@ -1,5 +1,8 @@
 ---
-export const prerender = false;
+// This page has no server-side data dependency (the queue loads client-side
+// from /api/reviews/due), so it's statically prerendered instead of paying
+// for an SSR + D1 round trip on every visit.
+export const prerender = true;
 
 import { Brain, CalendarClock, CheckCircle2, RotateCcw } from "lucide-astro";
 import Base from "../layouts/Base.astro";
@@ -409,6 +412,7 @@ import Base from "../layouts/Base.astro";
 
 <script>
   import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { element } from "../lib/dom";
 
   interface DueCard {
     quizItemId: number;

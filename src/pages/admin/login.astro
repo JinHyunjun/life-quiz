@@ -1,0 +1,131 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-astro";
+import Base from "../../layouts/Base.astro";
+import { isAuthorizedAdminSession } from "../../lib/admin";
+
+if (await isAuthorizedAdminSession(Astro.request, env.INGEST_ADMIN_TOKEN)) {
+  return Astro.redirect("/admin");
+}
+
+Astro.response.headers.set("cache-control", "no-store");
+const hasError = Astro.url.searchParams.get("error") === "1";
+const requestedReturnTo = Astro.url.searchParams.get("returnTo") ?? "/admin";
+const returnTo = requestedReturnTo.startsWith("/admin") && !requestedReturnTo.startsWith("//") ? requestedReturnTo : "/admin";
+---
+
+<Base title="운영자 로그인" description="라이프퀴즈 운영 품질 대시보드 로그인">
+  <div class="login-page shell">
+    <section class="login-panel" aria-labelledby="login-title">
+      <div class="login-icon" aria-hidden="true"><ShieldCheck size={28} /></div>
+      <p class="eyebrow">ADMIN ACCESS</p>
+      <h1 id="login-title">운영 품질 대시보드</h1>
+      <p class="login-copy">등록된 운영 토큰으로 수집 현황과 콘텐츠 품질을 확인합니다.</p>
+
+      <form method="post" action="/api/admin/login">
+        <input type="hidden" name="returnTo" value={returnTo} />
+        <label for="admin-password"><KeyRound size={16} /> 운영 토큰</label>
+        <div class="password-field">
+          <LockKeyhole size={18} aria-hidden="true" />
+          <input
+            id="admin-password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            maxlength="256"
+            aria-invalid={hasError ? "true" : undefined}
+            aria-describedby={hasError ? "login-error" : undefined}
+          />
+        </div>
+        {hasError && <p id="login-error" class="login-error" role="alert">운영 토큰이 일치하지 않습니다.</p>}
+        <button class="button button-primary" type="submit"><ShieldCheck size={17} /> 로그인</button>
+      </form>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .login-page {
+    min-height: calc(100vh - 200px);
+    display: grid;
+    place-items: center;
+    padding-block: 64px;
+  }
+
+  .login-panel {
+    width: min(100%, 430px);
+    padding: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .login-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 18px;
+    border-radius: var(--radius-md);
+    color: var(--green-deep);
+    background: var(--green-soft);
+  }
+
+  h1 {
+    margin: 4px 0 8px;
+    font-size: 1.6rem;
+  }
+
+  .login-copy {
+    margin: 0 0 26px;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  form,
+  label {
+    display: grid;
+  }
+
+  form { gap: 10px; }
+
+  label {
+    grid-template-columns: 18px auto;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted-strong);
+    font-size: 0.8rem;
+    font-weight: 750;
+  }
+
+  .password-field {
+    min-height: 46px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+  }
+
+  .password-field:focus-within {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px var(--green-soft);
+  }
+
+  .password-field svg { color: var(--muted); }
+  .password-field input { min-width: 0; border: 0; background: transparent; }
+  .password-field input:focus { outline: 0; }
+  .login-error { margin: 0; color: #a33434; font-size: 0.78rem; font-weight: 700; }
+  form .button { width: 100%; margin-top: 8px; }
+
+  @media (max-width: 520px) {
+    .login-page { padding-block: 32px; }
+    .login-panel { padding: 24px 20px; }
+  }
+</style>

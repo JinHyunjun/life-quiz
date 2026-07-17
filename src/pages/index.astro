@@ -2,25 +2,33 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Archive, ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, HeartPulse, Landmark, MapPinned, MessageCircle, PanelsTopLeft, RotateCcw, ShieldCheck, Sparkles } from "lucide-astro";
+import { Archive, ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, Landmark, MapPinned, MessageCircle, PanelsTopLeft, RotateCcw, ShieldCheck, Sparkles } from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import { createDb } from "../db/client";
 import { getContentStats, getTodayCategoryCounts, listArchiveDays, listRecentAiDiscoveries, listRecentDistrictBriefs, listRecentVisualGuides, listTodayContentItems } from "../lib/content";
 import { CATEGORY_DESCRIPTIONS, CATEGORY_GROUPS, CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
-import { formatKstDate } from "../lib/dates";
+import { formatKstDate, formatShortDate, todayKstRange } from "../lib/dates";
+import { excerpt } from "../lib/text";
 
 const db = createDb(env.DB);
 const categoryParam = Astro.url.searchParams.get("category");
 const activeCategory = (categoryParam && categoryParam in CATEGORY_LABELS ? categoryParam : undefined) as Category | undefined;
+const now = new Date();
+const today = todayKstRange(now);
 const [items, stats, archiveDays, visualGuides, aiDiscoveries, categoryCountRows, districtBriefs] = await Promise.all([
-  listTodayContentItems(db, activeCategory),
-  getContentStats(db),
-  listArchiveDays(db, new Date(), 3),
-  listRecentVisualGuides(db, activeCategory, 3),
-  listRecentAiDiscoveries(db, activeCategory, 6),
-  getTodayCategoryCounts(db),
-  listRecentDistrictBriefs(db, 3),
+  listTodayContentItems(db, activeCategory, now),
+  getContentStats(db, now),
+  listArchiveDays(db, now, 3),
+  listRecentVisualGuides(db, activeCategory, 3, today.start),
+  listRecentAiDiscoveries(db, activeCategory, 4, today.start),
+  getTodayCategoryCounts(db, now),
+  listRecentDistrictBriefs(db, 3, today.start),
 ]);
+
+// Cached at the edge: content only changes on the 6-hourly ingestion cron, so
+// repeat visits within the window can be served without hitting D1 again.
+Astro.response.headers.set("cache-control", "public, max-age=90, stale-while-revalidate=600");
+
 const todayCategoryCounts = new Map(categoryCountRows.map(({ category, count }) => [category, count]));
 const groupIcons = {
   "money-home": Landmark,
@@ -28,20 +36,9 @@ const groupIcons = {
   "safe-life": ShieldCheck,
   "culture-break": Sparkles,
 };
-const promotedIds = new Set([...visualGuides, ...aiDiscoveries, ...districtBriefs].map(({ id }) => id));
-const unpromotedItems = items.filter(({ id }) => !promotedIds.has(id));
-const featured = unpromotedItems[0];
-const feedItems = unpromotedItems.slice(1);
-const hasTodayItems = items.length > 0;
-
-function excerpt(bodyMd: string, maxLength = 110) {
-  const plain = bodyMd.replace(/[#*_>`\[\]]/g, "").replace(/\s+/g, " ").trim();
-  return plain.length > maxLength ? `${plain.slice(0, maxLength).trim()}...` : plain;
-}
-
-function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric" }).format(value);
-}
+const featured = items[0];
+const feedItems = items.slice(1);
+const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && districtBriefs.length > 0) || aiDiscoveries.length > 0;
 ---
 
 <Base title="읽고, 묻고, 오래 기억하는 생활 상식">
@@ -62,225 +59,217 @@ function formatDate(value: Date) {
     </div>
   </section>
 
-  <div class="shell home-content">
-    <section class="category-section" aria-labelledby="category-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">KNOWLEDGE MAP</p>
-          <h2 id="category-title">오늘의 지식 지도</h2>
-        </div>
-        <span class="content-count">오늘 {stats.today}개 · 누적 {stats.total}개</span>
-      </div>
-
-      <nav class="topic-map" aria-label="콘텐츠 분야">
-        <a class:list={["all-topics", { active: !activeCategory }]} href="/" aria-current={!activeCategory ? "page" : undefined}>
-          <span>모든 주제</span><strong>{stats.today}</strong>
-        </a>
-        {CATEGORY_GROUPS.map((group) => {
-          const GroupIcon = groupIcons[group.id];
-          return (
-            <section class="topic-group" aria-labelledby={`group-${group.id}`}>
-              <header>
-                <span class="topic-group-icon" aria-hidden="true"><GroupIcon size={19} /></span>
-                <span>
-                  <strong id={`group-${group.id}`}>{group.label}</strong>
-                  <small>{group.description}</small>
-                </span>
-              </header>
-              <div class="topic-links">
-                {group.categories.map((category) => (
-                  <a
-                    class:list={["topic-link", { active: activeCategory === category }]}
-                    href={`/?category=${category}`}
-                    aria-current={activeCategory === category ? "page" : undefined}
-                  >
-                    <span class="tab-swatch" data-category={category}></span>
-                    <span><strong>{CATEGORY_LABELS[category]}</strong><small>{CATEGORY_DESCRIPTIONS[category]}</small></span>
-                    <b>{todayCategoryCounts.get(category) ?? 0}</b>
-                  </a>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </nav>
-    </section>
-
-    {visualGuides.length > 0 && (
-      <section class="glossary-section" aria-labelledby="glossary-title">
+  <div class="shell home-layout">
+    <div class="home-main">
+      <section class="category-section" aria-labelledby="category-title">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">STARTER GLOSSARY</p>
-            <h2 id="glossary-title">처음 배우는 금융·투자·부동산 용어</h2>
+            <p class="eyebrow">KNOWLEDGE MAP</p>
+            <h2 id="category-title">오늘의 지식 지도</h2>
           </div>
-          <a class="glossary-note" href="/start">전체 시작 코스 <ArrowRight size={16} /></a>
+          <span class="content-count">오늘 {stats.today}개 · 누적 {stats.total}개</span>
         </div>
-        <div class="glossary-grid">
-          {visualGuides.map((guide) => (
-            <a class="glossary-card" href={`/articles/${guide.id}`} data-category={guide.category}>
-              <span class="glossary-icon"><PanelsTopLeft size={28} /></span>
-              <span class="glossary-copy">
-                <span class="category-label" data-category={guide.category}>{categoryLabel(guide.category)}</span>
-                <strong>{guide.title}</strong>
-                <small>{guide.cards?.[0]?.body ?? excerpt(guide.bodyMd, 90)}</small>
-              </span>
-              <ArrowRight size={19} />
-            </a>
-          ))}
-        </div>
-      </section>
-    )}
 
-    {!activeCategory && districtBriefs.length > 0 && (
-      <section class="district-section" aria-labelledby="district-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow"><MapPinned size={14} /> SEOUL DISTRICT BRIEF</p>
-            <h2 id="district-title">자치구를 한눈에 비교하는 서울 브리핑</h2>
-          </div>
-          <a class="discovery-more" href="/archive?category=seoul_life">서울살이 더 보기 <ArrowRight size={16} /></a>
-        </div>
-        <ul class="district-grid">
-          {districtBriefs.map((item) => (
-            <li>
-              <a class="district-card" href={`/articles/${item.id}`} data-category={item.category}>
-                <span class="district-card-icon" aria-hidden="true"><MapPinned size={24} /></span>
-                <span class="district-card-copy">
-                  <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
-                  <strong>{item.title}</strong>
-                  <small>{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 95)}</small>
-                </span>
-                <ArrowRight size={18} />
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
-    )}
-
-    {aiDiscoveries.length > 0 && (
-      <section class="discovery-section" aria-labelledby="discovery-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow"><Sparkles size={14} /> CURATED DISCOVERY</p>
-            <h2 id="discovery-title">AI가 자료를 찾아 정리한 흥미로운 상식</h2>
-          </div>
-          <a class="discovery-more" href="/archive?source=ai_trivia">더 둘러보기 <ArrowRight size={16} /></a>
-        </div>
-        <ul class="discovery-grid">
-          {aiDiscoveries.map((item) => (
-            <li>
-              <a class="discovery-card" href={`/articles/${item.id}`} data-category={item.category}>
-                <span class="discovery-meta">
-                  <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
-                  <span>{formatDate(item.createdAt)}</span>
-                </span>
-                <strong>{item.title}</strong>
-                <span class="discovery-excerpt">{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 95)}</span>
-                <span class="discovery-source">{item.citationLabel}<ArrowRight size={15} /></span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </section>
-    )}
-
-    {featured ? (
-      <>
-        <section class="featured-section" aria-labelledby="featured-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">NEW KNOWLEDGE</p>
-              <h2 id="featured-title">오늘 가장 최근에 도착한 상식</h2>
-            </div>
-          </div>
-
-          <a class="featured-story" href={`/articles/${featured.id}`}>
-            <div class="featured-number" aria-hidden="true">01</div>
-            <div class="featured-copy">
-              <div class="featured-tags">
-                <span class="category-label" data-category={featured.category}>{categoryLabel(featured.category)}</span>
-                {featured.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
-              </div>
-              <h3>{featured.title}</h3>
-              <p>{featured.cards?.[0]?.body ?? excerpt(featured.bodyMd, 150)}</p>
-              <span class="story-meta">{featured.citationLabel} · {formatDate(featured.createdAt)}</span>
-            </div>
-            <span class="story-arrow" aria-hidden="true"><ArrowRight size={23} /></span>
+        <nav class="topic-map" aria-label="콘텐츠 분야">
+          <a class:list={["all-topics", { active: !activeCategory }]} href="/" aria-current={!activeCategory ? "page" : undefined}>
+            <span>모든 주제</span><strong>{stats.today}</strong>
           </a>
-        </section>
+          {CATEGORY_GROUPS.map((group) => {
+            const GroupIcon = groupIcons[group.id];
+            return (
+              <section class="topic-group" aria-labelledby={`group-${group.id}`}>
+                <header>
+                  <span class="topic-group-icon" aria-hidden="true"><GroupIcon size={19} /></span>
+                  <span>
+                    <strong id={`group-${group.id}`}>{group.label}</strong>
+                    <small>{group.description}</small>
+                  </span>
+                </header>
+                <div class="topic-links">
+                  {group.categories.map((category) => (
+                    <a
+                      class:list={["topic-link", { active: activeCategory === category }]}
+                      href={`/?category=${category}`}
+                      aria-current={activeCategory === category ? "page" : undefined}
+                    >
+                      <span class="category-swatch" data-category={category}></span>
+                      <span><strong>{CATEGORY_LABELS[category]}</strong><small>{CATEGORY_DESCRIPTIONS[category]}</small></span>
+                      <b>{todayCategoryCounts.get(category) ?? 0}</b>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </nav>
+      </section>
 
-        {feedItems.length > 0 && (
-          <section class="feed-section" aria-labelledby="feed-title">
+      {featured ? (
+        <>
+          <section class="featured-section" aria-labelledby="featured-title">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">KNOWLEDGE FEED</p>
-                <h2 id="feed-title">오늘 차곡차곡 쌓인 상식</h2>
+                <p class="eyebrow">NEW KNOWLEDGE</p>
+                <h2 id="featured-title">오늘 가장 최근에 도착한 상식</h2>
               </div>
             </div>
 
-            <ul class="content-grid">
-              {feedItems.map((item, index) => (
-                <li>
-                  <a class="content-card" href={`/articles/${item.id}`}>
-                    <div class="card-topline">
-                      <div class="card-tags">
-                        <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
-                        {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
-                      </div>
-                      <span class="card-number">{String(index + 2).padStart(2, "0")}</span>
-                    </div>
-                    <h3>{item.title}</h3>
-                    <p>{item.cards?.[0]?.body ?? excerpt(item.bodyMd)}</p>
-                    <div class="card-footer">
-                      <span>{item.citationLabel}</span>
-                      <span>{formatDate(item.createdAt)}</span>
-                    </div>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </>
-    ) : !hasTodayItems ? (
-      <section class="empty-state" aria-labelledby="empty-title">
-        <BookOpen size={34} strokeWidth={1.7} />
-        <h2 id="empty-title">오늘 이 분야에 도착한 상식은 아직 없어요</h2>
-        <p>지난 상식 보관함에서 이전 자료를 찾아볼 수 있어요.</p>
-        <a class="button button-primary" href="/archive"><Archive size={17} /> 지난 상식 보기</a>
-      </section>
-    ) : null}
-
-    <section class="archive-band" aria-labelledby="archive-title">
-      <div class="archive-band-icon" aria-hidden="true"><Archive size={26} /></div>
-      <div class="archive-band-copy">
-        <p class="eyebrow">BEFORE TODAY</p>
-        <h2 id="archive-title">00시 이전 상식은 보관함에서</h2>
-        <p>날짜, 분야, 출처별로 나눠서 이전 데이터 {stats.archive}개를 계속 탐색할 수 있어요.</p>
-      </div>
-      {archiveDays.length > 0 && (
-        <div class="archive-days" aria-label="최근 보관 날짜">
-          {archiveDays.map((day) => (
-            <a href={`/archive?date=${day.day}`}>
-              <CalendarDays size={15} />
-              <span>{formatKstDate(day.day, false)}</span>
-              <strong>{day.count}</strong>
+            <a class="featured-story" href={`/articles/${featured.id}`}>
+              <div class="featured-number" aria-hidden="true">01</div>
+              <div class="featured-copy">
+                <div class="featured-tags">
+                  <span class="category-label" data-category={featured.category}>{categoryLabel(featured.category)}</span>
+                  {featured.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+                </div>
+                <h3>{featured.title}</h3>
+                <p>{featured.cards?.[0]?.body ?? excerpt(featured.bodyMd, 150)}</p>
+                <span class="story-meta">{featured.citationLabel} · {formatShortDate(featured.createdAt)}</span>
+              </div>
+              <span class="story-arrow" aria-hidden="true"><ArrowRight size={23} /></span>
             </a>
-          ))}
+          </section>
+
+          {feedItems.length > 0 && (
+            <section class="feed-section" aria-labelledby="feed-title">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">KNOWLEDGE FEED</p>
+                  <h2 id="feed-title">오늘 차곡차곡 쌓인 상식</h2>
+                </div>
+              </div>
+
+              <ul class="content-grid">
+                {feedItems.map((item, index) => (
+                  <li>
+                    <a class="content-card" href={`/articles/${item.id}`}>
+                      <div class="card-topline">
+                        <div class="card-tags">
+                          <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                          {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+                        </div>
+                        <span class="card-number">{String(index + 2).padStart(2, "0")}</span>
+                      </div>
+                      <h3>{item.title}</h3>
+                      <p>{item.cards?.[0]?.body ?? excerpt(item.bodyMd)}</p>
+                      <div class="card-footer">
+                        <span>{item.citationLabel}</span>
+                        <span>{formatShortDate(item.createdAt)}</span>
+                      </div>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      ) : (
+        <section class="empty-state" aria-labelledby="empty-title">
+          <BookOpen size={34} strokeWidth={1.7} />
+          <h2 id="empty-title">오늘 이 분야에 도착한 상식은 아직 없어요</h2>
+          <p>지난 상식 보관함에서 이전 자료를 찾아볼 수 있어요.</p>
+          <a class="button button-primary" href="/archive"><Archive size={17} /> 지난 상식 보기</a>
+        </section>
+      )}
+    </div>
+
+    <aside class="home-sidebar" aria-label="더 둘러보기">
+      {hasSidebarContent && (
+        <div class="sidebar-card">
+          <div class="sidebar-card-heading">
+            <p class="eyebrow">EXPLORE MORE</p>
+            <h2>오늘 함께 볼 만한 것들</h2>
+          </div>
+
+          {visualGuides.length > 0 && (
+            <div class="sidebar-group">
+              <div class="sidebar-group-heading">
+                <span><PanelsTopLeft size={15} /> 시작 코스 용어</span>
+                <a href="/start">전체 보기 <ArrowRight size={13} /></a>
+              </div>
+              <ul class="rail-list">
+                {visualGuides.map((guide) => (
+                  <li>
+                    <a href={`/articles/${guide.id}`} data-category={guide.category}>
+                      <span class="rail-icon"><PanelsTopLeft size={16} /></span>
+                      <span class="rail-copy">
+                        <strong>{guide.title}</strong>
+                        <small>{guide.cards?.[0]?.body ?? excerpt(guide.bodyMd, 60)}</small>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {!activeCategory && districtBriefs.length > 0 && (
+            <div class="sidebar-group">
+              <div class="sidebar-group-heading">
+                <span><MapPinned size={15} /> 서울 자치구 브리핑</span>
+                <a href="/archive?category=seoul_life">더 보기 <ArrowRight size={13} /></a>
+              </div>
+              <ul class="rail-list">
+                {districtBriefs.map((item) => (
+                  <li>
+                    <a href={`/articles/${item.id}`} data-category={item.category}>
+                      <span class="rail-icon"><MapPinned size={16} /></span>
+                      <span class="rail-copy">
+                        <strong>{item.title}</strong>
+                        <small>{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 60)}</small>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {aiDiscoveries.length > 0 && (
+            <div class="sidebar-group">
+              <div class="sidebar-group-heading">
+                <span><Sparkles size={15} /> 큐레이션 상식</span>
+                <a href="/archive?source=ai_trivia">더 보기 <ArrowRight size={13} /></a>
+              </div>
+              <ul class="rail-list">
+                {aiDiscoveries.map((item) => (
+                  <li>
+                    <a href={`/articles/${item.id}`} data-category={item.category}>
+                      <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                      <span class="rail-copy">
+                        <strong>{item.title}</strong>
+                        <small>{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 60)}</small>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
-      <a class="button button-secondary archive-button" href="/archive">
-        전체 보관함 <ArrowRight size={17} />
+
+      <a class="sidebar-card archive-card" href="/archive">
+        <div class="archive-card-heading">
+          <Archive size={20} />
+          <div><span>00시 이전 상식은 보관함에서</span><strong>{stats.archive}개 계속 탐색하기</strong></div>
+        </div>
+        {archiveDays.length > 0 && (
+          <div class="archive-days">
+            {archiveDays.map((day) => (
+              <span><CalendarDays size={13} /> {formatKstDate(day.day, false)} · {day.count}</span>
+            ))}
+          </div>
+        )}
+        <span class="archive-card-cta">전체 보관함 보기 <ArrowRight size={15} /></span>
       </a>
-    </section>
+    </aside>
   </div>
 </Base>
 
 <style>
   .hero {
     position: relative;
-    min-height: 390px;
+    min-height: 340px;
     overflow: hidden;
     isolation: isolate;
     background: #eef2ef;
@@ -297,7 +286,7 @@ function formatDate(value: Date) {
   }
 
   .hero-content {
-    min-height: 390px;
+    min-height: 340px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -316,13 +305,13 @@ function formatDate(value: Date) {
 
   .hero h1 {
     margin: 0;
-    font-size: clamp(2.4rem, 5vw, 4.5rem);
+    font-size: clamp(2.2rem, 4.4vw, 3.8rem);
     line-height: 1.07;
   }
 
   .hero-content > p:not(.hero-kicker) {
     max-width: 470px;
-    margin: 18px 0 0;
+    margin: 16px 0 0;
     color: var(--muted-strong);
     font-size: 1rem;
   }
@@ -330,18 +319,33 @@ function formatDate(value: Date) {
   .hero-actions {
     display: flex;
     gap: 10px;
-    margin-top: 26px;
+    margin-top: 24px;
   }
 
-  .home-content {
-    padding-top: 46px;
+  .home-layout {
+    padding-top: 40px;
+    padding-bottom: 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    align-items: start;
+    gap: 32px;
+  }
+
+  .home-main {
+    min-width: 0;
+  }
+
+  .home-sidebar {
+    position: sticky;
+    top: 88px;
+    display: grid;
+    gap: 16px;
   }
 
   .category-section,
-  .discovery-section,
   .featured-section,
   .feed-section {
-    margin-bottom: 50px;
+    margin-bottom: 40px;
   }
 
   .content-count {
@@ -389,7 +393,7 @@ function formatDate(value: Date) {
 
   .topic-group {
     min-width: 0;
-    padding: 18px;
+    padding: 16px;
     background: var(--paper);
   }
 
@@ -461,64 +465,10 @@ function formatDate(value: Date) {
   .topic-link small { color: var(--muted); font-size: 0.67rem; }
   .topic-link b { color: var(--muted); font-size: 0.73rem; text-align: right; }
 
-  .category-tabs {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 2px 2px 8px;
-    scrollbar-width: none;
-  }
-
-  .category-tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .category-tab {
-    min-height: 38px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    flex: 0 0 auto;
-    padding: 0 13px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--paper);
-    color: var(--muted-strong);
-    text-decoration: none;
-    font-size: 0.84rem;
-    font-weight: 700;
-  }
-
-  .category-tab:hover,
-  .category-tab.active {
-    color: white;
-    border-color: var(--ink);
-    background: var(--ink);
-  }
-
-  .tab-swatch {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--green);
-  }
-
-  .tab-swatch[data-category="housing"] { background: var(--coral); }
-  .tab-swatch[data-category="investment"] { background: var(--berry); }
-  .tab-swatch[data-category="seoul_life"] { background: var(--blue); }
-  .tab-swatch[data-category="career"] { background: #6b5c36; }
-  .tab-swatch[data-category="rights"] { background: #8a4c32; }
-  .tab-swatch[data-category="digital_safety"] { background: #356b85; }
-  .tab-swatch[data-category="health"] { background: #b64d5f; }
-  .tab-swatch[data-category="daily_tips"] { background: var(--yellow); }
-  .tab-swatch[data-category="history"] { background: #7b5ca8; }
-  .tab-swatch[data-category="humor"] { background: #d66a29; }
-  .tab-swatch[data-category="social_skills"] { background: #277e8e; }
-
   .featured-story {
-    min-height: 230px;
+    min-height: 210px;
     display: grid;
-    grid-template-columns: 110px minmax(0, 1fr) 46px;
+    grid-template-columns: 100px minmax(0, 1fr) 46px;
     align-items: stretch;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--green) 25%, var(--line));
@@ -540,7 +490,7 @@ function formatDate(value: Date) {
 
   .featured-copy {
     align-self: center;
-    padding: 34px 38px;
+    padding: 30px 34px;
   }
 
   .featured-tags,
@@ -551,281 +501,16 @@ function formatDate(value: Date) {
     gap: 8px;
   }
 
-  .glossary-section {
-    margin-bottom: 52px;
-    padding: 24px;
-    border: 1px solid #d8ce94;
-    border-radius: var(--radius-md);
-    background: #fffbdf;
-  }
-
-  .glossary-section .section-heading {
-    margin-bottom: 16px;
-  }
-
-  .glossary-note {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: #695a0a;
-    font-size: 0.76rem;
-    font-weight: 800;
-    text-decoration: none;
-  }
-
-  .glossary-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-  }
-
-  .glossary-card {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: 58px minmax(0, 1fr) 22px;
-    align-items: center;
-    gap: 14px;
-    padding: 16px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    color: var(--ink);
-    background: var(--paper);
-    text-decoration: none;
-    transition: transform 160ms ease, border-color 160ms ease;
-  }
-
-  .glossary-card:hover {
-    transform: translateY(-2px);
-    border-color: #b4a54c;
-  }
-
-  .glossary-icon {
-    width: 58px;
-    height: 58px;
-    display: grid;
-    place-items: center;
-    border-radius: var(--radius-md);
-    color: var(--green-deep);
-    background: var(--green-soft);
-  }
-
-  .glossary-card[data-category="housing"] .glossary-icon {
-    color: var(--coral);
-    background: var(--coral-soft);
-  }
-
-  .glossary-card[data-category="investment"] .glossary-icon {
-    color: var(--berry);
-    background: var(--berry-soft);
-  }
-
-  .glossary-copy {
-    min-width: 0;
-    display: grid;
-    gap: 4px;
-  }
-
-  .glossary-copy strong,
-  .glossary-copy small {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .discovery-section {
-    margin-bottom: 52px;
-  }
-
-  .district-section {
-    margin-bottom: 52px;
-    padding: 24px 0;
-    border-block: 1px solid var(--line);
-  }
-
-  .district-section .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .district-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .district-grid li { min-width: 0; }
-
-  .district-card {
-    min-height: 150px;
-    height: 100%;
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr) 18px;
-    align-items: center;
-    gap: 12px;
-    padding: 18px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    color: var(--ink);
-    background: var(--paper);
-    text-decoration: none;
-  }
-
-  .district-card:hover { border-color: var(--blue); }
-
-  .district-card-icon {
-    width: 44px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    border-radius: var(--radius-sm);
-    color: var(--blue);
-    background: var(--blue-soft);
-  }
-
-  .district-card-copy {
-    min-width: 0;
-    display: grid;
-    gap: 5px;
-  }
-
-  .district-card-copy strong {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 0.9rem;
-    line-height: 1.35;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .district-card-copy small {
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 0.72rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .discovery-section .eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .discovery-more {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--green-deep);
-    font-size: 0.78rem;
-    font-weight: 800;
-    text-decoration: none;
-  }
-
-  .discovery-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .discovery-grid li {
-    min-width: 0;
-  }
-
-  .discovery-card {
-    min-height: 218px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    border: 1px solid var(--line);
-    border-top: 4px solid var(--green);
-    border-radius: var(--radius-md);
-    background: var(--paper);
-    color: var(--ink);
-    text-decoration: none;
-    box-shadow: var(--shadow-sm);
-    transition: transform 160ms ease, box-shadow 160ms ease;
-  }
-
-  .discovery-card[data-category="history"] { border-top-color: #7b5ca8; }
-  .discovery-card[data-category="humor"] { border-top-color: #d66a29; }
-  .discovery-card[data-category="social_skills"] { border-top-color: #277e8e; }
-  .discovery-card[data-category="daily_tips"] { border-top-color: var(--yellow); }
-  .discovery-card[data-category="investment"] { border-top-color: var(--berry); }
-
-  .discovery-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 28px rgba(22, 34, 28, 0.09);
-  }
-
-  .discovery-meta,
-  .discovery-source {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-  }
-
-  .discovery-meta {
-    color: var(--muted);
-    font-size: 0.72rem;
-  }
-
-  .discovery-card strong {
-    margin: 18px 0 10px;
-    font-size: 1.05rem;
-    line-height: 1.42;
-  }
-
-  .discovery-excerpt {
-    display: -webkit-box;
-    overflow: hidden;
-    color: var(--muted-strong);
-    font-size: 0.83rem;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-  }
-
-  .discovery-source {
-    margin-top: auto;
-    padding-top: 14px;
-    overflow: hidden;
-    border-top: 1px solid var(--line);
-    color: var(--green-deep);
-    font-size: 0.72rem;
-    font-weight: 750;
-  }
-
-  .discovery-source svg {
-    flex: 0 0 auto;
-  }
-
-  .glossary-copy strong {
-    font-size: 0.96rem;
-  }
-
-  .glossary-copy small {
-    color: var(--muted);
-    font-size: 0.75rem;
-  }
-
   .featured-copy h3 {
-    max-width: 750px;
+    max-width: 640px;
     margin: 10px 0 10px;
-    font-size: clamp(1.35rem, 2.5vw, 2rem);
+    font-size: clamp(1.3rem, 2.2vw, 1.8rem);
     line-height: 1.3;
   }
 
   .featured-copy p {
-    max-width: 720px;
-    margin: 0 0 18px;
+    max-width: 620px;
+    margin: 0 0 16px;
     color: var(--muted-strong);
   }
 
@@ -848,7 +533,7 @@ function formatDate(value: Date) {
 
   .content-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
     margin: 0;
     padding: 0;
@@ -860,11 +545,11 @@ function formatDate(value: Date) {
   }
 
   .content-card {
-    min-height: 242px;
+    min-height: 220px;
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 22px;
+    padding: 20px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
@@ -894,24 +579,24 @@ function formatDate(value: Date) {
   }
 
   .content-card h3 {
-    margin: 18px 0 10px;
-    font-size: 1.08rem;
+    margin: 16px 0 9px;
+    font-size: 1.02rem;
     line-height: 1.42;
   }
 
   .content-card > p {
     display: -webkit-box;
-    margin: 0 0 22px;
+    margin: 0 0 18px;
     overflow: hidden;
     color: var(--muted-strong);
-    font-size: 0.87rem;
+    font-size: 0.85rem;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
 
   .card-footer {
     margin-top: auto;
-    padding-top: 14px;
+    padding-top: 13px;
     border-top: 1px solid var(--line);
   }
 
@@ -941,71 +626,182 @@ function formatDate(value: Date) {
     color: var(--muted);
   }
 
-  .archive-band {
-    display: grid;
-    grid-template-columns: 52px minmax(240px, 1fr) minmax(220px, auto) auto;
-    align-items: center;
-    gap: 20px;
-    margin: 0 0 12px;
-    padding: 24px;
+  .sidebar-card {
+    padding: 20px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    background: var(--ink);
-    color: white;
+    background: var(--paper);
   }
 
-  .archive-band-icon {
-    width: 52px;
-    height: 52px;
+  .sidebar-card-heading {
+    margin-bottom: 16px;
+  }
+
+  .sidebar-card-heading h2 {
+    margin: 0;
+    font-size: 1.02rem;
+  }
+
+  .sidebar-group + .sidebar-group {
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+  }
+
+  .sidebar-group-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .sidebar-group-heading > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted-strong);
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .sidebar-group-heading a {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--green-deep);
+    font-size: 0.7rem;
+    font-weight: 750;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .rail-list {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .rail-list a {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .rail-list a:hover {
+    background: var(--surface-strong);
+  }
+
+  .rail-icon {
+    width: 30px;
+    height: 30px;
     display: grid;
     place-items: center;
-    border-radius: var(--radius-md);
-    color: var(--green-deep);
-    background: #a9d8c4;
+    border-radius: var(--radius-sm);
+    color: var(--category-color, var(--green-deep));
+    background: var(--category-soft, var(--green-soft));
   }
 
-  .archive-band .eyebrow {
+  .rail-list .category-label {
+    align-self: start;
+    margin-top: 2px;
+  }
+
+  .rail-copy {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .rail-copy strong {
+    overflow: hidden;
+    font-size: 0.83rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rail-copy small {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.4;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .archive-card {
+    display: grid;
+    gap: 12px;
+    color: white;
+    background: var(--ink);
+    text-decoration: none;
+  }
+
+  .archive-card-heading {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+  }
+
+  .archive-card-heading > svg {
     color: #9bd0b9;
   }
 
-  .archive-band h2 {
-    margin: 0;
-    font-size: 1.15rem;
-  }
-
-  .archive-band-copy > p:last-child {
-    margin: 4px 0 0;
-    color: #b8c3bd;
-    font-size: 0.8rem;
-  }
-
-  .archive-days {
-    display: flex;
-    gap: 6px;
-  }
-
-  .archive-days a {
-    min-height: 42px;
+  .archive-card-heading div {
     display: grid;
-    grid-template-columns: 16px auto;
-    align-items: center;
-    gap: 2px 6px;
-    padding: 6px 9px;
-    border: 1px solid #3d4a44;
-    border-radius: var(--radius-sm);
-    color: #dbe4df;
-    text-decoration: none;
-    font-size: 0.68rem;
+    gap: 2px;
   }
 
-  .archive-days strong {
-    grid-column: 2;
-    color: white;
+  .archive-card-heading span {
+    color: #b8c3bd;
     font-size: 0.72rem;
   }
 
-  .archive-button {
-    white-space: nowrap;
+  .archive-card-heading strong {
+    font-size: 0.94rem;
+    line-height: 1.35;
+  }
+
+  .archive-days {
+    display: grid;
+    gap: 4px;
+  }
+
+  .archive-days span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #c6d0ca;
+    font-size: 0.72rem;
+  }
+
+  .archive-card-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding-top: 10px;
+    border-top: 1px solid #37423d;
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 750;
+  }
+
+  @media (max-width: 1080px) {
+    .home-layout {
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 24px;
+    }
   }
 
   @media (max-width: 900px) {
@@ -1013,24 +809,17 @@ function formatDate(value: Date) {
       opacity: 0.48;
     }
 
+    .home-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .home-sidebar {
+      position: static;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .content-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .discovery-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .district-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .archive-band {
-      grid-template-columns: 52px minmax(0, 1fr) auto;
-    }
-
-    .archive-days {
-      display: none;
     }
   }
 
@@ -1051,21 +840,9 @@ function formatDate(value: Date) {
       min-height: 50px;
     }
 
-    .glossary-section {
-      padding: 18px;
-    }
-
-    .glossary-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .glossary-note {
-      display: none;
-    }
-
     .hero,
     .hero-content {
-      min-height: 430px;
+      min-height: 400px;
     }
 
     .hero-image {
@@ -1074,7 +851,7 @@ function formatDate(value: Date) {
     }
 
     .hero h1 {
-      font-size: 2.35rem;
+      font-size: 2.2rem;
     }
 
     .hero-content > p:not(.hero-kicker) {
@@ -1087,16 +864,18 @@ function formatDate(value: Date) {
       align-items: stretch;
     }
 
-    .home-content {
-      padding-top: 34px;
+    .home-layout {
+      padding-top: 30px;
+    }
+
+    .home-sidebar {
+      grid-template-columns: 1fr;
     }
 
     .category-section,
-    .district-section,
-    .discovery-section,
     .featured-section,
     .feed-section {
-      margin-bottom: 38px;
+      margin-bottom: 32px;
     }
 
     .featured-story {
@@ -1109,11 +888,11 @@ function formatDate(value: Date) {
     }
 
     .featured-copy {
-      padding: 24px 20px;
+      padding: 22px 18px;
     }
 
     .featured-copy h3 {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
     }
 
     .story-arrow {
@@ -1124,40 +903,8 @@ function formatDate(value: Date) {
       grid-template-columns: 1fr;
     }
 
-    .discovery-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .district-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .district-card {
-      min-height: 128px;
-    }
-
-    .discovery-more {
-      display: none;
-    }
-
     .content-card {
-      min-height: 214px;
-    }
-
-    .archive-band {
-      grid-template-columns: 42px minmax(0, 1fr);
-      gap: 14px;
-      padding: 20px;
-    }
-
-    .archive-band-icon {
-      width: 42px;
-      height: 42px;
-    }
-
-    .archive-button {
-      grid-column: 1 / -1;
-      width: 100%;
+      min-height: 0;
     }
   }
 </style>

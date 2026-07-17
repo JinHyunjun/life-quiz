@@ -48,9 +48,10 @@ export async function listTodayContentItems(db: AppDb, category?: Category, now 
   return category ? qualityItems : interleaveCategories(qualityItems);
 }
 
-export async function listRecentVisualGuides(db: AppDb, category?: Category, limit = 2) {
+export async function listRecentVisualGuides(db: AppDb, category?: Category, limit = 2, before?: Date) {
   const conditions: SQL[] = [publishedContent, eq(contentItems.contentFormat, "visual_guide")];
   if (category) conditions.push(eq(contentItems.category, category));
+  if (before) conditions.push(lt(contentItems.createdAt, before));
 
   const items = await db
     .select(summaryFields)
@@ -61,7 +62,7 @@ export async function listRecentVisualGuides(db: AppDb, category?: Category, lim
   return items.map(withQualityCards);
 }
 
-export async function listRecentAiDiscoveries(db: AppDb, category?: Category, limit = 6) {
+export async function listRecentAiDiscoveries(db: AppDb, category?: Category, limit = 6, before?: Date) {
   const conditions: SQL[] = [
     publishedContent,
     eq(contentItems.contentFormat, "article"),
@@ -79,6 +80,7 @@ export async function listRecentAiDiscoveries(db: AppDb, category?: Category, li
     "health",
     "investment",
   ]));
+  if (before) conditions.push(lt(contentItems.createdAt, before));
 
   const items = await db
     .select(summaryFields)
@@ -90,15 +92,18 @@ export async function listRecentAiDiscoveries(db: AppDb, category?: Category, li
   return interleaveCategories(items.map(withQualityCards));
 }
 
-export async function listRecentDistrictBriefs(db: AppDb, limit = 3) {
+export async function listRecentDistrictBriefs(db: AppDb, limit = 3, before?: Date) {
+  const conditions: SQL[] = [
+    publishedContent,
+    inArray(contentItems.category, ["housing", "seoul_life"]),
+    sql`${contentItems.citationLabel} LIKE ${"%비교%"}`,
+  ];
+  if (before) conditions.push(lt(contentItems.createdAt, before));
+
   const items = await db
     .select(summaryFields)
     .from(contentItems)
-    .where(and(
-      publishedContent,
-      inArray(contentItems.category, ["housing", "seoul_life"]),
-      sql`${contentItems.citationLabel} LIKE ${"%비교%"}`,
-    ))
+    .where(and(...conditions))
     .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
     .limit(Math.min(Math.max(Math.trunc(limit), 1), 6));
   return items.map(withQualityCards);

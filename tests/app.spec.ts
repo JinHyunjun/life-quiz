@@ -4,8 +4,7 @@ test("home feed renders without horizontal overflow", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
-  await expect(page.locator(".category-tab").filter({ hasText: "주식·투자" })).toBeVisible();
-  await expect(page.locator(".discovery-section")).toBeVisible();
+  await expect(page.locator(".topic-link").filter({ hasText: "주식·투자" })).toBeVisible();
   await expect(page.locator(".featured-story, .empty-state")).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -39,7 +38,9 @@ test("archive separates older content by date and filters", async ({ page }) => 
   await expect(page.locator(".archive-card").first()).toBeVisible();
   await expect(page.getByText("보관된 상식")).toBeVisible();
 
-  const datedTab = page.locator(".date-tab").nth(1);
+  const dateList = page.locator(".date-filter-list");
+  await expect(dateList).toHaveCSS("overflow-y", "auto");
+  const datedTab = dateList.locator(".filter-row").nth(1);
   await expect(datedTab).toBeVisible();
   await datedTab.click();
   await expect(page).toHaveURL(/date=\d{4}-\d{2}-\d{2}/);
@@ -75,7 +76,7 @@ test("starter courses organize foundational visual guides", async ({ page }) => 
   await expect(page.getByRole("heading", { level: 2, name: "월급을 지키는 금융 기초" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "계약 전에 배우는 집 기초" })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "잃지 않기 위해 배우는 투자 기초" })).toBeVisible();
-  await expect(page.locator(".lesson-list a, .course-empty").first()).toBeVisible();
+  await expect(page.locator(".lesson-grid a, .course-empty").first()).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
@@ -113,4 +114,12 @@ test("release notes render the Notion-managed timeline", async ({ page }) => {
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test("operations dashboard requires an administrator session", async ({ page }) => {
+  await page.goto("/admin");
+
+  await expect(page).toHaveURL(/\/admin\/login\?returnTo=/);
+  await expect(page.getByRole("heading", { level: 1, name: "운영 품질 대시보드" })).toBeVisible();
+  await expect(page.getByLabel("운영 토큰")).toBeVisible();
 });

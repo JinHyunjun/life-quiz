@@ -19,6 +19,10 @@ try {
   // The checked-in snapshot keeps this public page useful during an upstream outage.
 }
 
+// Cached at the edge: release notes only change when a new version ships,
+// so short-lived edge caching avoids re-fetching the ingest worker on every visit.
+Astro.response.headers.set("cache-control", "public, max-age=90, stale-while-revalidate=600");
+
 const latest = feed.releases[0];
 
 function displayDate(value: string | null) {
@@ -62,32 +66,43 @@ function displayDate(value: string | null) {
     </section>
 
     {feed.releases.length > 0 ? (
-      <ol class="release-list" aria-label="버전별 업데이트 내역">
-        {feed.releases.map((release, index) => (
-          <li class:list={["release-item", { latest: index === 0 }]}>
-            <span class="timeline-dot" aria-hidden="true"></span>
-            <article class="release-card">
-              <header class="release-card-header">
-                <div class="version-line">
-                  <span class="version-label">{release.version}</span>
-                  {index === 0 && <span class="new-label">NEW</span>}
-                </div>
-                <h2>{release.title}</h2>
-                <time datetime={release.date ?? undefined}><CalendarDays size={15} /> {displayDate(release.date)}</time>
-              </header>
+      <div class="release-layout">
+        <nav class="release-nav" aria-label="버전 바로가기">
+          {feed.releases.map((release, index) => (
+            <a href={`#v-${release.version}`} class:list={{ latest: index === 0 }}>
+              <span class="version-label">{release.version}</span>
+              <small>{displayDate(release.date)}</small>
+            </a>
+          ))}
+        </nav>
 
-              <ul class="change-list">
-                {release.changes.map((change, changeIndex) => (
-                  <li class:list={[`change-${change.type}`, { "new-section": change.section && change.section !== release.changes[changeIndex - 1]?.section }]}>
-                    {change.section && change.section !== release.changes[changeIndex - 1]?.section && <strong>{change.section}</strong>}
-                    <span><Check size={15} /> {change.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </article>
-          </li>
-        ))}
-      </ol>
+        <ol class="release-list" aria-label="버전별 업데이트 내역">
+          {feed.releases.map((release, index) => (
+            <li id={`v-${release.version}`} class:list={["release-item", { latest: index === 0 }]}>
+              <span class="timeline-dot" aria-hidden="true"></span>
+              <article class="release-card">
+                <header class="release-card-header">
+                  <div class="version-line">
+                    <span class="version-label">{release.version}</span>
+                    {index === 0 && <span class="new-label">NEW</span>}
+                  </div>
+                  <h2>{release.title}</h2>
+                  <time datetime={release.date ?? undefined}><CalendarDays size={15} /> {displayDate(release.date)}</time>
+                </header>
+
+                <ul class="change-list">
+                  {release.changes.map((change, changeIndex) => (
+                    <li class:list={[`change-${change.type}`, { "new-section": change.section && change.section !== release.changes[changeIndex - 1]?.section }]}>
+                      {change.section && change.section !== release.changes[changeIndex - 1]?.section && <strong>{change.section}</strong>}
+                      <span><Check size={15} /> {change.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </li>
+          ))}
+        </ol>
+      </div>
     ) : (
       <section class="release-empty">
         <History size={30} />
@@ -183,12 +198,62 @@ function displayDate(value: string | null) {
     margin: 0;
   }
 
+  .release-layout {
+    display: grid;
+    grid-template-columns: 210px minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  .release-nav {
+    position: sticky;
+    top: 88px;
+    max-height: calc(100vh - 110px);
+    display: grid;
+    gap: 2px;
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    scrollbar-width: thin;
+  }
+
+  .release-nav a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    color: var(--muted-strong);
+    text-decoration: none;
+  }
+
+  .release-nav a:hover {
+    background: var(--surface-strong);
+  }
+
+  .release-nav a.latest {
+    color: var(--green-deep);
+  }
+
+  .release-nav .version-label {
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  .release-nav small {
+    color: var(--muted);
+    font-size: 0.68rem;
+    white-space: nowrap;
+  }
+
   .release-list {
     position: relative;
     display: grid;
     gap: 20px;
-    max-width: 900px;
-    margin: 0 auto;
+    min-width: 0;
     padding: 0 0 10px 34px;
     list-style: none;
   }
@@ -328,6 +393,24 @@ function displayDate(value: string | null) {
     margin: 0;
     color: var(--ink);
     font-size: 1.1rem;
+  }
+
+  @media (max-width: 900px) {
+    .release-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .release-nav {
+      position: static;
+      max-height: none;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(120px, auto);
+      overflow-x: auto;
+    }
+
+    .release-list {
+      padding-left: 26px;
+    }
   }
 
   @media (max-width: 760px) {

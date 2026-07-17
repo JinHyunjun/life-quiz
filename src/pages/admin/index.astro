@@ -1,0 +1,356 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { Activity, AlertTriangle, CalendarClock, CheckCircle2, CircleX, Clock3, Database, FileCheck2, LogOut, Radio, RefreshCw, ShieldCheck } from "lucide-astro";
+import Base from "../../layouts/Base.astro";
+import { createDb } from "../../db/client";
+import { isAuthorizedAdminSession } from "../../lib/admin";
+import { CATEGORY_LABELS } from "../../lib/categories";
+import { formatKstDate } from "../../lib/dates";
+import { getQualityDashboard, type QualityStatus } from "../../lib/quality";
+
+if (!(await isAuthorizedAdminSession(Astro.request, env.INGEST_ADMIN_TOKEN))) {
+  return Astro.redirect(`/admin/login?returnTo=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
+}
+
+Astro.response.headers.set("cache-control", "no-store");
+const dashboard = await getQualityDashboard(createDb(env.DB));
+const maxDailyCount = Math.max(1, ...dashboard.daily.map(({ count }) => count));
+const diagnosticSummary = dashboard.latestDiagnostics.reduce(
+  (summary, diagnostic) => ({ ...summary, [diagnostic.status]: summary[diagnostic.status] + 1 }),
+  { success: 0, empty: 0, error: 0 },
+);
+const sourceLabels = { gov: "공공데이터", news: "뉴스·RSS", youtube: "YouTube", ai_trivia: "AI 큐레이션" };
+const overallCopy = {
+  pass: { label: "정상", detail: "핵심 품질 기준을 모두 충족하고 있습니다." },
+  warning: { label: "점검 필요", detail: "서비스는 동작 중이며 일부 지표를 확인해야 합니다." },
+  fail: { label: "조치 필요", detail: "발행 또는 수집 파이프라인에 즉시 확인할 항목이 있습니다." },
+}[dashboard.overallStatus];
+
+const dateTimeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function statusLabel(status: QualityStatus) {
+  return status === "pass" ? "정상" : status === "warning" ? "주의" : "실패";
+}
+---
+
+<Base title="운영 품질 대시보드" description="라이프퀴즈 콘텐츠와 수집 파이프라인 품질 현황">
+  <div class="admin-page shell">
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">OPERATIONS</p>
+        <h1 class="page-title">품질 검증 대시보드</h1>
+        <p>콘텐츠 품질은 접속 시 최신 D1 기준으로 계산하고, 수집 결과는 기존 6시간 Cron 실행마다 기록합니다.</p>
+      </div>
+      <form method="post" action="/api/admin/logout">
+        <button class="button button-secondary" type="submit"><LogOut size={17} /> 로그아웃</button>
+      </form>
+    </header>
+
+    <section class="quality-status" data-status={dashboard.overallStatus} aria-labelledby="overall-title">
+      <span class="status-symbol" aria-hidden="true">
+        {dashboard.overallStatus === "pass" ? <CheckCircle2 size={25} /> : dashboard.overallStatus === "warning" ? <AlertTriangle size={25} /> : <CircleX size={25} />}
+      </span>
+      <div>
+        <p class="eyebrow">OVERALL STATUS</p>
+        <h2 id="overall-title">{overallCopy.label}</h2>
+        <p>{overallCopy.detail}</p>
+      </div>
+      <time datetime={dashboard.checkedAt.toISOString()}>검증 {dateTimeFormatter.format(dashboard.checkedAt)}</time>
+    </section>
+
+    <section class="check-section" aria-labelledby="checks-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">QUALITY CHECKS</p>
+          <h2 id="checks-title">핵심 품질 기준</h2>
+        </div>
+        <span class="section-note"><RefreshCw size={14} /> 대시보드 접속 시 갱신</span>
+      </div>
+      <ul class="check-grid">
+        {dashboard.checks.map((check) => (
+          <li class="check-card" data-status={check.status}>
+            <div class="check-topline">
+              <span class="check-icon" aria-hidden="true">
+                {check.status === "pass" ? <CheckCircle2 size={18} /> : check.status === "warning" ? <AlertTriangle size={18} /> : <CircleX size={18} />}
+              </span>
+              <span class="status-badge">{statusLabel(check.status)}</span>
+            </div>
+            <span>{check.label}</span>
+            <strong>{check.value}</strong>
+            <small>{check.detail}</small>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <div class="admin-columns">
+      <section class="admin-section" aria-labelledby="daily-title">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">PUBLISHING TREND</p>
+            <h2 id="daily-title">최근 14일 발행량</h2>
+          </div>
+          <span class="metric-inline"><FileCheck2 size={15} /> 누적 {dashboard.content.total}개</span>
+        </div>
+        <div class="daily-chart" role="img" aria-label={`최근 14일 일별 발행량. 오늘 ${dashboard.todayCount}개`}>
+          {dashboard.daily.map(({ day, count }) => (
+            <div class="daily-column" title={`${formatKstDate(day)} ${count}개`}>
+              <strong>{count}</strong>
+              <span class="bar-track"><span class="bar-fill" style={`height: ${Math.max(4, Math.round((count / maxDailyCount) * 100))}%`}></span></span>
+              <small>{day.slice(5).replace("-", "/")}</small>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section class="admin-section" aria-labelledby="coverage-title">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">COVERAGE</p>
+            <h2 id="coverage-title">오늘 주제·전체 출처</h2>
+          </div>
+        </div>
+        <div class="coverage-split">
+          <div>
+            <h3>오늘 분야</h3>
+            <ul class="distribution-list">
+              {dashboard.todayCategories.map(({ category, count }) => (
+                <li><span><span class="category-swatch" data-category={category}></span>{CATEGORY_LABELS[category]}</span><strong>{count}</strong></li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3>전체 출처</h3>
+            <ul class="distribution-list">
+              {dashboard.sourceRows.map(({ originType, count }) => (
+                <li><span>{originType ? sourceLabels[originType] : "출처 미분류"}</span><strong>{count}</strong></li>
+              ))}
+              <li><span>검수로 숨김</span><strong>{dashboard.hiddenCount}</strong></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="admin-section" aria-labelledby="runs-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">INGESTION HISTORY</p>
+          <h2 id="runs-title">수집·검증 실행 이력</h2>
+        </div>
+        <span class="section-note"><CalendarClock size={14} /> KST 00·06·12·18시</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>실행 시각</th><th>방식</th><th>상태</th><th>후보</th><th>생성</th><th>중복·제외</th><th>지연</th><th>실패</th></tr>
+          </thead>
+          <tbody>
+            {dashboard.runs.map((run) => (
+              <tr>
+                <td><time datetime={run.startedAt.toISOString()}>{dateTimeFormatter.format(run.startedAt)}</time></td>
+                <td>{run.trigger === "scheduled" ? "자동" : "수동"}</td>
+                <td><span class="table-status" data-status={run.status === "success" ? "pass" : "fail"}>{run.status === "success" ? "완료" : "오류"}</span></td>
+                <td>{run.pendingCount}</td>
+                <td><strong>{run.createdCount}</strong></td>
+                <td>{run.skippedCount}</td>
+                <td>{run.deferredCount}</td>
+                <td class:list={{ danger: run.failedCount > 0 }}>{run.failedCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-section" aria-labelledby="collectors-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">LATEST COLLECTORS</p>
+          <h2 id="collectors-title">최근 수집원 진단</h2>
+        </div>
+        <div class="diagnostic-counts" aria-label="수집원 상태 요약">
+          <span data-status="pass">성공 {diagnosticSummary.success}</span>
+          <span data-status="warning">새 항목 없음 {diagnosticSummary.empty}</span>
+          <span data-status="fail">오류 {diagnosticSummary.error}</span>
+        </div>
+      </div>
+      {dashboard.latestDiagnostics.length > 0 ? (
+        <ul class="diagnostic-list">
+          {dashboard.latestDiagnostics.map((diagnostic) => (
+            <li>
+              <span class="collector-icon" data-status={diagnostic.status === "success" ? "pass" : diagnostic.status === "empty" ? "warning" : "fail"} aria-hidden="true">
+                {diagnostic.status === "success" ? <Radio size={15} /> : diagnostic.status === "empty" ? <Clock3 size={15} /> : <CircleX size={15} />}
+              </span>
+              <span><strong>{diagnostic.source}</strong><small>{diagnostic.error ?? `${diagnostic.candidateCount}개 후보 확인`}</small></span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div class="empty-diagnostics"><Database size={24} /><span>수집원 진단 기록이 없습니다.</span></div>
+      )}
+    </section>
+  </div>
+</Base>
+
+<style>
+  .admin-page { padding-top: 44px; }
+
+  .admin-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 28px;
+  }
+
+  .admin-header p:not(.eyebrow) { max-width: 720px; margin: 10px 0 0; color: var(--muted); }
+
+  .quality-status {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 38px;
+    padding: 20px 0;
+    border-block: 1px solid var(--line);
+  }
+
+  .status-symbol {
+    width: 46px;
+    height: 46px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-md);
+  }
+
+  [data-status="pass"] { --status-color: #177455; --status-soft: #e1f3eb; }
+  [data-status="warning"] { --status-color: #8a6410; --status-soft: #fff2c7; }
+  [data-status="fail"] { --status-color: #a33434; --status-soft: #fae7e7; }
+  .status-symbol, .check-icon, .collector-icon { color: var(--status-color); background: var(--status-soft); }
+  .quality-status h2 { margin: 2px 0; font-size: 1.35rem; }
+  .quality-status p:last-child { margin: 0; color: var(--muted); font-size: 0.84rem; }
+  .quality-status time { color: var(--muted); font-size: 0.76rem; }
+
+  .check-section { margin-bottom: 44px; }
+  .section-note, .metric-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .check-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .check-card {
+    min-width: 0;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--status-color);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+  }
+
+  .check-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+  .check-icon, .collector-icon { display: grid; place-items: center; border-radius: var(--radius-sm); }
+  .check-icon { width: 32px; height: 32px; }
+  .status-badge, .table-status, .diagnostic-counts span {
+    color: var(--status-color);
+    background: var(--status-soft);
+    border-radius: var(--radius-sm);
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+  .status-badge { padding: 4px 7px; }
+  .check-card > span:not(.check-topline) { color: var(--muted); font-size: 0.76rem; font-weight: 700; }
+  .check-card > strong { margin: 4px 0 10px; font-size: 1.45rem; }
+  .check-card > small { margin-top: auto; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+
+  .admin-columns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr); gap: 32px; }
+  .admin-section { min-width: 0; margin-bottom: 44px; }
+  .compact-heading { align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+
+  .daily-chart {
+    height: 230px;
+    display: grid;
+    grid-template-columns: repeat(14, minmax(22px, 1fr));
+    align-items: end;
+    gap: 7px;
+    padding-top: 12px;
+    overflow-x: auto;
+  }
+
+  .daily-column { min-width: 22px; height: 100%; display: grid; grid-template-rows: 20px minmax(120px, 1fr) 20px; justify-items: center; gap: 5px; }
+  .daily-column strong { font-size: 0.67rem; }
+  .daily-column small { color: var(--muted); font-size: 0.6rem; white-space: nowrap; }
+  .bar-track { width: 100%; max-width: 24px; height: 100%; display: flex; align-items: end; border-radius: 3px 3px 0 0; background: var(--surface-strong); overflow: hidden; }
+  .bar-fill { width: 100%; background: var(--green); }
+
+  .coverage-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .coverage-split h3 { margin: 0 0 10px; font-size: 0.8rem; }
+  .distribution-list { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+  .distribution-list li { min-height: 29px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--surface-strong); font-size: 0.74rem; }
+  .distribution-list li > span { min-width: 0; display: inline-flex; align-items: center; gap: 7px; color: var(--muted-strong); }
+  .distribution-list strong { font-size: 0.76rem; }
+
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+  th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-size: 0.7rem; font-weight: 750; }
+  td { color: var(--muted-strong); }
+  td strong { color: var(--ink); }
+  td.danger { color: #a33434; font-weight: 800; }
+  .table-status { display: inline-block; min-width: 42px; padding: 4px 6px; text-align: center; }
+
+  .diagnostic-counts { display: flex; flex-wrap: wrap; justify-content: end; gap: 6px; }
+  .diagnostic-counts span { padding: 5px 8px; }
+  .diagnostic-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .diagnostic-list li { min-width: 0; display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 9px; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+  .collector-icon { width: 30px; height: 30px; }
+  .diagnostic-list li > span:last-child { min-width: 0; display: grid; gap: 2px; }
+  .diagnostic-list strong { overflow: hidden; font-size: 0.73rem; text-overflow: ellipsis; white-space: nowrap; }
+  .diagnostic-list small { color: var(--muted); font-size: 0.66rem; }
+  .empty-diagnostics { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 100px; color: var(--muted); }
+
+  @media (max-width: 1020px) {
+    .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-columns { grid-template-columns: 1fr; gap: 0; }
+    .diagnostic-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 620px) {
+    .admin-page { padding-top: 30px; }
+    .admin-header { align-items: stretch; flex-direction: column; }
+    .admin-header .button { width: 100%; }
+    .quality-status { grid-template-columns: 42px minmax(0, 1fr); }
+    .quality-status time { grid-column: 2; }
+    .check-grid, .diagnostic-list { grid-template-columns: 1fr; }
+    .check-card { min-height: 160px; }
+    .coverage-split { grid-template-columns: 1fr; }
+    .daily-chart { min-width: 620px; }
+    .compact-heading { align-items: start; }
+    .diagnostic-counts { justify-content: start; }
+  }
+</style>

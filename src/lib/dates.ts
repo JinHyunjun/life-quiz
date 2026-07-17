@@ -45,3 +45,19 @@ export function formatKstDate(key: string, includeYear = true) {
     weekday: "short",
   }).format(range.start);
 }
+
+const shortDateFormatter = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric" });
+const longDateFormatter = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric" });
+
+export function formatShortDate(value: Date) {
+  return shortDateFormatter.format(value);
+}
+
+export function formatLongDate(value: Date) {
+  return longDateFormatter.format(value);
+}
+
+export function formatLongKstDate(key: string) {
+  const range = kstDayRange(key);
+  return range ? longDateFormatter.format(range.start) : key;
+}

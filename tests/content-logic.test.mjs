@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
-import { isAuthorizedAdminRequest } from "../src/lib/admin.ts";
+import { createAdminSessionCookie, isAuthorizedAdminRequest, isAuthorizedAdminSession } from "../src/lib/admin.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun, seoulDistrictsForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
@@ -170,6 +170,26 @@ test("manual ingestion requires the exact bearer token", async () => {
     false,
   );
   assert.equal(await isAuthorizedAdminRequest(new Request("https://example.com"), token), false);
+});
+
+test("admin dashboard session is signed, expires, and rejects tampering", async () => {
+  const token = "test-admin-token";
+  const issuedAt = Date.parse("2026-07-17T00:00:00Z");
+  const cookie = (await createAdminSessionCookie(token, true, issuedAt)).split(";")[0];
+  const request = new Request("https://example.com/admin", { headers: { cookie } });
+
+  assert.equal(await isAuthorizedAdminSession(request, token, issuedAt + 1_000), true);
+  assert.equal(await isAuthorizedAdminSession(request, "different-token", issuedAt + 1_000), false);
+  assert.equal(await isAuthorizedAdminSession(request, token, issuedAt + 13 * 60 * 60 * 1_000), false);
+
+  const tampered = new Request("https://example.com/admin", { headers: { cookie: `${cookie}x` } });
+  assert.equal(await isAuthorizedAdminSession(tampered, token, issuedAt + 1_000), false);
+
+  const currentCookie = (await createAdminSessionCookie(token, true)).split(";")[0];
+  assert.equal(
+    await isAuthorizedAdminRequest(new Request("https://example.com/admin", { headers: { cookie: currentCookie } }), token),
+    true,
+  );
 });
 
 test("AI trivia accepts concise source text and tolerates related but non-identical cards", () => {

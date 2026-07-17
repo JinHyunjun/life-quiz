@@ -6,6 +6,7 @@ import { ArrowRight, BookOpenCheck, ChartLine, Check, House, Landmark, RotateCcw
 import Base from "../layouts/Base.astro";
 import { createDb } from "../db/client";
 import { listRecentVisualGuides } from "../lib/content";
+import { excerpt } from "../lib/text";
 
 const db = createDb(env.DB);
 const definitions = [
@@ -38,20 +39,19 @@ const definitions = [
 const guideGroups = await Promise.all(
   definitions.map((definition) => listRecentVisualGuides(db, definition.category, 6)),
 );
+
+// Cached at the edge: these visual guides only change on the ingestion cron.
+Astro.response.headers.set("cache-control", "public, max-age=90, stale-while-revalidate=600");
+
 const tracks = definitions.map((definition, index) => ({
   ...definition,
   lessons: [...guideGroups[index]].reverse(),
 }));
-
-function excerpt(bodyMd: string, maxLength = 100) {
-  const plain = bodyMd.replace(/[#*_>`\[\]]/g, "").replace(/\s+/g, " ").trim();
-  return plain.length > maxLength ? `${plain.slice(0, maxLength).trim()}...` : plain;
-}
 ---
 
 <Base title="사회초년생 시작 코스" description="금융, 주거, 투자를 기초 용어부터 순서대로 배우는 라이프퀴즈 시작 코스입니다.">
-  <div class="start-page">
-    <header class="start-header shell">
+  <div class="start-page shell">
+    <header class="start-header">
       <div class="start-title">
         <p class="eyebrow">START HERE</p>
         <h1>처음이라면,<br />이 순서로 시작해요</h1>
@@ -65,59 +65,60 @@ function excerpt(bodyMd: string, maxLength = 100) {
       </ol>
     </header>
 
-    <nav class="track-nav shell" aria-label="시작 코스 분야">
-      {tracks.map(({ category, title, icon: Icon }) => (
-        <a href={`#${category}`} data-category={category}><Icon size={18} /><span>{title}</span></a>
-      ))}
-    </nav>
+    <div class="start-layout">
+      <nav class="track-side-nav" aria-label="시작 코스 분야">
+        {tracks.map(({ category, title, icon: Icon, lessons }) => (
+          <a href={`#${category}`} data-category={category}>
+            <span class="track-nav-icon"><Icon size={18} /></span>
+            <span class="track-nav-copy"><strong>{title}</strong><small>{lessons.length}개 공개</small></span>
+          </a>
+        ))}
+        <a class="track-nav-cta" href="/review"><RotateCcw size={16} /> 오늘의 복습</a>
+      </nav>
 
-    <div class="track-list">
-      {tracks.map(({ icon: Icon, ...track }, trackIndex) => (
-        <section class="course-track" id={track.category} data-category={track.category} aria-labelledby={`${track.category}-title`}>
-          <div class="shell track-inner">
+      <div class="track-list">
+        {tracks.map(({ icon: Icon, ...track }, trackIndex) => (
+          <section class="course-track" id={track.category} data-category={track.category} aria-labelledby={`${track.category}-title`}>
             <header class="track-header">
               <span class="track-index">0{trackIndex + 1}</span>
-              <div class="track-icon" aria-hidden="true"><Icon size={28} /></div>
+              <div class="track-icon" aria-hidden="true"><Icon size={24} /></div>
               <div>
                 <p class="eyebrow">{track.eyebrow}</p>
                 <h2 id={`${track.category}-title`}>{track.title}</h2>
                 <p>{track.description}</p>
               </div>
-              <span class="lesson-count">현재 {track.lessons.length}개 공개</span>
             </header>
 
-            <div class="track-body">
-              <div class="track-outcome">
-                <Check size={18} />
-                <p><strong>이 코스의 기준</strong>{track.outcome}</p>
-              </div>
-
-              {track.lessons.length > 0 ? (
-                <ol class="lesson-list">
-                  {track.lessons.map((lesson, lessonIndex) => (
-                    <li>
-                      <a href={`/articles/${lesson.id}`}>
-                        <span class="lesson-number">{String(lessonIndex + 1).padStart(2, "0")}</span>
-                        <span class="lesson-copy">
-                          <small>{lessonIndex === 0 ? "첫 개념" : `${lessonIndex + 1}번째 개념`}</small>
-                          <strong>{lesson.title}</strong>
-                          <span>{lesson.cards?.[0]?.body ?? excerpt(lesson.bodyMd)}</span>
-                        </span>
-                        <ArrowRight size={19} />
-                      </a>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <div class="course-empty"><BookOpenCheck size={24} /><p>첫 번째 기초 용어를 준비하고 있어요.</p></div>
-              )}
+            <div class="track-outcome">
+              <Check size={16} />
+              <p><strong>이 코스의 기준</strong>{track.outcome}</p>
             </div>
-          </div>
-        </section>
-      ))}
+
+            {track.lessons.length > 0 ? (
+              <ol class="lesson-grid">
+                {track.lessons.map((lesson, lessonIndex) => (
+                  <li>
+                    <a href={`/articles/${lesson.id}`}>
+                      <span class="lesson-number">{String(lessonIndex + 1).padStart(2, "0")}</span>
+                      <span class="lesson-copy">
+                        <small>{lessonIndex === 0 ? "첫 개념" : `${lessonIndex + 1}번째 개념`}</small>
+                        <strong>{lesson.title}</strong>
+                        <span>{lesson.cards?.[0]?.body ?? excerpt(lesson.bodyMd, 70)}</span>
+                      </span>
+                      <ArrowRight size={17} />
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div class="course-empty"><BookOpenCheck size={24} /><p>첫 번째 기초 용어를 준비하고 있어요.</p></div>
+            )}
+          </section>
+        ))}
+      </div>
     </div>
 
-    <section class="next-step shell" aria-labelledby="next-step-title">
+    <section class="next-step" aria-labelledby="next-step-title">
       <RotateCcw size={25} />
       <div><p class="eyebrow">KEEP IT</p><h2 id="next-step-title">읽은 다음에는 기억으로 남겨요</h2><p>퀴즈를 풀면 FSRS가 기억 상태에 맞춰 다음 복습일을 정합니다.</p></div>
       <a class="button button-primary" href="/review">오늘의 복습 <ArrowRight size={17} /></a>
@@ -126,66 +127,78 @@ function excerpt(bodyMd: string, maxLength = 100) {
 </Base>
 
 <style>
-  .start-page { padding-top: 58px; }
-  .start-header { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr); align-items: end; gap: 60px; padding-bottom: 46px; }
-  .start-title h1 { max-width: 720px; margin: 4px 0 16px; font-size: clamp(2.3rem, 5vw, 4.2rem); line-height: 1.08; }
-  .start-title > p:last-child { max-width: 640px; margin: 0; color: var(--muted-strong); font-size: 1rem; }
+  .start-page { padding-top: 48px; }
+  .start-header { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr); align-items: end; gap: 50px; padding-bottom: 38px; }
+  .start-title h1 { max-width: 640px; margin: 4px 0 14px; font-size: clamp(2.1rem, 4.2vw, 3.4rem); line-height: 1.1; }
+  .start-title > p:last-child { max-width: 600px; margin: 0; color: var(--muted-strong); font-size: 0.96rem; }
   .learning-rhythm { margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
-  .learning-rhythm li { min-height: 70px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
+  .learning-rhythm li { min-height: 62px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 12px; border-bottom: 1px solid var(--line); }
   .learning-rhythm li > span { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-sm); color: white; background: var(--ink); font-size: 0.72rem; font-weight: 850; }
   .learning-rhythm div { display: grid; gap: 2px; }
-  .learning-rhythm strong { font-size: 0.88rem; }
-  .learning-rhythm small { color: var(--muted); font-size: 0.74rem; }
-  .track-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding-bottom: 30px; }
-  .track-nav a { min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 9px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); background: var(--paper); text-decoration: none; font-size: 0.82rem; font-weight: 750; }
-  .track-nav a[data-category="finance"] svg { color: var(--green); }
-  .track-nav a[data-category="housing"] svg { color: var(--coral); }
-  .track-nav a[data-category="investment"] svg { color: var(--berry); }
-  .track-list { border-top: 1px solid var(--line); }
-  .course-track { --track-color: var(--green); --track-soft: var(--green-soft); scroll-margin-top: 86px; border-bottom: 1px solid var(--line); }
+  .learning-rhythm strong { font-size: 0.86rem; }
+  .learning-rhythm small { color: var(--muted); font-size: 0.72rem; }
+
+  .start-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); align-items: start; gap: 24px; padding-top: 30px; border-top: 1px solid var(--line); }
+
+  .track-side-nav { position: sticky; top: 88px; display: grid; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+  .track-side-nav a { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 10px; padding: 8px; border-radius: var(--radius-sm); color: var(--ink); text-decoration: none; }
+  .track-side-nav a:hover { background: var(--surface-strong); }
+  .track-nav-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--category-color, var(--green)); background: var(--category-soft, var(--green-soft)); }
+  .track-nav-copy { min-width: 0; display: grid; gap: 1px; }
+  .track-nav-copy strong { overflow: hidden; font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
+  .track-nav-copy small { color: var(--muted); font-size: 0.68rem; }
+  .track-nav-cta { display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 40px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--green-deep); font-size: 0.8rem; font-weight: 800; text-decoration: none; }
+  .track-nav-cta:hover { background: transparent; }
+
+  .track-list { min-width: 0; display: grid; gap: 20px; }
+  .course-track { --track-color: var(--green); --track-soft: var(--green-soft); scroll-margin-top: 96px; padding: 26px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
   .course-track[data-category="housing"] { --track-color: var(--coral); --track-soft: var(--coral-soft); }
   .course-track[data-category="investment"] { --track-color: var(--berry); --track-soft: var(--berry-soft); }
-  .track-inner { padding-top: 46px; padding-bottom: 52px; }
-  .track-header { display: grid; grid-template-columns: 42px 58px minmax(0, 1fr) auto; align-items: center; gap: 16px; margin-bottom: 26px; }
-  .track-index { color: var(--track-color); font-size: 0.8rem; font-weight: 850; }
-  .track-icon { width: 58px; height: 58px; display: grid; place-items: center; border-radius: var(--radius-md); color: var(--track-color); background: var(--track-soft); }
-  .track-header h2 { margin: 0 0 4px; font-size: 1.45rem; }
-  .track-header > div:nth-child(3) > p:last-child { margin: 0; color: var(--muted); font-size: 0.86rem; }
-  .lesson-count { padding: 7px 10px; border-radius: var(--radius-sm); color: var(--track-color); background: var(--track-soft); font-size: 0.74rem; font-weight: 800; }
-  .track-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 30px; }
-  .track-outcome { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 9px; padding-top: 18px; color: var(--track-color); border-top: 2px solid var(--track-color); }
-  .track-outcome p { display: grid; gap: 4px; margin: 0; color: var(--muted-strong); font-size: 0.78rem; line-height: 1.55; }
-  .track-outcome strong { color: var(--ink); font-size: 0.82rem; }
-  .lesson-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-  .lesson-list a { min-height: 112px; display: grid; grid-template-columns: 44px minmax(0, 1fr) 22px; align-items: center; gap: 15px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); background: var(--paper); text-decoration: none; transition: border-color 150ms ease, transform 150ms ease; }
-  .lesson-list a:hover { transform: translateX(3px); border-color: var(--track-color); }
-  .lesson-number { color: var(--track-color); font-size: 0.78rem; font-weight: 850; }
+  .track-header { display: grid; grid-template-columns: 30px 50px minmax(0, 1fr); align-items: center; gap: 14px; margin-bottom: 18px; }
+  .track-index { color: var(--track-color); font-size: 0.78rem; font-weight: 850; }
+  .track-icon { width: 50px; height: 50px; display: grid; place-items: center; border-radius: var(--radius-md); color: var(--track-color); background: var(--track-soft); }
+  .track-header h2 { margin: 0 0 3px; font-size: 1.28rem; }
+  .track-header > div:nth-child(3) > p:last-child { margin: 0; color: var(--muted); font-size: 0.84rem; }
+  .track-outcome { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; margin-bottom: 16px; padding-top: 14px; color: var(--track-color); border-top: 2px solid var(--track-color); }
+  .track-outcome p { display: grid; gap: 3px; margin: 0; color: var(--muted-strong); font-size: 0.78rem; line-height: 1.5; }
+  .track-outcome strong { color: var(--ink); font-size: 0.8rem; }
+  .lesson-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .lesson-grid a { min-height: 100px; height: 100%; display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: start; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); color: var(--ink); background: var(--surface); text-decoration: none; transition: border-color 150ms ease, transform 150ms ease; }
+  .lesson-grid a:hover { transform: translateY(-2px); border-color: var(--track-color); }
+  .lesson-number { color: var(--track-color); font-size: 0.74rem; font-weight: 850; }
   .lesson-copy { min-width: 0; display: grid; gap: 3px; }
-  .lesson-copy small { color: var(--track-color); font-size: 0.68rem; font-weight: 800; }
-  .lesson-copy strong { font-size: 0.98rem; }
-  .lesson-copy > span { overflow: hidden; color: var(--muted); font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
-  .lesson-list a > svg { color: var(--muted); }
-  .course-empty { min-height: 120px; display: grid; place-content: center; justify-items: center; border: 1px dashed var(--line); border-radius: var(--radius-md); color: var(--muted); background: var(--paper); }
+  .lesson-copy small { color: var(--track-color); font-size: 0.66rem; font-weight: 800; }
+  .lesson-copy strong { font-size: 0.9rem; line-height: 1.35; }
+  .lesson-copy > span { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 0.74rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .lesson-grid a > svg { display: none; }
+  .course-empty { min-height: 100px; display: grid; place-content: center; justify-items: center; border: 1px dashed var(--line); border-radius: var(--radius-md); color: var(--muted); background: var(--surface); }
   .course-empty p { margin: 8px 0 0; }
-  .next-step { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 18px; margin-top: 50px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--ink); color: white; }
+  .next-step { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 18px; margin-top: 36px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--ink); color: white; }
   .next-step > svg { color: #9bd0b9; }
   .next-step h2 { margin: 0 0 3px; font-size: 1.1rem; }
   .next-step p:last-child { margin: 0; color: #b8c3bd; font-size: 0.8rem; }
   .next-step .eyebrow { color: #9bd0b9; }
-  @media (max-width: 820px) {
-    .start-header { grid-template-columns: 1fr; gap: 34px; }
-    .track-body { grid-template-columns: 1fr; gap: 18px; }
-    .track-outcome { grid-template-columns: 22px minmax(0, 1fr); }
+
+  @media (max-width: 980px) {
+    .start-layout { grid-template-columns: 1fr; }
+    .track-side-nav { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+    .track-side-nav a { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 6px; }
+    .track-nav-cta { grid-column: 1 / -1; }
   }
+
+  @media (max-width: 820px) {
+    .start-header { grid-template-columns: 1fr; gap: 30px; }
+  }
+
   @media (max-width: 620px) {
-    .start-page { padding-top: 36px; }
-    .start-header { padding-bottom: 32px; }
-    .start-title h1 { font-size: 2.35rem; }
-    .track-nav { grid-template-columns: 1fr; }
-    .track-header { grid-template-columns: 34px 48px minmax(0, 1fr); align-items: start; gap: 11px; }
-    .track-icon { width: 48px; height: 48px; }
-    .lesson-count { grid-column: 2 / -1; justify-self: start; }
-    .lesson-list a { grid-template-columns: 34px minmax(0, 1fr) 18px; padding: 15px 14px; }
+    .start-page { padding-top: 32px; }
+    .start-header { padding-bottom: 28px; }
+    .start-title h1 { font-size: 2.1rem; }
+    .track-side-nav { grid-template-columns: 1fr; }
+    .course-track { padding: 20px; }
+    .track-header { grid-template-columns: 30px 44px minmax(0, 1fr); }
+    .track-icon { width: 44px; height: 44px; }
+    .lesson-grid { grid-template-columns: 1fr; }
     .next-step { grid-template-columns: 36px minmax(0, 1fr); }
     .next-step .button { grid-column: 1 / -1; width: 100%; }
   }

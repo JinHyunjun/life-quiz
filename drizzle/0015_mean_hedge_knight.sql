@@ -1,0 +1,1 @@
+CREATE INDEX `quiz_items_content_item_idx` ON `quiz_items` (`content_item_id`);

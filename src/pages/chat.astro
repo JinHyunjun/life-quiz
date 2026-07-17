@@ -10,6 +10,10 @@ import { listChatTopics } from "../lib/content";
 
 const db = createDb(env.DB);
 const topics = await listChatTopics(db);
+
+// Cached at the edge: the topic list only shifts on the ingestion cron.
+Astro.response.headers.set("cache-control", "public, max-age=90, stale-while-revalidate=600");
+
 const requestedContentId = Number(Astro.url.searchParams.get("content"));
 const selectedTopic = Number.isInteger(requestedContentId) ? topics.find((topic) => topic.id === requestedContentId) : undefined;
 const initialSuggestions = selectedTopic
@@ -230,20 +234,8 @@ const initialSuggestions = selectedTopic
     height: 28px;
     justify-self: center;
     border-radius: 3px;
-    background: var(--green);
+    background: var(--category-color, var(--green));
   }
-
-  .topic-swatch[data-category="housing"] { background: var(--coral); }
-  .topic-swatch[data-category="investment"] { background: var(--berry); }
-  .topic-swatch[data-category="seoul_life"] { background: var(--blue); }
-  .topic-swatch[data-category="career"] { background: #6b5c36; }
-  .topic-swatch[data-category="rights"] { background: #8a4c32; }
-  .topic-swatch[data-category="digital_safety"] { background: #356b85; }
-  .topic-swatch[data-category="health"] { background: #b64d5f; }
-  .topic-swatch[data-category="daily_tips"] { background: var(--yellow); }
-  .topic-swatch[data-category="history"] { background: #7b5ca8; }
-  .topic-swatch[data-category="humor"] { background: #d66a29; }
-  .topic-swatch[data-category="social_skills"] { background: #277e8e; }
 
   .topic-link > span:nth-child(2) {
     min-width: 0;
@@ -579,6 +571,8 @@ const initialSuggestions = selectedTopic
 </style>
 
 <script>
+  import { element } from "../lib/dom";
+
   interface ClientMessage {
     role: "user" | "assistant";
     text: string;
@@ -610,13 +604,6 @@ const initialSuggestions = selectedTopic
   const historyKey = `life-quiz-chat:${contentItemId ?? "recent"}`;
   let messages: ClientMessage[] = [];
   let pending = false;
-
-  function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
-    const node = document.createElement(tag);
-    if (className) node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  }
 
   function saveHistory() {
     try {

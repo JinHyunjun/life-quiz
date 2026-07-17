@@ -181,18 +181,30 @@ img {
   content: "";
 }
 
-.category-label[data-category="finance"] { --category-color: var(--green); }
-.category-label[data-category="investment"] { --category-color: var(--berry); }
-.category-label[data-category="housing"] { --category-color: var(--coral); }
-.category-label[data-category="seoul_life"] { --category-color: var(--blue); }
-.category-label[data-category="career"] { --category-color: #6b5c36; }
-.category-label[data-category="rights"] { --category-color: #8a4c32; }
-.category-label[data-category="digital_safety"] { --category-color: #356b85; }
-.category-label[data-category="health"] { --category-color: #b64d5f; }
-.category-label[data-category="daily_tips"] { --category-color: var(--yellow); }
-.category-label[data-category="history"] { --category-color: #7b5ca8; }
-.category-label[data-category="humor"] { --category-color: #d66a29; }
-.category-label[data-category="social_skills"] { --category-color: #277e8e; }
+/*
+ * Single source of truth for per-category theming. Any element carrying
+ * `data-category` (labels, swatches, cards, article shells) inherits
+ * --category-color / --category-soft instead of redefining this map.
+ */
+[data-category] { --category-color: var(--green); --category-soft: var(--green-soft); }
+[data-category="housing"] { --category-color: var(--coral); --category-soft: var(--coral-soft); }
+[data-category="investment"] { --category-color: var(--berry); --category-soft: var(--berry-soft); }
+[data-category="seoul_life"] { --category-color: var(--blue); --category-soft: var(--blue-soft); }
+[data-category="career"] { --category-color: #6b5c36; --category-soft: #f3eee0; }
+[data-category="rights"] { --category-color: #8a4c32; --category-soft: #f7e9e2; }
+[data-category="digital_safety"] { --category-color: #356b85; --category-soft: #e5f0f5; }
+[data-category="health"] { --category-color: #b64d5f; --category-soft: #fae9ec; }
+[data-category="daily_tips"] { --category-color: #b27a08; --category-soft: var(--yellow-soft); }
+[data-category="history"] { --category-color: #76529e; --category-soft: #efe8f7; }
+[data-category="humor"] { --category-color: #bd5b22; --category-soft: #faeadf; }
+[data-category="social_skills"] { --category-color: #287483; --category-soft: #e1f1f2; }
+
+.category-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--category-color, var(--green));
+}
 
 .visual-format-badge {
   display: inline-flex;

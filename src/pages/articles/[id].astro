@@ -8,6 +8,7 @@ import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
 import { getContentItemWithQuiz } from "../../lib/content";
 import { categoryLabel } from "../../lib/categories";
+import { formatLongDate } from "../../lib/dates";
 
 const id = Number(Astro.params.id);
 const db = createDb(env.DB);
@@ -25,11 +26,10 @@ const deepReadSections = paragraphs.map((body, index) => ({
   body,
 }));
 const actionCard = item.cards?.at(-1) ?? null;
-const publishedAt = new Intl.DateTimeFormat("ko-KR", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-}).format(item.createdAt);
+const publishedAt = formatLongDate(item.createdAt);
+
+// Cached at the edge: published articles are immutable once created.
+Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-revalidate=1800");
 ---
 
 <Base title={item.title} description={`${item.title} - ${item.citationLabel}`}>
@@ -189,22 +189,11 @@ const publishedAt = new Intl.DateTimeFormat("ko-KR", {
 
 <style>
   .article-shell {
-    --article-color: var(--green);
-    --article-soft: var(--green-soft);
+    /* --category-color / --category-soft come from the global [data-category] map. */
+    --article-color: var(--category-color, var(--green));
+    --article-soft: var(--category-soft, var(--green-soft));
     padding-top: 30px;
   }
-
-  .article-shell[data-category="housing"] { --article-color: var(--coral); --article-soft: var(--coral-soft); }
-  .article-shell[data-category="investment"] { --article-color: var(--berry); --article-soft: var(--berry-soft); }
-  .article-shell[data-category="seoul_life"] { --article-color: var(--blue); --article-soft: var(--blue-soft); }
-  .article-shell[data-category="career"] { --article-color: #6b5c36; --article-soft: #f3eee0; }
-  .article-shell[data-category="rights"] { --article-color: #8a4c32; --article-soft: #f7e9e2; }
-  .article-shell[data-category="digital_safety"] { --article-color: #356b85; --article-soft: #e5f0f5; }
-  .article-shell[data-category="health"] { --article-color: #b64d5f; --article-soft: #fae9ec; }
-  .article-shell[data-category="daily_tips"] { --article-color: #b27a08; --article-soft: var(--yellow-soft); }
-  .article-shell[data-category="history"] { --article-color: #76529e; --article-soft: #efe8f7; }
-  .article-shell[data-category="humor"] { --article-color: #bd5b22; --article-soft: #faeadf; }
-  .article-shell[data-category="social_skills"] { --article-color: #287483; --article-soft: #e1f1f2; }
 
   .back-link {
     display: inline-flex;

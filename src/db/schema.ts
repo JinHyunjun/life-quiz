@@ -90,18 +90,22 @@ export const contentItems = sqliteTable(
   ],
 );
 
-export const quizItems = sqliteTable("quiz_items", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  contentItemId: integer("content_item_id")
-    .notNull()
-    .references(() => contentItems.id),
-  question: text("question").notNull(),
-  choices: text("choices", { mode: "json" }).notNull().$type<string[]>(),
-  answer: text("answer").notNull(),
-  explanation: text("explanation")
-    .notNull()
-    .default("관련 글에서 정답의 근거와 핵심 개념을 다시 확인해보세요."),
-});
+export const quizItems = sqliteTable(
+  "quiz_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contentItemId: integer("content_item_id")
+      .notNull()
+      .references(() => contentItems.id),
+    question: text("question").notNull(),
+    choices: text("choices", { mode: "json" }).notNull().$type<string[]>(),
+    answer: text("answer").notNull(),
+    explanation: text("explanation")
+      .notNull()
+      .default("관련 글에서 정답의 근거와 핵심 개념을 다시 확인해보세요."),
+  },
+  (table) => [index("quiz_items_content_item_idx").on(table.contentItemId)],
+);
 
 export const learningItems = sqliteTable(
   "learning_items",

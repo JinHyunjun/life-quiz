@@ -13,7 +13,8 @@ import {
   type OriginType,
 } from "../lib/content";
 import { createDb } from "../db/client";
-import { formatKstDate, kstDayRange, todayKstRange } from "../lib/dates";
+import { formatKstDate, formatShortDate, kstDayRange, todayKstRange } from "../lib/dates";
+import { excerpt } from "../lib/text";
 
 const SOURCE_LABELS: Record<OriginType, string> = {
   gov: "공공데이터",
@@ -43,13 +44,19 @@ const [archive, days, facets, stats] = await Promise.all([
     query: activeQuery,
     page: pageParam,
   }),
-  listArchiveDays(db),
+  listArchiveDays(db, new Date(), 366),
   getArchiveFacets(db),
   getContentStats(db),
 ]);
 
+// Cached at the edge: archive facets only shift when new content ships on
+// the ingestion cron, so short-lived edge caching avoids re-querying D1 for
+// every visitor browsing the same filter combination.
+Astro.response.headers.set("cache-control", "public, max-age=90, stale-while-revalidate=600");
+
 const categoryCounts = new Map(facets.categoryCounts.map((facet) => [facet.category, facet.count]));
 const sourceCounts = new Map(facets.sourceCounts.map((facet) => [facet.originType, facet.count]));
+const hasActiveFilters = Boolean(activeCategory || activeSource || activeDate || activeQuery);
 
 function archiveHref(overrides: { category?: string | null; date?: string | null; source?: string | null; query?: string | null; page?: number | null }) {
   const next = new URLSearchParams();
@@ -68,20 +75,6 @@ function archiveHref(overrides: { category?: string | null; date?: string | null
   if (page > 1) next.set("page", String(page));
   const query = next.toString();
   return query ? `/archive?${query}` : "/archive";
-}
-
-function excerpt(bodyMd: string, maxLength = 115) {
-  const plain = bodyMd.replace(/[#*_>`\[\]]/g, "").replace(/\s+/g, " ").trim();
-  return plain.length > maxLength ? `${plain.slice(0, maxLength).trim()}...` : plain;
-}
-
-function formatItemDate(value: Date) {
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(value);
 }
 ---
 
@@ -103,124 +96,123 @@ function formatItemDate(value: Date) {
       <div><Database size={20} /><span>전체 누적</span><strong>{stats.total}</strong></div>
     </section>
 
-    <section class="date-section" aria-labelledby="date-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">BY DATE</p>
-          <h2 id="date-title">날짜별로 보기</h2>
+    <div class="archive-layout">
+      <aside class="archive-filters" aria-label="보관함 필터">
+        <div class="filter-block">
+          <form class="archive-search" method="get" action="/archive" role="search">
+            {activeDate && <input type="hidden" name="date" value={activeDate} />}
+            {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
+            {activeSource && <input type="hidden" name="source" value={activeSource} />}
+            <Search size={17} aria-hidden="true" />
+            <label class="visually-hidden" for="archive-query">지난 상식 검색</label>
+            <input id="archive-query" name="q" type="search" value={activeQuery} maxlength="60" placeholder="제목, 내용, 출처 검색" />
+            <button class="icon-button" type="submit" aria-label="검색"><Search size={16} /></button>
+          </form>
         </div>
-      </div>
-      <nav class="date-tabs" aria-label="보관 날짜">
-        <a class:list={["date-tab", { active: !activeDate }]} href={archiveHref({ date: null, page: 1 })} aria-current={!activeDate ? "page" : undefined}>
-          <span>모든 날짜</span><strong>{stats.archive}</strong>
-        </a>
-        {days.map((day) => (
-          <a class:list={["date-tab", { active: activeDate === day.day }]} href={archiveHref({ date: day.day, page: 1 })} aria-current={activeDate === day.day ? "page" : undefined}>
-            <span>{formatKstDate(day.day, false)}</span><strong>{day.count}</strong>
-          </a>
-        ))}
-      </nav>
-    </section>
 
-    <section class="filter-section" aria-labelledby="filter-title">
-      <div class="section-heading filter-heading">
-        <div>
-          <p class="eyebrow">FILTER</p>
-          <h2 id="filter-title">검색하고 분야별로 나누기</h2>
-        </div>
-        {(activeCategory || activeSource || activeDate || activeQuery) && <a class="reset-link" href="/archive">필터 초기화</a>}
-      </div>
-
-      <form class="archive-search" method="get" action="/archive" role="search">
-        {activeDate && <input type="hidden" name="date" value={activeDate} />}
-        {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
-        {activeSource && <input type="hidden" name="source" value={activeSource} />}
-        <Search size={18} aria-hidden="true" />
-        <label class="visually-hidden" for="archive-query">지난 상식 검색</label>
-        <input id="archive-query" name="q" type="search" value={activeQuery} maxlength="60" placeholder="제목, 내용, 출처 검색" />
-        <button class="button button-primary" type="submit"><Search size={16} /> 검색</button>
-      </form>
-
-      <nav class="category-tabs archive-categories" aria-label="보관함 분야">
-        <a class:list={["category-tab", { active: !activeCategory }]} href={archiveHref({ category: null, page: 1 })} aria-current={!activeCategory ? "page" : undefined}>
-          전체 분야
-        </a>
-        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-          <a class:list={["category-tab", { active: activeCategory === key }]} href={archiveHref({ category: key, page: 1 })} aria-current={activeCategory === key ? "page" : undefined}>
-            <span class="tab-swatch" data-category={key}></span>
-            <span>{label}</span>
-            <strong>{categoryCounts.get(key as Category) ?? 0}</strong>
-          </a>
-        ))}
-      </nav>
-
-      <form class="source-filter" method="get" action="/archive">
-        {activeDate && <input type="hidden" name="date" value={activeDate} />}
-        {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
-        {activeQuery && <input type="hidden" name="q" value={activeQuery} />}
-        <label for="source-select"><Filter size={16} /> 출처 유형</label>
-        <select id="source-select" name="source">
-          <option value="">모든 출처</option>
-          {Object.entries(SOURCE_LABELS).map(([key, label]) => (
-            <option value={key} selected={activeSource === key}>{label} ({sourceCounts.get(key as OriginType) ?? 0})</option>
-          ))}
-        </select>
-        <button class="button button-secondary" type="submit">적용</button>
-      </form>
-    </section>
-
-    <section class="archive-results" aria-labelledby="results-title">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">RESULTS</p>
-          <h2 id="results-title">{activeDate ? formatKstDate(activeDate) : "이전 데이터 전체"}</h2>
-          <p>{archive.total}개의 상식 · {archive.page} / {archive.totalPages} 페이지</p>
-        </div>
-      </div>
-
-      {archive.items.length > 0 ? (
-        <ul class="archive-grid">
-          {archive.items.map((item) => (
-            <li>
-              <a class="archive-card" href={`/articles/${item.id}`}>
-                <div class="card-topline">
-                  <div class="card-tags">
-                    <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
-                    {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
-                  </div>
-                  <span class="source-type">{item.originType ? SOURCE_LABELS[item.originType] : "기타"}</span>
-                </div>
-                <h3>{item.title}</h3>
-                <p>{item.cards?.[0]?.body ?? excerpt(item.bodyMd)}</p>
-                <div class="card-footer">
-                  <span>{item.citationLabel}</span>
-                  <span>{formatItemDate(item.createdAt)}</span>
-                </div>
+        <div class="filter-block">
+          <div class="filter-block-heading">
+            <p class="eyebrow">BY DATE</p>
+            {hasActiveFilters && <a class="reset-link" href="/archive">초기화</a>}
+          </div>
+          <nav class="filter-list date-filter-list" aria-label="보관 날짜" tabindex="0">
+            <a class:list={["filter-row", { active: !activeDate }]} href={archiveHref({ date: null, page: 1 })} aria-current={!activeDate ? "page" : undefined}>
+              <span>모든 날짜</span><strong>{stats.archive}</strong>
+            </a>
+            {days.map((day) => (
+              <a class:list={["filter-row", { active: activeDate === day.day }]} href={archiveHref({ date: day.day, page: 1 })} aria-current={activeDate === day.day ? "page" : undefined}>
+                <span>{formatKstDate(day.day, false)}</span><strong>{day.count}</strong>
               </a>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div class="archive-empty">
-          <Archive size={32} />
-          <h3>조건에 맞는 지난 상식이 없어요</h3>
-          <p>필터를 초기화하거나 다른 날짜를 선택해보세요.</p>
-          <a class="button button-primary" href="/archive">전체 보관함 보기</a>
+            ))}
+          </nav>
         </div>
-      )}
 
-      {archive.totalPages > 1 && (
-        <nav class="pagination" aria-label="보관함 페이지">
-          {archive.page > 1 ? (
-            <a class="button button-secondary" href={archiveHref({ page: archive.page - 1 })}><ChevronLeft size={17} /> 이전</a>
-          ) : <span class="button button-secondary disabled"><ChevronLeft size={17} /> 이전</span>}
-          <span class="page-status"><strong>{archive.page}</strong><span>/</span>{archive.totalPages}</span>
-          {archive.page < archive.totalPages ? (
-            <a class="button button-secondary" href={archiveHref({ page: archive.page + 1 })}>다음 <ChevronRight size={17} /></a>
-          ) : <span class="button button-secondary disabled">다음 <ChevronRight size={17} /></span>}
-        </nav>
-      )}
-    </section>
+        <div class="filter-block">
+          <p class="eyebrow">BY CATEGORY</p>
+          <nav class="filter-list" aria-label="보관함 분야">
+            <a class:list={["filter-row", { active: !activeCategory }]} href={archiveHref({ category: null, page: 1 })} aria-current={!activeCategory ? "page" : undefined}>
+              <span>전체 분야</span><strong>{stats.archive}</strong>
+            </a>
+            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+              <a class:list={["filter-row", { active: activeCategory === key }]} href={archiveHref({ category: key, page: 1 })} aria-current={activeCategory === key ? "page" : undefined}>
+                <span><span class="category-swatch" data-category={key}></span>{label}</span>
+                <strong>{categoryCounts.get(key as Category) ?? 0}</strong>
+              </a>
+            ))}
+          </nav>
+        </div>
+
+        <div class="filter-block">
+          <p class="eyebrow">BY SOURCE</p>
+          <form class="source-filter" method="get" action="/archive">
+            {activeDate && <input type="hidden" name="date" value={activeDate} />}
+            {activeCategory && <input type="hidden" name="category" value={activeCategory} />}
+            {activeQuery && <input type="hidden" name="q" value={activeQuery} />}
+            <label for="source-select"><Filter size={14} /> 출처 유형</label>
+            <select id="source-select" name="source">
+              <option value="">모든 출처</option>
+              {Object.entries(SOURCE_LABELS).map(([key, label]) => (
+                <option value={key} selected={activeSource === key}>{label} ({sourceCounts.get(key as OriginType) ?? 0})</option>
+              ))}
+            </select>
+            <button class="button button-secondary" type="submit">적용</button>
+          </form>
+        </div>
+      </aside>
+
+      <section class="archive-results" aria-labelledby="results-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">RESULTS</p>
+            <h2 id="results-title">{activeDate ? formatKstDate(activeDate) : "이전 데이터 전체"}</h2>
+            <p>{archive.total}개의 상식 · {archive.page} / {archive.totalPages} 페이지</p>
+          </div>
+        </div>
+
+        {archive.items.length > 0 ? (
+          <ul class="archive-grid">
+            {archive.items.map((item) => (
+              <li>
+                <a class="archive-card" href={`/articles/${item.id}`}>
+                  <div class="card-topline">
+                    <div class="card-tags">
+                      <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                      {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+                    </div>
+                    <span class="source-type">{item.originType ? SOURCE_LABELS[item.originType] : "기타"}</span>
+                  </div>
+                  <h3>{item.title}</h3>
+                  <p>{item.cards?.[0]?.body ?? excerpt(item.bodyMd)}</p>
+                  <div class="card-footer">
+                    <span>{item.citationLabel}</span>
+                    <span>{formatShortDate(item.createdAt)}</span>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div class="archive-empty">
+            <Archive size={32} />
+            <h3>조건에 맞는 지난 상식이 없어요</h3>
+            <p>필터를 초기화하거나 다른 날짜를 선택해보세요.</p>
+            <a class="button button-primary" href="/archive">전체 보관함 보기</a>
+          </div>
+        )}
+
+        {archive.totalPages > 1 && (
+          <nav class="pagination" aria-label="보관함 페이지">
+            {archive.page > 1 ? (
+              <a class="button button-secondary" href={archiveHref({ page: archive.page - 1 })}><ChevronLeft size={17} /> 이전</a>
+            ) : <span class="button button-secondary disabled"><ChevronLeft size={17} /> 이전</span>}
+            <span class="page-status"><strong>{archive.page}</strong><span>/</span>{archive.totalPages}</span>
+            {archive.page < archive.totalPages ? (
+              <a class="button button-secondary" href={archiveHref({ page: archive.page + 1 })}>다음 <ChevronRight size={17} /></a>
+            ) : <span class="button button-secondary disabled">다음 <ChevronRight size={17} /></span>}
+          </nav>
+        )}
+      </section>
+    </div>
 
     <a class="today-banner" href="/">
       <div><span>오늘의 새 상식</span><strong>{stats.today}개가 기다리고 있어요</strong></div>
@@ -231,7 +223,7 @@ function formatItemDate(value: Date) {
 
 <style>
   .archive-page {
-    padding-top: 50px;
+    padding-top: 44px;
   }
 
   .archive-header {
@@ -239,7 +231,7 @@ function formatItemDate(value: Date) {
     align-items: end;
     justify-content: space-between;
     gap: 28px;
-    margin-bottom: 34px;
+    margin-bottom: 28px;
   }
 
   .archive-header p:not(.eyebrow) {
@@ -250,7 +242,7 @@ function formatItemDate(value: Date) {
   .archive-summary {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-bottom: 48px;
+    margin-bottom: 24px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
@@ -262,7 +254,7 @@ function formatItemDate(value: Date) {
     grid-template-columns: 28px minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
-    padding: 20px;
+    padding: 18px 20px;
     border-right: 1px solid var(--line);
   }
 
@@ -271,114 +263,53 @@ function formatItemDate(value: Date) {
   .archive-summary span { color: var(--muted); font-size: 0.78rem; }
   .archive-summary strong { font-size: 1.2rem; }
 
-  .date-section,
-  .filter-section,
-  .archive-results {
-    margin-bottom: 48px;
+  .archive-layout {
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    align-items: start;
+    gap: 22px;
   }
 
-  .date-tabs,
-  .category-tabs {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 2px 2px 8px;
-    scrollbar-width: none;
+  .archive-filters {
+    position: sticky;
+    top: 88px;
+    display: grid;
+    gap: 16px;
   }
 
-  .date-tabs::-webkit-scrollbar,
-  .category-tabs::-webkit-scrollbar { display: none; }
-
-  .date-tab {
-    min-width: 130px;
-    min-height: 58px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    flex: 0 0 auto;
-    padding: 8px 14px;
+  .filter-block {
+    padding: 16px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
-    color: var(--ink);
-    text-decoration: none;
   }
 
-  .date-tab span { color: var(--muted); font-size: 0.75rem; }
-  .date-tab strong { font-size: 1rem; }
-  .date-tab.active { color: white; border-color: var(--green); background: var(--green); }
-  .date-tab.active span { color: #c8e3d7; }
+  .filter-block .eyebrow {
+    margin-bottom: 10px;
+  }
 
-  .filter-heading {
+  .filter-block-heading {
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .filter-block-heading .eyebrow {
+    margin-bottom: 0;
   }
 
   .reset-link {
     color: var(--green);
-    font-size: 0.8rem;
+    font-size: 0.76rem;
     font-weight: 750;
   }
 
-  .category-tab {
-    min-height: 40px;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    flex: 0 0 auto;
-    padding: 0 12px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--paper);
-    color: var(--muted-strong);
-    text-decoration: none;
-    font-size: 0.8rem;
-    font-weight: 700;
-  }
-
-  .category-tab strong {
-    color: var(--muted);
-    font-size: 0.7rem;
-  }
-
-  .category-tab.active {
-    color: white;
-    border-color: var(--ink);
-    background: var(--ink);
-  }
-
-  .category-tab.active strong { color: #b9c5bf; }
-
-  .tab-swatch {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--green);
-  }
-
-  .tab-swatch[data-category="housing"] { background: var(--coral); }
-  .tab-swatch[data-category="investment"] { background: var(--berry); }
-  .tab-swatch[data-category="seoul_life"] { background: var(--blue); }
-  .tab-swatch[data-category="career"] { background: #6b5c36; }
-  .tab-swatch[data-category="rights"] { background: #8a4c32; }
-  .tab-swatch[data-category="digital_safety"] { background: #356b85; }
-  .tab-swatch[data-category="health"] { background: #b64d5f; }
-  .tab-swatch[data-category="daily_tips"] { background: var(--yellow); }
-  .tab-swatch[data-category="history"] { background: #7b5ca8; }
-  .tab-swatch[data-category="humor"] { background: #d66a29; }
-  .tab-swatch[data-category="social_skills"] { background: #277e8e; }
-
   .archive-search {
-    min-height: 56px;
     display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) auto;
+    grid-template-columns: 17px minmax(0, 1fr) 34px;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-    padding: 6px 7px 6px 16px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    color: var(--muted);
-    background: var(--paper);
+    gap: 8px;
   }
 
   .archive-search input {
@@ -390,30 +321,103 @@ function formatItemDate(value: Date) {
 
   .archive-search input::placeholder { color: #8b9791; }
 
-  .source-filter {
+  .archive-search .icon-button {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+  }
+
+  .filter-list {
+    display: grid;
+    gap: 3px;
+    max-height: 340px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--green) 70%, var(--line)) var(--surface-strong);
+  }
+
+  .date-filter-list {
+    max-height: 460px;
+    padding-right: 6px;
+    overscroll-behavior: contain;
+  }
+
+  .filter-list::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .filter-list::-webkit-scrollbar-track {
+    border-radius: var(--radius-sm);
+    background: var(--surface-strong);
+  }
+
+  .filter-list::-webkit-scrollbar-thumb {
+    border: 2px solid var(--surface-strong);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--green) 70%, var(--line));
+  }
+
+  .filter-row {
+    min-height: 38px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
-    margin-top: 12px;
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 0.8rem;
+  }
+
+  .filter-row > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .filter-row strong {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 750;
+  }
+
+  .filter-row:hover,
+  .filter-row.active {
     background: var(--surface-strong);
+  }
+
+  .filter-row.active {
+    color: var(--ink);
+    font-weight: 750;
+    box-shadow: inset 3px 0 0 var(--green);
+  }
+
+  .filter-row.active strong {
+    color: var(--green-deep);
+  }
+
+  .source-filter {
+    display: grid;
+    gap: 8px;
   }
 
   .source-filter label {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-right: auto;
     color: var(--muted-strong);
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 750;
   }
 
   .source-filter select {
-    min-width: 190px;
-    min-height: 42px;
+    min-height: 40px;
     padding: 0 10px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
@@ -421,9 +425,13 @@ function formatItemDate(value: Date) {
     font-size: 0.82rem;
   }
 
+  .archive-results {
+    min-width: 0;
+  }
+
   .archive-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
     margin: 0;
     padding: 0;
@@ -433,11 +441,11 @@ function formatItemDate(value: Date) {
   .archive-grid li { min-width: 0; }
 
   .archive-card {
-    min-height: 248px;
+    min-height: 232px;
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 21px;
+    padding: 20px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
@@ -475,24 +483,24 @@ function formatItemDate(value: Date) {
   }
 
   .archive-card h3 {
-    margin: 18px 0 9px;
-    font-size: 1.04rem;
+    margin: 16px 0 8px;
+    font-size: 1rem;
     line-height: 1.42;
   }
 
   .archive-card > p {
     display: -webkit-box;
-    margin: 0 0 20px;
+    margin: 0 0 18px;
     overflow: hidden;
     color: var(--muted-strong);
-    font-size: 0.84rem;
+    font-size: 0.83rem;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
 
   .card-footer {
     margin-top: auto;
-    padding-top: 13px;
+    padding-top: 12px;
     border-top: 1px solid var(--line);
     color: var(--muted);
     font-size: 0.72rem;
@@ -523,7 +531,7 @@ function formatItemDate(value: Date) {
     align-items: center;
     justify-content: center;
     gap: 16px;
-    margin-top: 28px;
+    margin-top: 24px;
   }
 
   .pagination .disabled {
@@ -547,6 +555,7 @@ function formatItemDate(value: Date) {
     align-items: center;
     justify-content: space-between;
     gap: 20px;
+    margin-top: 28px;
     padding: 22px 24px;
     border-radius: var(--radius-md);
     color: white;
@@ -558,31 +567,45 @@ function formatItemDate(value: Date) {
   .today-banner span { color: #c6e4d6; font-size: 0.74rem; }
   .today-banner strong { font-size: 1.05rem; }
 
+  @media (max-width: 1180px) {
+    .archive-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   @media (max-width: 900px) {
     .archive-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .archive-summary > div:nth-child(2) { border-right: 0; }
     .archive-summary > div:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
-    .archive-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    .archive-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .archive-filters {
+      position: static;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filter-list {
+      max-height: 220px;
+    }
+
+    .date-filter-list {
+      max-height: 320px;
+    }
   }
 
   @media (max-width: 620px) {
-    .archive-page { padding-top: 34px; }
+    .archive-page { padding-top: 30px; }
     .archive-header { align-items: stretch; flex-direction: column; }
     .archive-header .button { width: 100%; }
     .archive-summary > div { grid-template-columns: 24px minmax(0, 1fr) auto; padding: 15px 12px; }
     .archive-summary span { font-size: 0.7rem; }
     .archive-summary strong { font-size: 1rem; }
-    .source-filter { align-items: stretch; flex-direction: column; }
-    .source-filter label { margin-right: 0; }
-    .source-filter select,
-    .source-filter .button { width: 100%; }
-    .archive-search {
-      grid-template-columns: 20px minmax(0, 1fr);
-      padding: 12px 14px;
-    }
-    .archive-search .button { grid-column: 1 / -1; width: 100%; }
+    .archive-filters { grid-template-columns: 1fr; }
     .archive-grid { grid-template-columns: 1fr; }
-    .archive-card { min-height: 220px; }
+    .archive-card { min-height: 0; }
     .pagination { gap: 8px; }
     .pagination .button { padding-inline: 10px; }
   }
