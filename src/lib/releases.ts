@@ -23,10 +23,22 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-12T04:30:00.000Z",
+  fetchedAt: "2026-07-17T10:49:49.510Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.12",
+      title: "지난 상식 탐색과 운영 품질 대시보드",
+      date: "2026-07-17",
+      changes: [
+        { type: "bullet", text: "지난 상식 날짜 필터를 최근 1년 범위와 명확한 세로 스크롤 영역으로 확장" },
+        { type: "bullet", text: "추천 여부 때문에 빠지던 오늘 소식을 복구해 원격 D1의 오늘 콘텐츠 22개를 홈에 모두 노출" },
+        { type: "bullet", text: "홈 추천 레일은 오늘 이전 자료만 사용하도록 분리해 오늘 피드와 중복되지 않게 정리" },
+        { type: "bullet", text: "운영 토큰 로그인과 발행량·주제·출처·카드·본문·퀴즈·수집 상태 품질 대시보드 추가" },
+        { type: "bullet", text: "기존 6시간 수집 Cron 이력을 재사용하고 퀴즈 집계 인덱스로 D1 읽기 비용 절감" },
+      ],
+    },
     {
       version: "v0.11",
       title: "주제 지도와 자치구 비교 브리핑",
