@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-17T10:49:49.510Z",
+  fetchedAt: "2026-07-22T02:29:45.077Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.13",
+      title: "콘텐츠 수집 안정화",
+      date: "2026-07-22",
+      changes: [
+        { type: "bullet", text: "최근 수집량 급감 원인을 원격 실행 이력에서 확인하고 Cloudflare 무료 플랜의 회차당 외부 요청 한도를 넘던 수집 구조 수정" },
+        { type: "bullet", text: "YouTube 8개 주제와 출처형 AI 상식 8개 주제를 네 시간대에 2개씩 나눠 하루 동안 전체 분야를 고르게 수집" },
+        { type: "bullet", text: "성공 건수만 세던 회차 제한을 실패까지 포함한 최대 12번 생성 시도로 바꿔 연속 오류 때 요청이 폭증하지 않도록 보호" },
+        { type: "bullet", text: "Gemini 3.1 Flash Lite의 일시적인 429·5xx 응답은 한 번만 재시도하고 모든 호출에 기존 12 RPM 예산 적용" },
+        { type: "bullet", text: "외부 원문을 읽지 못한 AI 상식은 URL만으로 생성하지 않고 실패 이력에 남겨 출처가 확인된 콘텐츠만 발행" },
+        { type: "bullet", text: "로직 23건, 데스크톱·모바일 E2E 16건, 타입체크와 프로덕션 빌드로 변경 사항 검증" },
+      ],
+    },
     {
       version: "v0.12",
       title: "지난 상식 탐색과 운영 품질 대시보드",

@@ -1,6 +1,7 @@
 import type { ContentVisualCue } from "../../../src/db/schema";
 import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards } from "../../../src/lib/card-quality";
 import type { SourcedContentCategory } from "./editorial";
+import { geminiRetryDelayMs, isRetryableGeminiStatus } from "./gemini-retry";
 import { hasSuccessfulUrlContext, type GeminiCandidate } from "./gemini-url-context";
 
 export interface GeneratedCard {
@@ -207,40 +208,49 @@ async function callGemini<T>(params: {
   beforeRequest: BeforeGeminiRequest;
 }): Promise<T> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${params.model}:generateContent?key=${params.apiKey}`;
-
-  await params.beforeRequest();
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: params.prompt }] }],
-      ...(params.urlContextUrl ? { tools: [{ url_context: {} }] } : {}),
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: params.schema,
-        maxOutputTokens: params.maxOutputTokens,
-        temperature: params.temperature,
-      },
-    }),
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: params.prompt }] }],
+    ...(params.urlContextUrl ? { tools: [{ url_context: {} }] } : {}),
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: params.schema,
+      maxOutputTokens: params.maxOutputTokens,
+      temperature: params.temperature,
+    },
   });
 
-  if (!res.ok) {
-    const detail = (await res.text()).slice(0, 500);
-    throw new Error(`Gemini request failed: ${res.status} ${detail}`);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await params.beforeRequest();
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 500);
+      if (attempt === 0 && isRetryableGeminiStatus(res.status)) {
+        await scheduler.wait(geminiRetryDelayMs(res.headers.get("retry-after")));
+        continue;
+      }
+      throw new Error(`Gemini request failed: ${res.status} ${detail}`);
+    }
+
+    const data = (await res.json()) as { candidates: GeminiCandidate[] };
+    const candidate = data.candidates?.[0];
+    if (params.urlContextUrl && !hasSuccessfulUrlContext(candidate)) {
+      throw new Error(`Gemini URL context could not retrieve source: ${params.urlContextUrl}`);
+    }
+    const text = candidate?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error("Gemini response had no content");
+    }
+
+    return JSON.parse(text) as T;
   }
 
-  const data = (await res.json()) as { candidates: GeminiCandidate[] };
-  const candidate = data.candidates?.[0];
-  if (params.urlContextUrl && !hasSuccessfulUrlContext(candidate)) {
-    throw new Error(`Gemini URL context could not retrieve source: ${params.urlContextUrl}`);
-  }
-  const text = candidate?.content?.parts?.[0]?.text;
-  if (!text) {
-    throw new Error("Gemini response had no content");
-  }
-
-  return JSON.parse(text) as T;
+  throw new Error("Gemini request failed after retry");
 }
 
 export function assembleGeneratedSections(

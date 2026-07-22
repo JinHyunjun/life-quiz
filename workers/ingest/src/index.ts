@@ -29,6 +29,7 @@ import {
   type GeminiRequestPurpose,
 } from "./rate-limit";
 import {
+  hasIngestionAttemptBudget,
   ingestionPacingDelayMs,
   normalizeIngestionIntervalMs,
   scheduledAiCurriculumBatchForKstRun,
@@ -627,26 +628,13 @@ async function ingestTriviaItem(
   item: Extract<PendingItem, { kind: "trivia" }>,
   beforeRequest: BeforeGeminiRequest,
 ) {
-  let sourceMaterial: Awaited<ReturnType<typeof fetchWikipediaSummary>>;
-  let useUrlContext = false;
-  try {
-    sourceMaterial = await fetchWikipediaSummary(item);
-  } catch {
-    useUrlContext = true;
-    sourceMaterial = {
-      title: item.wikipediaTitle,
-      extract: "",
-      url: item.sourceUrl,
-      citationLabel: `위키백과 '${item.wikipediaTitle}' · CC BY-SA · Gemini URL Context 확인`,
-    };
-  }
+  const sourceMaterial = await fetchWikipediaSummary(item);
   const generated = await generateTrivia({
     category: item.category,
     topic: item.topic,
     sourceText: sourceMaterial.extract,
     citationLabel: sourceMaterial.citationLabel,
     sourceUrl: sourceMaterial.url,
-    useUrlContext,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -727,6 +715,7 @@ async function runIngestion(env: Env) {
   const skipped: string[] = [];
   const deferred: string[] = [];
   const failed: { item: string; error: string }[] = [];
+  let attemptedCount = 0;
   let lastStartedAtMs = 0;
 
   for (let itemIndex = 0; itemIndex < pending.length; itemIndex += 1) {
@@ -738,7 +727,7 @@ async function runIngestion(env: Env) {
       continue;
     }
 
-    if (created.length >= maxItems) {
+    if (!hasIngestionAttemptBudget(attemptedCount, maxItems)) {
       deferred.push(label);
       continue;
     }
@@ -746,6 +735,7 @@ async function runIngestion(env: Env) {
     const delayMs = ingestionPacingDelayMs(lastStartedAtMs, minIntervalMs);
     if (delayMs > 0) await scheduler.wait(delayMs);
     lastStartedAtMs = Date.now();
+    attemptedCount += 1;
 
     try {
       if (item.kind === "sourced") created.push(await ingestSourcedItem(db, env, item, beforeRequest));
@@ -770,6 +760,7 @@ async function runIngestion(env: Env) {
     collectorDiagnostics: collection.diagnostics,
     minIntervalMs,
     maxItems,
+    attemptedCount,
   };
 }
 
@@ -792,6 +783,7 @@ function failedIngestionResult(env: Env, error: unknown): IngestionResult {
     collectorDiagnostics: [],
     minIntervalMs: normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS)),
     maxItems: normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS)),
+    attemptedCount: 0,
   };
 }
 

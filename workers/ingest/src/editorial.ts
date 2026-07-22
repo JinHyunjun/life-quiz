@@ -204,8 +204,9 @@ export function youtubeEditorialPlanForKstSlot(now = new Date()) {
 
 export function youtubeEditorialPlansForKstRun(now = new Date()) {
   const kstHour = new Date(now.getTime() + 9 * 60 * 60 * 1_000).getUTCHours();
-  const slot = Math.floor(kstHour / 6) % YOUTUBE_EDITORIAL_PLANS.length;
-  return YOUTUBE_EDITORIAL_PLANS.map((_, index) => YOUTUBE_EDITORIAL_PLANS[(slot + index) % YOUTUBE_EDITORIAL_PLANS.length]);
+  const slot = Math.floor(kstHour / 6) % 4;
+  const offset = slot * 2;
+  return YOUTUBE_EDITORIAL_PLANS.slice(offset, offset + 2);
 }
 
 function normalize(value: string) {

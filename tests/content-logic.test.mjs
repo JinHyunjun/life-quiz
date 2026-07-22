@@ -8,10 +8,12 @@ import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
 import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot, youtubeEditorialPlansForKstRun } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
+import { isRetryableGeminiStatus } from "../workers/ingest/src/gemini-retry.ts";
 import { hasSuccessfulUrlContext } from "../workers/ingest/src/gemini-url-context.ts";
 import { contentFingerprint } from "../workers/ingest/src/fingerprint.ts";
 import { isUsableWikipediaExtract, normalizeWikitextLead, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
+  hasIngestionAttemptBudget,
   ingestionPacingDelayMs,
   scheduledAiCurriculumBatchForKstRun,
   scheduledAiCurriculumForKstRun,
@@ -108,17 +110,35 @@ test("district briefing compares four distinct districts per run", () => {
   assert.equal(new Set(districts.map(({ name }) => name)).size, 4);
 });
 
-test("daily AI curriculum batch covers all core categories in one run", () => {
-  const schedule = scheduledAiCurriculumBatchForKstRun(new Date("2026-06-26T15:00:00Z"));
+test("daily AI curriculum batch covers all core categories across four runs", () => {
+  const firstRun = new Date("2026-06-26T15:00:00Z");
+  const schedules = Array.from({ length: 4 }, (_, index) =>
+    scheduledAiCurriculumBatchForKstRun(new Date(firstRun.getTime() + index * 6 * 60 * 60 * 1_000)),
+  );
 
   assert.deepEqual(
-    schedule.glossary.map((topic) => topic.category).sort(),
+    schedules.flatMap((schedule) => schedule.glossary.map((topic) => topic.category)).sort(),
     ["finance", "housing", "investment"],
   );
   assert.deepEqual(
-    schedule.trivia.map((topic) => topic.category).sort(),
+    schedules.flatMap((schedule) => schedule.trivia.map((topic) => topic.category)).sort(),
     ["career", "daily_tips", "digital_safety", "health", "history", "humor", "rights", "social_skills"],
   );
+  assert.ok(schedules.every((schedule) => schedule.glossary.length <= 1));
+  assert.ok(schedules.every((schedule) => schedule.trivia.length === 2));
+});
+
+test("only transient Gemini HTTP failures are retried", () => {
+  assert.equal(isRetryableGeminiStatus(429), true);
+  assert.equal(isRetryableGeminiStatus(503), true);
+  assert.equal(isRetryableGeminiStatus(400), false);
+  assert.equal(isRetryableGeminiStatus(404), false);
+});
+
+test("ingestion budget limits attempts even when earlier items fail", () => {
+  assert.equal(hasIngestionAttemptBudget(11, 12), true);
+  assert.equal(hasIngestionAttemptBudget(12, 12), false);
+  assert.equal(hasIngestionAttemptBudget(20, 12), false);
 });
 
 test("AI general knowledge rotates through externally grounded topics", () => {
@@ -283,8 +303,22 @@ test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", 
   assert.equal(youtubeEditorialPlanForKstSlot(new Date("2026-06-26T15:00:00Z")).category, "finance");
   assert.deepEqual(
     youtubeEditorialPlansForKstRun(new Date("2026-06-26T15:00:00Z")).map((plan) => plan.category),
-    ["finance", "seoul_life", "housing", "social_skills", "rights", "digital_safety", "health", "career"],
+    ["finance", "seoul_life"],
   );
+  const firstRun = new Date("2026-06-26T15:00:00Z");
+  const dailyCategories = Array.from({ length: 4 }, (_, index) =>
+    youtubeEditorialPlansForKstRun(new Date(firstRun.getTime() + index * 6 * 60 * 60 * 1_000)),
+  ).flatMap((plans) => plans.map((plan) => plan.category));
+  assert.deepEqual(dailyCategories, [
+    "finance",
+    "seoul_life",
+    "housing",
+    "social_skills",
+    "rights",
+    "digital_safety",
+    "health",
+    "career",
+  ]);
 });
 
 test("Notion release headings, dates, sections, and bullets are parsed", () => {

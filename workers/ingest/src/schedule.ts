@@ -40,9 +40,16 @@ export function scheduledAiCurriculumForKstRun(now = new Date()) {
 
 export function scheduledAiCurriculumBatchForKstRun(now = new Date()) {
   const slot = kstSixHourSlot(now);
+  const glossaryTopics = glossaryTopicsForKstDay(now);
+  const triviaOffset = slot * 2;
+
   return {
-    glossary: rotateBySlot(glossaryTopicsForKstDay(now), slot),
-    trivia: rotateBySlot(TRIVIA_CATEGORIES, slot).map((category) => triviaSourceForKstDay(category, now)),
+    // Keep each Worker invocation comfortably below the free-plan external
+    // subrequest limit while still covering the full curriculum every day.
+    glossary: glossaryTopics[slot] ? [glossaryTopics[slot]] : [],
+    trivia: TRIVIA_CATEGORIES.slice(triviaOffset, triviaOffset + 2).map((category) =>
+      triviaSourceForKstDay(category, now),
+    ),
   };
 }
 
@@ -55,7 +62,6 @@ export function ingestionPacingDelayMs(lastStartedAtMs: number, intervalMs: numb
   return Math.max(0, normalizeIngestionIntervalMs(intervalMs) - (nowMs - lastStartedAtMs));
 }
 
-function rotateBySlot<T>(items: readonly T[], slot: number): T[] {
-  if (items.length === 0) return [];
-  return items.map((_, index) => items[(slot + index) % items.length]);
+export function hasIngestionAttemptBudget(attemptedCount: number, maxItems: number) {
+  return attemptedCount < maxItems;
 }
