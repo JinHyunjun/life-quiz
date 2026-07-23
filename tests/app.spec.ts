@@ -19,7 +19,15 @@ test("article carousel and source area are usable", async ({ page }) => {
   await expect(page.locator(".article-header h1")).toBeVisible();
   await expect(page.locator(".article-body")).toBeVisible();
   await expect(page.locator(".deep-read-section").first()).toBeVisible();
-  await expect(page.locator(".action-takeaway")).toBeVisible();
+  const learningCards = page.locator(".comic-panel, .card-news");
+  await expect(learningCards).toHaveCount(4);
+
+  const cardContents = (await learningCards.allTextContents()).map((content) =>
+    content.replace(/\s+/g, " ").trim(),
+  );
+  expect(new Set(cardContents).size).toBe(4);
+
+  await expect(page.locator(".action-takeaway")).toHaveCount(0);
   const source = page.locator(".source-note a[target='_blank']");
   await expect(source).toBeVisible();
   await expect(source).toHaveAttribute("href", /^https:\/\//);

@@ -1,5 +1,5 @@
 import type { ContentVisualCue } from "../../../src/db/schema";
-import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards } from "../../../src/lib/card-quality";
+import { assertDeepReadCoversCards, assertDistinctCards } from "../../../src/lib/card-quality";
 import type { SourcedContentCategory } from "./editorial";
 import { geminiRetryDelayMs, isRetryableGeminiStatus } from "./gemini-retry";
 import { hasSuccessfulUrlContext, type GeminiCandidate } from "./gemini-url-context";
@@ -255,14 +255,13 @@ async function callGemini<T>(params: {
 
 export function assembleGeneratedSections(
   sections: readonly GeneratedSection[],
-  options: { allowSemanticOverlap?: boolean } = {},
 ) {
   const candidates = sections.map((section) => ({
     heading: section.heading.trim(),
     body: section.summary.trim(),
     ...(section.visual ? { visual: section.visual } : {}),
   }));
-  const cards = options.allowSemanticOverlap ? assertReadableCards(candidates) : assertDistinctCards(candidates);
+  const cards = assertDistinctCards(candidates);
   const bodyMd = sections
     .map((section) => `${section.summary.trim()} ${section.details.trim()}`.trim())
     .join("\n\n");
@@ -382,7 +381,7 @@ export async function generateTrivia(params: {
     urlContextUrl: params.useUrlContext ? params.sourceUrl : undefined,
     beforeRequest: params.beforeRequest,
   });
-  return { ...generated, ...assembleGeneratedSections(generated.sections, { allowSemanticOverlap: true }) };
+  return { ...generated, ...assembleGeneratedSections(generated.sections) };
 }
 
 export async function generateGlossaryGuide(params: {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assertDeepReadCoversCards, assertDistinctCards, assertReadableCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
+import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
 import { createAdminSessionCookie, isAuthorizedAdminRequest, isAuthorizedAdminSession } from "../src/lib/admin.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun, seoulDistrictsForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
@@ -212,7 +212,7 @@ test("admin dashboard session is signed, expires, and rejects tampering", async 
   );
 });
 
-test("AI trivia accepts concise source text and tolerates related but non-identical cards", () => {
+test("AI trivia requires four semantically distinct cards", () => {
   assert.equal(isUsableWikipediaExtract("가".repeat(70)), true);
   assert.equal(isUsableWikipediaExtract("가".repeat(69)), false);
 
@@ -224,7 +224,6 @@ test("AI trivia accepts concise source text and tolerates related but non-identi
   ];
 
   assert.throws(() => assertDistinctCards(cards));
-  assert.doesNotThrow(() => assertReadableCards(cards));
 });
 
 test("Wikimedia source fallback keeps readable lead facts", () => {
