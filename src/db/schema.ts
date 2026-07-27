@@ -153,6 +153,61 @@ export const reviewLogs = sqliteTable(
   ],
 );
 
+export const dailySessionItems = sqliteTable(
+  "daily_session_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    kstDate: text("kst_date").notNull(),
+    quizItemId: integer("quiz_item_id")
+      .notNull()
+      .references(() => quizItems.id),
+    position: integer("position").notNull(),
+    itemType: text("item_type", { enum: ["review", "new"] }).notNull(),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("daily_session_items_user_date_position_unique").on(table.userId, table.kstDate, table.position),
+    uniqueIndex("daily_session_items_user_date_quiz_unique").on(table.userId, table.kstDate, table.quizItemId),
+    index("daily_session_items_user_date_idx").on(table.userId, table.kstDate),
+  ],
+);
+
+export type ContentFeedbackKind =
+  | "helpful"
+  | "hard_to_understand"
+  | "duplicate"
+  | "outdated"
+  | "source_issue"
+  | "quiz_issue";
+
+export const contentFeedback = sqliteTable(
+  "content_feedback",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contentItemId: integer("content_item_id")
+      .notNull()
+      .references(() => contentItems.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    kind: text("kind", {
+      enum: ["helpful", "hard_to_understand", "duplicate", "outdated", "source_issue", "quiz_issue"],
+    }).notNull(),
+    status: text("status", { enum: ["open", "resolved", "dismissed"] }).notNull().default("open"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    uniqueIndex("content_feedback_user_content_kind_unique").on(table.userId, table.contentItemId, table.kind),
+    index("content_feedback_status_created_idx").on(table.status, table.createdAt),
+    index("content_feedback_content_kind_idx").on(table.contentItemId, table.kind),
+  ],
+);
+
 export const chatUsage = sqliteTable(
   "chat_usage",
   {
@@ -177,6 +232,7 @@ export const geminiRequestLog = sqliteTable(
 export interface IngestionRunCreatedItem {
   contentItemId: number;
   title: string;
+  category: typeof contentItems.$inferSelect.category;
 }
 
 export interface IngestionRunFailure {

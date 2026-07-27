@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } from "../src/lib/card-quality.ts";
 import { createAdminSessionCookie, isAuthorizedAdminRequest, isAuthorizedAdminSession } from "../src/lib/admin.ts";
+import { selectBalancedDailyCandidates } from "../src/lib/daily-selection.ts";
+import {
+  hasDailyPublishingCapacity,
+  prioritizeByDailyPublishingTargets,
+} from "../src/lib/publishing-policy.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun, seoulDistrictsForKstRun } from "../workers/ingest/src/districts.ts";
 import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
@@ -102,6 +107,39 @@ test("daily AI curriculum is distributed across four six-hour slots", () => {
     ["history", "humor", "social_skills", "daily_tips"],
   );
   assert.ok(schedules.every((schedule) => schedule.trivia.sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
+});
+
+test("daily five fills unused categories before repeating a subject", () => {
+  const candidates = [
+    { id: 1, category: "housing" },
+    { id: 2, category: "finance" },
+    { id: 3, category: "housing" },
+    { id: 4, category: "career" },
+    { id: 5, category: "health" },
+    { id: 6, category: "finance" },
+  ];
+
+  assert.deepEqual(
+    selectBalancedDailyCandidates(candidates, new Set(["finance"]), 4).map(({ id }) => id),
+    [1, 4, 5, 2],
+  );
+});
+
+test("daily publishing policy prioritizes missing fields and enforces category caps", () => {
+  const candidates = [
+    { id: "housing", category: "housing" },
+    { id: "career", category: "career" },
+    { id: "finance", category: "finance" },
+    { id: "health", category: "health" },
+  ];
+  const counts = { housing: 5, finance: 2, career: 0, health: 0 };
+
+  assert.deepEqual(
+    prioritizeByDailyPublishingTargets(candidates, counts).map(({ id }) => id),
+    ["career", "health", "finance", "housing"],
+  );
+  assert.equal(hasDailyPublishingCapacity("housing", counts), true);
+  assert.equal(hasDailyPublishingCapacity("housing", { ...counts, housing: 6 }), false);
 });
 
 test("district briefing compares four distinct districts per run", () => {

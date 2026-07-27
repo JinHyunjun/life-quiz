@@ -1,6 +1,12 @@
 import { Hono } from "hono";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { ContentCard, IngestionCollectorDiagnostic } from "../../../src/db/schema";
+import { todayKstRange } from "../../../src/lib/dates";
+import {
+  hasDailyPublishingCapacity,
+  prioritizeByDailyPublishingTargets,
+  type DailyPublishingCounts,
+} from "../../../src/lib/publishing-policy";
 import { createDb, schema, type AppDb } from "./db";
 import {
   answerChat,
@@ -575,7 +581,7 @@ async function ingestSourcedItem(
     bodyMd: generated.bodyMd,
     cards: generated.cards,
     contentFormat: "article",
-    category: generated.category,
+    category: item.category,
     citationUrl: item.url,
     citationLabel: item.citationLabel,
     question: generated.question,
@@ -701,17 +707,25 @@ async function insertContentAndQuiz(
     explanation: params.explanation,
   });
 
-  return { contentItemId: contentItem.id, title: params.title };
+  return { contentItemId: contentItem.id, title: params.title, category: contentItem.category };
 }
 
 async function runIngestion(env: Env) {
   const db = createDb(env.DB);
   const collection = await collectPendingItems(env);
-  const pending = collection.items;
+  const dailyCounts = await loadTodayPublishingCounts(db);
+  const pending = prioritizeByDailyPublishingTargets(
+    collection.items.map((item) => ({ ...item, category: pendingItemCategory(item) })),
+    dailyCounts,
+  ) as PendingItem[];
   const beforeRequest = createGeminiRequestGate(env, "ingestion");
   const minIntervalMs = normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS));
   const maxItems = normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS));
-  const created: { contentItemId: number; title: string }[] = [];
+  const created: {
+    contentItemId: number;
+    title: string;
+    category: (typeof schema.contentItems.$inferSelect)["category"];
+  }[] = [];
   const skipped: string[] = [];
   const deferred: string[] = [];
   const failed: { item: string; error: string }[] = [];
@@ -727,6 +741,12 @@ async function runIngestion(env: Env) {
       continue;
     }
 
+    const category = pendingItemCategory(item);
+    if (!hasDailyPublishingCapacity(category, dailyCounts)) {
+      skipped.push(`daily-category-cap:${category}:${label}`);
+      continue;
+    }
+
     if (!hasIngestionAttemptBudget(attemptedCount, maxItems)) {
       deferred.push(label);
       continue;
@@ -738,9 +758,13 @@ async function runIngestion(env: Env) {
     attemptedCount += 1;
 
     try {
-      if (item.kind === "sourced") created.push(await ingestSourcedItem(db, env, item, beforeRequest));
-      else if (item.kind === "glossary") created.push(await ingestGlossaryItem(db, env, item, beforeRequest));
-      else created.push(await ingestTriviaItem(db, env, item, beforeRequest));
+      const createdItem = item.kind === "sourced"
+        ? await ingestSourcedItem(db, env, item, beforeRequest)
+        : item.kind === "glossary"
+          ? await ingestGlossaryItem(db, env, item, beforeRequest)
+          : await ingestTriviaItem(db, env, item, beforeRequest);
+      created.push(createdItem);
+      dailyCounts[createdItem.category] = (dailyCounts[createdItem.category] ?? 0) + 1;
     } catch (err) {
       if (err instanceof GeminiRateLimitError) {
         deferred.push(label);
@@ -762,6 +786,24 @@ async function runIngestion(env: Env) {
     maxItems,
     attemptedCount,
   };
+}
+
+async function loadTodayPublishingCounts(db: AppDb): Promise<DailyPublishingCounts> {
+  const today = todayKstRange();
+  const rows = await db
+    .select({
+      category: schema.contentItems.category,
+      count: sql<number>`count(*)`.mapWith(Number),
+    })
+    .from(schema.contentItems)
+    .where(and(
+      eq(schema.contentItems.moderationStatus, "published"),
+      gte(schema.contentItems.createdAt, today.start),
+      lt(schema.contentItems.createdAt, today.end),
+    ))
+    .groupBy(schema.contentItems.category);
+
+  return Object.fromEntries(rows.map(({ category, count }) => [category, count])) as DailyPublishingCounts;
 }
 
 function pendingItemKey(item: PendingItem) {

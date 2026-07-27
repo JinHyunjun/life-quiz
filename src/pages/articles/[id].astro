@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { ArrowLeft, BookmarkPlus, ChevronLeft, ChevronRight, ExternalLink, MessageCircle, PanelsTopLeft, ShieldAlert } from "lucide-astro";
+import { AlertCircle, ArrowLeft, BookmarkPlus, ChevronLeft, ChevronRight, CircleHelp, Copy, ExternalLink, FileQuestion, Flag, MessageCircle, PanelsTopLeft, RefreshCcw, ShieldAlert, ThumbsUp } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
@@ -84,10 +84,10 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
           </div>
           <div class="carousel-controls">
             <span class="carousel-count" aria-live="polite"><strong id="current-slide">1</strong> / {item.cards.length}</span>
-            <button class="icon-button" id="previous-card" type="button" aria-label="이전 카드">
+            <button class="icon-button" id="previous-card" type="button" aria-label="이전 카드" disabled>
               <ChevronLeft size={20} />
             </button>
-            <button class="icon-button" id="next-card" type="button" aria-label="다음 카드">
+            <button class="icon-button" id="next-card" type="button" aria-label="다음 카드" disabled>
               <ChevronRight size={20} />
             </button>
           </div>
@@ -150,6 +150,34 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
           ) : (
             <span class="ai-source">{item.citationLabel}</span>
           )}
+        </section>
+
+        <section class="content-feedback" id="content-feedback" data-content-id={item.id} aria-labelledby="feedback-title">
+          <div class="feedback-heading">
+            <div>
+              <p class="eyebrow">YOUR FEEDBACK</p>
+              <h2 id="feedback-title">이 내용은 어땠나요?</h2>
+            </div>
+            <span id="helpful-count"></span>
+          </div>
+          <div class="feedback-controls">
+            <button class="feedback-button" type="button" data-feedback-kind="helpful" disabled>
+              <ThumbsUp size={16} /> 도움됐어요
+            </button>
+            <button class="feedback-button" type="button" data-feedback-kind="hard_to_understand" disabled>
+              <CircleHelp size={16} /> 이해하기 어려워요
+            </button>
+            <details class="feedback-menu" id="feedback-menu">
+              <summary><Flag size={16} /> 문제 신고</summary>
+              <div class="feedback-menu-items">
+                <button type="button" data-feedback-kind="duplicate" disabled><Copy size={15} /> 내용이 반복돼요</button>
+                <button type="button" data-feedback-kind="outdated" disabled><RefreshCcw size={15} /> 정보가 오래됐어요</button>
+                <button type="button" data-feedback-kind="source_issue" disabled><AlertCircle size={15} /> 출처에 문제가 있어요</button>
+                <button type="button" data-feedback-kind="quiz_issue" disabled><FileQuestion size={15} /> 퀴즈에 문제가 있어요</button>
+              </div>
+            </details>
+          </div>
+          <p class="feedback-status" id="feedback-status" aria-live="polite"></p>
         </section>
       </div>
 
@@ -535,6 +563,122 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     font-weight: 750;
   }
 
+  .content-feedback {
+    margin-top: 28px;
+    padding: 24px 2px;
+    border-block: 1px solid var(--line);
+  }
+
+  .feedback-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 14px;
+  }
+
+  .feedback-heading h2 {
+    margin: 0;
+    font-size: 1.08rem;
+  }
+
+  .feedback-heading > span {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .feedback-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .feedback-button,
+  .feedback-menu summary {
+    min-height: 39px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--muted-strong);
+    background: var(--paper);
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 750;
+  }
+
+  .feedback-button:hover,
+  .feedback-menu summary:hover {
+    border-color: color-mix(in srgb, var(--green) 35%, var(--line));
+    background: var(--green-soft);
+  }
+
+  .feedback-button.submitted,
+  .feedback-menu button.submitted {
+    color: var(--green-deep);
+    background: var(--green-soft);
+  }
+
+  .feedback-button:disabled,
+  .feedback-menu button:disabled {
+    cursor: default;
+    opacity: 0.78;
+  }
+
+  .feedback-menu {
+    position: relative;
+  }
+
+  .feedback-menu summary {
+    list-style: none;
+  }
+
+  .feedback-menu summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .feedback-menu-items {
+    position: absolute;
+    z-index: 12;
+    top: calc(100% + 7px);
+    right: 0;
+    width: 220px;
+    display: grid;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .feedback-menu-items button {
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 9px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.76rem;
+  }
+
+  .feedback-menu-items button:hover {
+    background: var(--surface-strong);
+  }
+
+  .feedback-status {
+    min-height: 18px;
+    margin: 8px 2px 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+  }
+
   .article-actions {
     position: sticky;
     top: 96px;
@@ -713,6 +857,27 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
       width: 100%;
       text-align: center;
     }
+
+    .feedback-controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .feedback-button,
+    .feedback-menu,
+    .feedback-menu summary {
+      width: 100%;
+    }
+
+    .feedback-menu summary {
+      justify-content: center;
+    }
+
+    .feedback-menu-items {
+      right: auto;
+      left: 0;
+      width: min(260px, calc(100vw - 28px));
+    }
   }
 </style>
 
@@ -725,6 +890,12 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   const learningStatus = document.querySelector<HTMLElement>("#learning-status");
   const learningUserId = getAnonymousUserId();
   let learningEnrolled = false;
+
+  const feedbackPanel = document.querySelector<HTMLElement>("#content-feedback");
+  const feedbackStatus = document.querySelector<HTMLElement>("#feedback-status");
+  const helpfulCount = document.querySelector<HTMLElement>("#helpful-count");
+  const feedbackMenu = document.querySelector<HTMLDetailsElement>("#feedback-menu");
+  const feedbackButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-feedback-kind]"));
 
   function renderLearningState(enrolled: boolean) {
     learningEnrolled = enrolled;
@@ -778,6 +949,67 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
 
   void initializeLearningState();
 
+  function markSubmittedFeedback(kinds: string[]) {
+    const submitted = new Set(kinds);
+    feedbackButtons.forEach((button) => {
+      const isSubmitted = submitted.has(button.dataset.feedbackKind ?? "");
+      button.classList.toggle("submitted", isSubmitted);
+      button.disabled = isSubmitted;
+    });
+  }
+
+  async function initializeFeedback() {
+    const contentItemId = Number(feedbackPanel?.dataset.contentId);
+    if (!feedbackPanel || !Number.isInteger(contentItemId)) return;
+    try {
+      const response = await fetch(`/api/feedback/${contentItemId}?userId=${encodeURIComponent(learningUserId)}`, {
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) throw new Error();
+      const result = await response.json() as { submittedKinds?: string[]; helpfulCount?: number };
+      markSubmittedFeedback(result.submittedKinds ?? []);
+      if (helpfulCount && Number(result.helpfulCount) > 0) {
+        helpfulCount.textContent = `${result.helpfulCount}명이 도움됐다고 답했어요`;
+      }
+    } catch {
+      feedbackButtons.forEach((button) => { button.disabled = false; });
+      if (feedbackStatus) feedbackStatus.textContent = "피드백 상태를 불러오지 못했어요.";
+    }
+  }
+
+  feedbackButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      const contentItemId = Number(feedbackPanel?.dataset.contentId);
+      const kind = button.dataset.feedbackKind;
+      if (!Number.isInteger(contentItemId) || !kind) return;
+      button.disabled = true;
+      if (feedbackStatus) feedbackStatus.textContent = "의견을 남기는 중이에요.";
+
+      try {
+        const response = await fetch(`/api/feedback/${contentItemId}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({ userId: learningUserId, kind }),
+        });
+        const result = await response.json() as { error?: string; label?: string };
+        if (!response.ok) throw new Error(result.error ?? "피드백을 남기지 못했습니다.");
+        button.classList.add("submitted");
+        button.disabled = true;
+        feedbackMenu?.removeAttribute("open");
+        if (feedbackStatus) {
+          feedbackStatus.textContent = kind === "helpful"
+            ? "고마워요. 도움이 된 콘텐츠를 더 잘 선별할게요."
+            : `${result.label ?? "의견"} 항목으로 QA 대시보드에 전달했어요.`;
+        }
+      } catch (error) {
+        button.disabled = false;
+        if (feedbackStatus) feedbackStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+      }
+    });
+  });
+
+  void initializeFeedback();
+
   const track = document.querySelector<HTMLElement>("#card-news-track");
 
   if (track) {
@@ -787,6 +1019,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     const next = document.querySelector<HTMLButtonElement>("#next-card");
     const currentLabel = document.querySelector<HTMLElement>("#current-slide");
     let currentIndex = 0;
+    let requestedIndex: number | null = null;
 
     const updateControls = (index: number) => {
       currentIndex = Math.min(Math.max(index, 0), slides.length - 1);
@@ -804,8 +1037,14 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     const goTo = (index: number) => {
       const target = slides[Math.min(Math.max(index, 0), slides.length - 1)];
       if (!target) return;
+      requestedIndex = Number(target.dataset.slideIndex);
       track.scrollTo({ left: target.offsetLeft - track.offsetLeft, behavior: "smooth" });
-      updateControls(index);
+      updateControls(requestedIndex);
+      window.setTimeout(() => {
+        if (requestedIndex === null) return;
+        updateControls(requestedIndex);
+        requestedIndex = null;
+      }, 420);
     };
 
     previous?.addEventListener("click", () => goTo(currentIndex - 1));
@@ -814,6 +1053,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
 
     let scrollTimer = 0;
     track.addEventListener("scroll", () => {
+      if (requestedIndex !== null) return;
       window.clearTimeout(scrollTimer);
       scrollTimer = window.setTimeout(() => {
         const nearest = slides.reduce((best, slide, index) => {

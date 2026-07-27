@@ -1,0 +1,555 @@
+---
+export const prerender = true;
+
+import { CheckCircle2, Clock3, RotateCcw } from "lucide-astro";
+import Base from "../layouts/Base.astro";
+---
+
+<Base title="오늘의 5분 학습" description="복습할 기억과 새로운 생활 상식 다섯 가지를 한 번에 학습합니다.">
+  <div class="daily-page shell">
+    <header class="daily-header">
+      <div>
+        <p class="eyebrow">DAILY FIVE</p>
+        <h1 class="page-title">오늘의 5분 학습</h1>
+        <p>오늘 기억할 다섯 가지를 준비했어요.</p>
+      </div>
+      <div class="time-chip"><Clock3 size={18} /><strong>약 5분</strong></div>
+    </header>
+
+    <div class="daily-layout">
+      <aside class="daily-overview" aria-label="오늘의 학습 현황">
+        <div class="overview-score">
+          <span>오늘의 진행</span>
+          <strong><b id="daily-completed">0</b> / <b id="daily-total">5</b></strong>
+        </div>
+        <div class="overview-track" aria-hidden="true"><span id="overview-progress"></span></div>
+        <ol class="daily-steps" id="daily-steps">
+          {Array.from({ length: 5 }, (_, index) => (
+            <li data-step={index}>
+              <span class="step-number">{index + 1}</span>
+              <span class="step-copy"><strong>학습 카드</strong><small>준비 중</small></span>
+              <CheckCircle2 class="step-check" size={18} />
+            </li>
+          ))}
+        </ol>
+        <a class="review-link" href="/review"><RotateCcw size={16} /> 전체 복습 큐 보기</a>
+      </aside>
+
+      <section class="daily-workspace" aria-live="polite">
+        <div id="daily-root">
+          <div class="daily-state" role="status">
+            <span class="loading-spinner" aria-hidden="true"></span>
+            <p>오늘의 카드를 고르고 있어요.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</Base>
+
+<style is:global>
+  .daily-page { padding-top: 46px; }
+
+  .daily-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 30px;
+  }
+
+  .daily-header > div > p:not(.eyebrow) { margin: 9px 0 0; color: var(--muted); }
+
+  .time-chip {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 13px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--green-deep);
+    background: var(--paper);
+    font-size: 0.82rem;
+  }
+
+  .daily-layout {
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    align-items: start;
+    gap: 22px;
+  }
+
+  .daily-overview {
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+  }
+
+  .overview-score {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 0.78rem;
+    font-weight: 750;
+  }
+
+  .overview-score > span { color: var(--muted); }
+  .overview-score > strong { font-size: 1rem; }
+
+  .overview-track {
+    height: 7px;
+    margin: 12px 0 22px;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--surface-strong);
+  }
+
+  .overview-track span {
+    width: 0;
+    height: 100%;
+    display: block;
+    border-radius: inherit;
+    background: var(--green);
+    transition: width 180ms ease;
+  }
+
+  .daily-steps {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .daily-steps li {
+    min-height: 58px;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border-radius: var(--radius-sm);
+  }
+
+  .daily-steps li.active { background: var(--green-soft); }
+
+  .step-number {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    background: var(--surface-strong);
+    font-size: 0.72rem;
+    font-weight: 850;
+  }
+
+  .daily-steps li.active .step-number { color: white; background: var(--green); }
+  .daily-steps li.complete .step-number { color: var(--green-deep); background: var(--green-soft); }
+
+  .step-copy { min-width: 0; display: grid; gap: 1px; }
+  .step-copy strong, .step-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .step-copy strong { font-size: 0.77rem; }
+  .step-copy small { color: var(--muted); font-size: 0.66rem; }
+  .step-check { color: var(--line); }
+  .daily-steps li.complete .step-check { color: var(--green); }
+
+  .review-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 18px;
+    color: var(--green-deep);
+    font-size: 0.75rem;
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .daily-workspace { min-width: 0; }
+
+  .daily-state {
+    min-height: 480px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    padding: 34px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    text-align: center;
+  }
+
+  .daily-state h2 { margin: 16px 0 0; font-size: 1.35rem; }
+  .daily-state p { max-width: 440px; margin: 9px 0 0; color: var(--muted); }
+  .daily-state .state-actions { display: flex; gap: 8px; margin-top: 22px; }
+
+  .loading-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--line);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: daily-spin 800ms linear infinite;
+  }
+
+  @keyframes daily-spin { to { transform: rotate(360deg); } }
+
+  .daily-card {
+    min-height: 480px;
+    display: flex;
+    flex-direction: column;
+    padding: 30px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--paper);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .daily-card-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .daily-card-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--category-color, var(--green));
+    font-size: 0.75rem;
+    font-weight: 850;
+  }
+
+  .daily-card-position { color: var(--muted); font-size: 0.75rem; font-weight: 750; }
+
+  .daily-card h2 {
+    max-width: 780px;
+    margin: 0 0 28px;
+    font-size: clamp(1.3rem, 2.4vw, 1.75rem);
+    line-height: 1.45;
+    word-break: keep-all;
+  }
+
+  .daily-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .daily-choice {
+    min-height: 68px;
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: center;
+    gap: 11px;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .daily-choice:hover:not(:disabled) { border-color: var(--green); background: var(--green-soft); }
+  .daily-choice:disabled { cursor: default; }
+
+  .choice-letter {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--muted-strong);
+    background: var(--surface-strong);
+    font-size: 0.76rem;
+    font-weight: 850;
+  }
+
+  .choice-text { min-width: 0; font-size: 0.9rem; line-height: 1.45; }
+  .daily-choice.correct { border-color: var(--green); background: var(--green-soft); }
+  .daily-choice.correct .choice-letter { color: white; background: var(--green); }
+  .daily-choice.incorrect { border-color: var(--coral); background: var(--coral-soft); }
+  .daily-choice.incorrect .choice-letter { color: white; background: var(--coral); }
+
+  .daily-answer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 22px;
+    margin-top: 24px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+
+  .daily-answer strong { display: block; margin-bottom: 5px; font-size: 0.96rem; }
+  .daily-answer p { max-width: 680px; margin: 0; color: var(--muted-strong); font-size: 0.84rem; line-height: 1.65; }
+  .answer-links { display: flex; align-items: center; gap: 8px; }
+
+  @media (max-width: 820px) {
+    .daily-layout { grid-template-columns: 1fr; }
+    .daily-overview { padding: 16px; }
+    .daily-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .daily-steps li { min-height: 48px; display: grid; grid-template-columns: 1fr; justify-items: center; padding: 6px; }
+    .step-copy, .step-check { display: none; }
+    .review-link { margin-top: 13px; }
+  }
+
+  @media (max-width: 600px) {
+    .daily-page { padding-top: 32px; }
+    .daily-header { align-items: start; margin-bottom: 24px; }
+    .time-chip { min-height: 36px; padding-inline: 10px; }
+    .daily-card { min-height: 0; padding: 22px 18px; }
+    .daily-choices { grid-template-columns: 1fr; }
+    .daily-answer { grid-template-columns: 1fr; align-items: stretch; }
+    .answer-links { display: grid; grid-template-columns: 1fr 1fr; }
+    .daily-state { min-height: 390px; }
+    .daily-state .state-actions { width: 100%; display: grid; }
+  }
+</style>
+
+<script>
+  import { getAnonymousUserId } from "../lib/anonymous-user";
+
+  type DailyCard = {
+    quizItemId: number;
+    contentItemId: number;
+    title: string;
+    category: string;
+    citationLabel: string;
+    question: string;
+    choices: string[];
+    position: number;
+    itemType: "review" | "new";
+    completedAt: string | null;
+  };
+
+  type DailySession = {
+    totalCount: number;
+    completedCount: number;
+    isComplete: boolean;
+    cards: DailyCard[];
+  };
+
+  type SubmitResult = {
+    isCorrect: boolean | null;
+    correctAnswer?: string;
+    explanation?: string;
+    completedCount: number;
+    totalCount: number;
+    isComplete: boolean;
+  };
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    finance: "금융",
+    investment: "주식·투자",
+    housing: "부동산",
+    seoul_life: "서울살이",
+    career: "직장·커리어",
+    rights: "노동·생활법",
+    digital_safety: "디지털 안전",
+    health: "건강·마음",
+    daily_tips: "생활상식",
+    history: "역사",
+    humor: "유쾌 상식",
+    social_skills: "사회생활",
+  };
+
+  const root = document.querySelector<HTMLElement>("#daily-root");
+  const completedLabel = document.querySelector<HTMLElement>("#daily-completed");
+  const totalLabel = document.querySelector<HTMLElement>("#daily-total");
+  const overviewProgress = document.querySelector<HTMLElement>("#overview-progress");
+  const stepElements = Array.from(document.querySelectorAll<HTMLElement>("[data-step]"));
+  const userId = getAnonymousUserId();
+  let session: DailySession | null = null;
+  let currentIndex = 0;
+
+  function makeElement<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  async function initializeDaily() {
+    if (!root) return;
+    try {
+      const response = await fetch(`/api/daily?userId=${encodeURIComponent(userId)}`, {
+        headers: { accept: "application/json" },
+      });
+      const data = await response.json() as DailySession & { error?: string };
+      if (!response.ok) throw new Error(data.error ?? "오늘의 카드를 불러오지 못했습니다.");
+      session = data;
+      currentIndex = Math.max(0, data.cards.findIndex(({ completedAt }) => completedAt === null));
+      renderOverview();
+      if (data.isComplete) renderComplete();
+      else if (data.cards.length === 0) renderEmpty();
+      else renderCard();
+    } catch (error) {
+      renderError(error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.");
+    }
+  }
+
+  function renderOverview() {
+    if (!session) return;
+    if (completedLabel) completedLabel.textContent = String(session.completedCount);
+    if (totalLabel) totalLabel.textContent = String(session.totalCount || 5);
+    if (overviewProgress) {
+      overviewProgress.style.width = `${session.totalCount > 0 ? (session.completedCount / session.totalCount) * 100 : 0}%`;
+    }
+
+    stepElements.forEach((step, index) => {
+      const card = session?.cards[index];
+      const complete = Boolean(card?.completedAt);
+      const active = index === currentIndex && !complete && !session?.isComplete;
+      step.classList.toggle("complete", complete);
+      step.classList.toggle("active", active);
+      const title = step.querySelector<HTMLElement>(".step-copy strong");
+      const detail = step.querySelector<HTMLElement>(".step-copy small");
+      if (title) title.textContent = card ? CATEGORY_LABELS[card.category] ?? card.category : "학습 카드";
+      if (detail) detail.textContent = card ? (card.itemType === "review" ? "기억 다시 보기" : "새 상식") : "준비 중";
+    });
+  }
+
+  function renderCard() {
+    if (!root || !session) return;
+    const card = session.cards[currentIndex];
+    if (!card) {
+      renderComplete();
+      return;
+    }
+
+    root.replaceChildren();
+    const article = makeElement("article", "daily-card");
+    article.dataset.category = card.category;
+    const top = makeElement("div", "daily-card-topline");
+    top.append(
+      makeElement("span", "daily-card-label", card.itemType === "review" ? "기억 다시 보기" : `${CATEGORY_LABELS[card.category] ?? card.category} 새 상식`),
+      makeElement("span", "daily-card-position", `${card.position + 1} / ${session.totalCount}`),
+    );
+    article.append(top, makeElement("h2", "", card.question));
+
+    const choices = makeElement("div", "daily-choices");
+    card.choices.forEach((choice, index) => {
+      const button = makeElement("button", "daily-choice");
+      button.type = "button";
+      button.dataset.choice = choice;
+      button.append(
+        makeElement("span", "choice-letter", String.fromCharCode(65 + index)),
+        makeElement("span", "choice-text", choice),
+      );
+      button.addEventListener("click", () => submitAnswer(card, button, choices));
+      choices.append(button);
+    });
+    article.append(choices);
+    root.append(article);
+  }
+
+  async function submitAnswer(card: DailyCard, selected: HTMLButtonElement, choices: HTMLElement) {
+    const buttons = Array.from(choices.querySelectorAll<HTMLButtonElement>(".daily-choice"));
+    buttons.forEach((button) => { button.disabled = true; });
+
+    try {
+      const response = await fetch(`/api/daily/${card.quizItemId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ userId, answer: selected.dataset.choice }),
+      });
+      const result = await response.json() as SubmitResult & { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "학습 결과를 저장하지 못했습니다.");
+
+      buttons.forEach((button) => {
+        if (button.dataset.choice === selected.dataset.choice) {
+          button.classList.add(result.isCorrect ? "correct" : "incorrect");
+        }
+        if (result.correctAnswer && button.dataset.choice === result.correctAnswer) button.classList.add("correct");
+      });
+
+      card.completedAt = new Date().toISOString();
+      if (session) {
+        session.completedCount = result.completedCount;
+        session.isComplete = result.isComplete;
+      }
+      renderOverview();
+
+      const answer = makeElement("div", "daily-answer");
+      const copy = makeElement("div");
+      copy.append(
+        makeElement("strong", "", result.isCorrect ? "정답이에요." : `정답은 '${result.correctAnswer}'예요.`),
+        makeElement("p", "", result.explanation ?? "관련 글에서 핵심 개념을 다시 확인해보세요."),
+      );
+      const links = makeElement("div", "answer-links");
+      const articleLink = makeElement("a", "button button-secondary", "개념 읽기");
+      articleLink.href = `/articles/${card.contentItemId}`;
+      const next = makeElement("button", "button button-primary", result.isComplete ? "학습 마치기" : "다음 카드");
+      next.type = "button";
+      next.addEventListener("click", () => {
+        if (result.isComplete) {
+          renderComplete();
+          return;
+        }
+        currentIndex = session?.cards.findIndex(({ completedAt }) => completedAt === null) ?? -1;
+        if (currentIndex < 0) renderComplete();
+        else {
+          renderOverview();
+          renderCard();
+        }
+      });
+      links.append(articleLink, next);
+      answer.append(copy, links);
+      choices.parentElement?.append(answer);
+    } catch (error) {
+      buttons.forEach((button) => { button.disabled = false; });
+      renderError(error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.");
+    }
+  }
+
+  function renderComplete() {
+    if (!root) return;
+    if (session) {
+      session.isComplete = true;
+      renderOverview();
+    }
+    root.replaceChildren();
+    const state = makeElement("div", "daily-state");
+    state.append(makeElement("h2", "", "오늘의 5분 학습 완료"), makeElement("p", "", "다섯 가지 기억을 모두 확인했어요. 다음 복습일은 FSRS가 각 카드마다 정해두었습니다."));
+    const actions = makeElement("div", "state-actions");
+    const home = makeElement("a", "button button-primary", "오늘의 상식 보기");
+    home.href = "/";
+    const review = makeElement("a", "button button-secondary", "전체 복습 큐");
+    review.href = "/review";
+    actions.append(home, review);
+    state.append(actions);
+    root.append(state);
+  }
+
+  function renderEmpty() {
+    if (!root) return;
+    root.replaceChildren();
+    const state = makeElement("div", "daily-state");
+    state.append(makeElement("h2", "", "학습 카드를 준비하지 못했어요"), makeElement("p", "", "공개된 퀴즈가 추가되면 오늘의 다섯 장이 자동으로 구성됩니다."));
+    const link = makeElement("a", "button button-primary", "상식 피드 보기");
+    link.href = "/";
+    state.append(link);
+    root.append(state);
+  }
+
+  function renderError(message: string) {
+    if (!root) return;
+    root.replaceChildren();
+    const state = makeElement("div", "daily-state");
+    state.append(makeElement("h2", "", "오늘의 학습을 열지 못했어요"), makeElement("p", "", message));
+    const retry = makeElement("button", "button button-primary", "다시 시도");
+    retry.type = "button";
+    retry.addEventListener("click", initializeDaily);
+    state.append(retry);
+    root.append(state);
+  }
+
+  void initializeDaily();
+</script>

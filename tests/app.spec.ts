@@ -77,6 +77,26 @@ test("review queue only includes content explicitly added by this browser", asyn
   await expect(page.locator(".feedback-explanation")).toBeVisible();
 });
 
+test("daily five creates a stable session and saves progress", async ({ page }) => {
+  await page.goto("/daily");
+
+  await expect(page.getByRole("heading", { level: 1, name: "오늘의 5분 학습" })).toBeVisible();
+  await expect(page.locator(".daily-card")).toBeVisible();
+  await expect(page.locator(".daily-steps li")).toHaveCount(5);
+  await expect(page.locator("#daily-total")).toHaveText("5");
+
+  await page.locator(".daily-choice").first().click();
+  await expect(page.locator(".daily-answer")).toBeVisible();
+  await expect(page.locator("#daily-completed")).toHaveText("1");
+
+  await page.reload();
+  await expect(page.locator("#daily-completed")).toHaveText("1");
+  await expect(page.locator(".daily-card-position")).toContainText("/ 5");
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test("starter courses organize foundational visual guides", async ({ page }) => {
   await page.goto("/start");
 
@@ -122,6 +142,17 @@ test("release notes render the Notion-managed timeline", async ({ page }) => {
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test("article feedback records a helpful response", async ({ page }) => {
+  await page.goto("/archive");
+  await page.locator(".archive-card").first().click();
+
+  const helpful = page.getByRole("button", { name: "도움됐어요" });
+  await expect(helpful).toBeEnabled();
+  await helpful.click();
+  await expect(helpful).toBeDisabled();
+  await expect(page.locator("#feedback-status")).toContainText("고마워요");
 });
 
 test("operations dashboard requires an administrator session", async ({ page }) => {

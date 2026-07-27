@@ -1,7 +1,8 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
-import { contentItems, ingestionRuns, quizItems, sources, type IngestionCollectorDiagnostic } from "../db/schema";
+import { contentFeedback, contentItems, ingestionRuns, quizItems, sources, type IngestionCollectorDiagnostic } from "../db/schema";
 import { kstDateKey, todayKstRange } from "./dates";
+import { DAILY_PUBLISHING_TARGETS } from "./publishing-policy";
 
 export type QualityStatus = "pass" | "warning" | "fail";
 
@@ -20,7 +21,7 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
   const today = todayKstRange(now);
   const historyStart = new Date(today.start.getTime() - 13 * DAY_MS);
 
-  const [contentRows, hiddenRows, todayCategories, dailyRows, sourceRows, runs] = await Promise.all([
+  const [contentRows, hiddenRows, todayCategories, dailyRows, sourceRows, runs, feedbackCounts, openFeedback] = await Promise.all([
     db
       .select({
         total: sql<number>`count(distinct ${contentItems.id})`.mapWith(Number),
@@ -69,6 +70,32 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
       .from(ingestionRuns)
       .orderBy(desc(ingestionRuns.startedAt))
       .limit(12),
+    db
+      .select({
+        kind: contentFeedback.kind,
+        status: contentFeedback.status,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(contentFeedback)
+      .groupBy(contentFeedback.kind, contentFeedback.status),
+    db
+      .select({
+        id: contentFeedback.id,
+        kind: contentFeedback.kind,
+        createdAt: contentFeedback.createdAt,
+        contentItemId: contentItems.id,
+        title: contentItems.title,
+        category: contentItems.category,
+        citationLabel: contentItems.citationLabel,
+      })
+      .from(contentFeedback)
+      .innerJoin(contentItems, eq(contentItems.id, contentFeedback.contentItemId))
+      .where(and(
+        eq(contentFeedback.status, "open"),
+        ne(contentFeedback.kind, "helpful"),
+      ))
+      .orderBy(desc(contentFeedback.createdAt))
+      .limit(30),
   ]);
 
   const content = contentRows[0] ?? { total: 0, cited: 0, fourCards: 0, detailed: 0, quizzed: 0 };
@@ -78,6 +105,12 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
     .filter((run) => run.startedAt.getTime() >= now.getTime() - DAY_MS)
     .reduce((sum, run) => sum + run.failedCount, 0);
   const latestRunAgeHours = latestRun ? (now.getTime() - latestRun.finishedAt.getTime()) / (60 * 60 * 1_000) : Infinity;
+  const openFeedbackCount = feedbackCounts
+    .filter(({ kind, status }) => kind !== "helpful" && status === "open")
+    .reduce((sum, { count }) => sum + count, 0);
+  const helpfulCount = feedbackCounts
+    .filter(({ kind }) => kind === "helpful")
+    .reduce((sum, { count }) => sum + count, 0);
 
   const checks: QualityCheck[] = [
     {
@@ -109,6 +142,13 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
           ? "warning"
           : "pass",
     },
+    {
+      key: "feedback",
+      label: "열린 사용자 제보",
+      value: `${openFeedbackCount}건`,
+      detail: openFeedbackCount > 0 ? "아래 QA 큐에서 내용과 출처를 확인하세요." : "처리할 콘텐츠 문제가 없습니다.",
+      status: maximumStatus(openFeedbackCount, 0, 5),
+    },
   ];
 
   const overallStatus: QualityStatus = checks.some((check) => check.status === "fail")
@@ -122,6 +162,17 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
     const day = kstDateKey(new Date(historyStart.getTime() + index * DAY_MS));
     return { day, count: dayCounts.get(day) ?? 0 };
   });
+  const todayCountMap = new Map(todayCategories.map(({ category, count }) => [category, count]));
+  const publishingTargets = Object.entries(DAILY_PUBLISHING_TARGETS).map(([category, target]) => {
+    const count = todayCountMap.get(category as keyof typeof DAILY_PUBLISHING_TARGETS) ?? 0;
+    return {
+      category: category as keyof typeof DAILY_PUBLISHING_TARGETS,
+      count,
+      minimum: target.minimum,
+      maximum: target.maximum,
+      status: count >= target.minimum ? "met" as const : "below" as const,
+    };
+  });
 
   return {
     overallStatus,
@@ -133,6 +184,12 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
     daily,
     sourceRows,
     runs,
+    publishingTargets,
+    feedback: {
+      helpfulCount,
+      openCount: openFeedbackCount,
+      queue: openFeedback,
+    },
     latestDiagnostics: (latestRun?.collectorDiagnostics ?? []) as IngestionCollectorDiagnostic[],
     checkedAt: now,
   };
@@ -152,6 +209,12 @@ function ratioCheck(key: string, label: string, numerator: number, denominator: 
 function minimumStatus(value: number, passAt: number, warnAt: number): QualityStatus {
   if (value >= passAt) return "pass";
   if (value >= warnAt) return "warning";
+  return "fail";
+}
+
+function maximumStatus(value: number, passAt: number, warnAt: number): QualityStatus {
+  if (value <= passAt) return "pass";
+  if (value <= warnAt) return "warning";
   return "fail";
 }
 

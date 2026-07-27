@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-22T02:29:45.077Z",
+  fetchedAt: "2026-07-27T12:35:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.14",
+      title: "5분 학습과 사용자 QA",
+      date: "2026-07-27",
+      changes: [
+        { type: "bullet", text: "FSRS 복습 최대 2장과 서로 다른 분야의 새 상식을 합친 브라우저별 오늘의 5분 학습 추가" },
+        { type: "bullet", text: "당일 5장 구성과 완료 상태를 D1에 저장해 새로고침 뒤에도 같은 학습과 진행률 유지" },
+        { type: "bullet", text: "글 상세에 도움됨·이해 어려움·중복·최신성·출처·퀴즈 문제 피드백 추가" },
+        { type: "bullet", text: "운영 대시보드에 사용자 제보 QA 큐, 해결·보류 처리, 분야별 현재 발행량과 최소·상한 표시" },
+        { type: "bullet", text: "12개 분야의 하루 최소 1개를 우선하고 분야별 상한을 적용해 특정 주제의 피드 과점 방지" },
+        { type: "bullet", text: "새 Cron 없이 기존 하루 4회 통합 수집 안에서 발행 정책을 적용하고 데스크톱·모바일 E2E로 검증" },
+      ],
+    },
     {
       version: "v0.13",
       title: "콘텐츠 수집 안정화",
