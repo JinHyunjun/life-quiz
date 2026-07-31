@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { AlertTriangle, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, LogOut, MessageSquareWarning, Radio, RefreshCw, ThumbsUp } from "lucide-astro";
+import { AlertTriangle, Bookmark, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, LogOut, MessageSquareWarning, Radio, RefreshCw, ThumbsUp, UsersRound } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import { createDb } from "../../db/client";
 import { isAuthorizedAdminSession } from "../../lib/admin";
@@ -180,6 +180,29 @@ function statusLabel(status: QualityStatus) {
         <div class="empty-diagnostics" id="feedback-empty"><CheckCircle2 size={24} /><span>처리할 사용자 제보가 없습니다.</span></div>
       )}
       <p class="admin-action-status" id="admin-action-status" aria-live="polite"></p>
+    </section>
+
+    <section class="admin-section adoption-section" aria-labelledby="adoption-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">LEARNING ADOPTION</p>
+          <h2 id="adoption-title">개인화·학습 사용 현황</h2>
+        </div>
+      </div>
+      <dl class="adoption-metrics">
+        <div>
+          <dt><UsersRound size={17} /> 관심 분야 설정</dt>
+          <dd>{dashboard.engagement.preferenceUsers}<small>브라우저</small></dd>
+        </div>
+        <div>
+          <dt><Bookmark size={17} /> 저장한 상식</dt>
+          <dd>{dashboard.engagement.savedItems}<small>건</small></dd>
+        </div>
+        <div>
+          <dt><CalendarCheck2 size={17} /> 완료한 5분 학습</dt>
+          <dd>{dashboard.engagement.completedDailySessions}<small>세션</small></dd>
+        </div>
+      </dl>
     </section>
 
     <section class="admin-section" aria-labelledby="runs-title">
@@ -420,6 +443,25 @@ function statusLabel(status: QualityStatus) {
   .feedback-actions .icon-button:last-child { color: var(--muted); }
   .admin-action-status { min-height: 18px; margin: 8px 0 0; color: var(--muted); font-size: 0.72rem; }
 
+  .adoption-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .adoption-metrics > div {
+    min-width: 0;
+    padding: 18px 20px;
+    border-right: 1px solid var(--line);
+  }
+
+  .adoption-metrics > div:first-child { padding-left: 0; }
+  .adoption-metrics > div:last-child { padding-right: 0; border-right: 0; }
+  .adoption-metrics dt { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.72rem; font-weight: 740; }
+  .adoption-metrics dd { margin: 5px 0 0; font-size: 1.55rem; font-weight: 820; }
+  .adoption-metrics dd small { margin-left: 4px; color: var(--muted); font-size: 0.68rem; font-weight: 650; }
+
   .table-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
   th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
@@ -461,6 +503,10 @@ function statusLabel(status: QualityStatus) {
     .feedback-metrics { justify-content: start; }
     .feedback-queue li { grid-template-columns: 8px minmax(0, 1fr); }
     .feedback-actions { grid-column: 2; }
+    .adoption-metrics { grid-template-columns: 1fr; }
+    .adoption-metrics > div,
+    .adoption-metrics > div:first-child,
+    .adoption-metrics > div:last-child { padding: 13px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   }
 </style>
 

@@ -97,6 +97,32 @@ test("daily five creates a stable session and saves progress", async ({ page }) 
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("learning profile saves interests and bookmarked knowledge", async ({ page }) => {
+  await page.goto("/archive");
+  await page.locator(".archive-card").first().click();
+  const articleTitle = (await page.getByRole("heading", { level: 1 }).textContent())?.trim() ?? "";
+
+  const saveButton = page.getByRole("button", { name: "상식 저장하기" });
+  await expect(saveButton).toBeEnabled();
+  await saveButton.click();
+  await expect(page.getByRole("button", { name: "저장한 상식 보기" })).toBeEnabled();
+
+  await page.goto("/me");
+  await expect(page.getByRole("heading", { level: 1, name: "내 학습" })).toBeVisible();
+  await expect(page.locator("#profile-content")).toBeVisible();
+  await expect(page.locator("#saved-list")).toContainText(articleTitle);
+
+  await page.locator('label:has(input[value="finance"])').click();
+  await page.locator('label:has(input[value="health"])').click();
+  await page.getByRole("button", { name: "관심 분야 저장" }).click();
+  await expect(page.locator("#preference-status")).toContainText("다음에 만드는 5분 학습부터 반영");
+
+  await page.reload();
+  await expect(page.locator("#profile-content")).toBeVisible();
+  await expect(page.getByLabel("금융", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("건강·마음", { exact: true })).toBeChecked();
+});
+
 test("starter courses organize foundational visual guides", async ({ page }) => {
   await page.goto("/start");
 

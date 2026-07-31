@@ -5,6 +5,10 @@ import { assertDeepReadCoversCards, assertDistinctCards, sanitizeContentCards } 
 import { createAdminSessionCookie, isAuthorizedAdminRequest, isAuthorizedAdminSession } from "../src/lib/admin.ts";
 import { selectBalancedDailyCandidates } from "../src/lib/daily-selection.ts";
 import {
+  calculateLearningStreak,
+  normalizePreferenceCategories,
+} from "../src/lib/personalization-logic.ts";
+import {
   hasDailyPublishingCapacity,
   prioritizeByDailyPublishingTargets,
 } from "../src/lib/publishing-policy.ts";
@@ -123,6 +127,49 @@ test("daily five fills unused categories before repeating a subject", () => {
     selectBalancedDailyCandidates(candidates, new Set(["finance"]), 4).map(({ id }) => id),
     [1, 4, 5, 2],
   );
+});
+
+test("daily five prioritizes preferred subjects without losing category variety", () => {
+  const candidates = [
+    { id: 1, category: "housing" },
+    { id: 2, category: "finance" },
+    { id: 3, category: "career" },
+    { id: 4, category: "health" },
+    { id: 5, category: "finance" },
+  ];
+
+  assert.deepEqual(
+    selectBalancedDailyCandidates(candidates, new Set(), 4, new Set(["health", "finance"]))
+      .map(({ id }) => id),
+    [2, 4, 1, 3],
+  );
+});
+
+test("learning streak keeps yesterday's run until today's session is complete", () => {
+  assert.deepEqual(
+    calculateLearningStreak(["2026-07-27", "2026-07-28", "2026-07-29"], "2026-07-30"),
+    { current: 3, longest: 3 },
+  );
+  assert.deepEqual(
+    calculateLearningStreak(["2026-07-27", "2026-07-29", "2026-07-30"], "2026-07-30"),
+    { current: 2, longest: 2 },
+  );
+});
+
+test("interest preferences accept known categories and enforce the five-subject limit", () => {
+  assert.deepEqual(
+    normalizePreferenceCategories(["finance", "health", "finance"]),
+    ["finance", "health"],
+  );
+  assert.throws(() => normalizePreferenceCategories(["unknown"]));
+  assert.throws(() => normalizePreferenceCategories([
+    "finance",
+    "investment",
+    "housing",
+    "career",
+    "health",
+    "history",
+  ]));
 });
 
 test("daily publishing policy prioritizes missing fields and enforces category caps", () => {

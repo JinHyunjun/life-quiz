@@ -1,4 +1,5 @@
 import { index, uniqueIndex, sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import type { Category } from "../lib/categories";
 import type { ReleaseFeed } from "../lib/releases";
 
 // Placeholder shape; Phase 5 regenerates this via `better-auth` CLI to match its session/account tables.
@@ -173,6 +174,32 @@ export const dailySessionItems = sqliteTable(
     uniqueIndex("daily_session_items_user_date_position_unique").on(table.userId, table.kstDate, table.position),
     uniqueIndex("daily_session_items_user_date_quiz_unique").on(table.userId, table.kstDate, table.quizItemId),
     index("daily_session_items_user_date_idx").on(table.userId, table.kstDate),
+  ],
+);
+
+export const userPreferences = sqliteTable("user_preferences", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id),
+  categories: text("categories", { mode: "json" }).notNull().$type<Category[]>(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const savedContentItems = sqliteTable(
+  "saved_content_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    contentItemId: integer("content_item_id")
+      .notNull()
+      .references(() => contentItems.id),
+    savedAt: integer("saved_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("saved_content_items_user_content_unique").on(table.userId, table.contentItemId),
+    index("saved_content_items_user_saved_idx").on(table.userId, table.savedAt),
   ],
 );
 

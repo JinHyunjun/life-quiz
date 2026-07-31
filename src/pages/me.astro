@@ -1,0 +1,617 @@
+---
+export const prerender = true;
+
+import {
+  Bookmark,
+  BookOpenCheck,
+  Brain,
+  CalendarCheck2,
+  Check,
+  ChevronRight,
+  Flame,
+  RotateCcw,
+  Sparkles,
+  Target,
+  Trash2,
+} from "lucide-astro";
+import Base from "../layouts/Base.astro";
+import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
+---
+
+<Base title="내 학습" description="라이프퀴즈 학습 기록, 관심 분야와 저장한 상식">
+  <div class="profile-page shell">
+    <header class="profile-header">
+      <div>
+        <p class="eyebrow">MY LEARNING</p>
+        <h1 class="page-title">내 학습</h1>
+        <p>오늘의 작은 학습이 얼마나 쌓였는지 확인해보세요.</p>
+      </div>
+      <a class="button button-primary" href="/daily"><Sparkles size={17} /> 오늘 5분 시작</a>
+    </header>
+
+    <div class="profile-loading" id="profile-loading" role="status">
+      <span class="loading-mark"><Brain size={24} /></span>
+      <span>학습 기록을 불러오는 중입니다.</span>
+    </div>
+
+    <div class="profile-content" id="profile-content" hidden>
+      <section class="metric-band" aria-label="학습 요약">
+        <div>
+          <span><Flame size={17} /> 현재 연속</span>
+          <strong><b id="current-streak">0</b>일</strong>
+          <small>최장 <span id="longest-streak">0</span>일</small>
+        </div>
+        <div>
+          <span><CalendarCheck2 size={17} /> 완료한 날</span>
+          <strong><b id="completed-days">0</b>일</strong>
+          <small>5분 학습 완료</small>
+        </div>
+        <div>
+          <span><RotateCcw size={17} /> 누적 복습</span>
+          <strong><b id="review-count">0</b>회</strong>
+          <small><span id="due-count">0</span>개 복습 대기</small>
+        </div>
+        <div>
+          <span><Target size={17} /> 기억 성공</span>
+          <strong><b id="success-rate">0</b>%</strong>
+          <small><span id="learned-count">0</span>개 상식 학습</small>
+        </div>
+      </section>
+
+      <div class="profile-grid">
+        <section class="profile-section activity-section" aria-labelledby="activity-title">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">LAST 7 DAYS</p>
+              <h2 id="activity-title">이번 주 학습 흐름</h2>
+            </div>
+            <span class="saved-summary"><Bookmark size={14} /> 저장 <strong id="saved-count">0</strong></span>
+          </div>
+          <ol class="activity-grid" id="activity-grid" aria-label="최근 7일 학습 진행률"></ol>
+        </section>
+
+        <section class="profile-section preference-section" aria-labelledby="preference-title">
+          <div class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">INTERESTS</p>
+              <h2 id="preference-title">관심 분야</h2>
+            </div>
+            <span class="preference-count"><strong id="preference-count">0</strong>/5</span>
+          </div>
+          <form id="preference-form">
+            <div class="preference-groups">
+              {CATEGORY_GROUPS.map((group) => (
+                <fieldset>
+                  <legend>{group.label}</legend>
+                  <div class="preference-options">
+                    {group.categories.map((category) => (
+                      <label data-category={category}>
+                        <input
+                          type="checkbox"
+                          name="category"
+                          value={category}
+                          data-label={CATEGORY_LABELS[category]}
+                        />
+                        <span class="category-swatch" data-category={category}></span>
+                        <span>{CATEGORY_LABELS[category]}</span>
+                        <Check class="check-icon" size={14} />
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+            <div class="preference-actions">
+              <p id="preference-status" aria-live="polite">최대 5개까지 고를 수 있습니다.</p>
+              <button class="button button-secondary" type="submit">관심 분야 저장</button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <section class="profile-section category-progress-section" aria-labelledby="category-progress-title">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">MEMORY MAP</p>
+            <h2 id="category-progress-title">분야별 기억 현황</h2>
+          </div>
+        </div>
+        <div class="category-progress" id="category-progress"></div>
+        <div class="empty-state" id="category-empty" hidden>
+          <BookOpenCheck size={24} />
+          <span>첫 퀴즈를 풀면 분야별 기록이 여기에 나타납니다.</span>
+        </div>
+      </section>
+
+      <section class="profile-section saved-section" aria-labelledby="saved-title">
+        <div class="section-heading compact-heading">
+          <div>
+            <p class="eyebrow">SAVED KNOWLEDGE</p>
+            <h2 id="saved-title">저장한 상식</h2>
+          </div>
+          <a href="/archive">보관함 둘러보기 <ChevronRight size={14} /></a>
+        </div>
+        <ul class="saved-list" id="saved-list"></ul>
+        <div class="empty-state" id="saved-empty" hidden>
+          <Bookmark size={24} />
+          <span>다시 보고 싶은 글을 저장해두세요.</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="profile-error" id="profile-error" hidden>
+      <Brain size={25} />
+      <h2>학습 기록을 불러오지 못했습니다.</h2>
+      <button class="button button-secondary" id="profile-retry" type="button">다시 불러오기</button>
+    </div>
+  </div>
+
+  <template id="category-progress-template">
+    <div class="category-progress-row">
+      <span class="category-swatch"></span>
+      <div>
+        <div class="progress-copy"><strong></strong><span></span></div>
+        <span class="progress-track"><span class="progress-fill"></span></span>
+      </div>
+    </div>
+  </template>
+
+  <template id="saved-item-template">
+    <li>
+      <span class="category-swatch"></span>
+      <a><strong></strong><small></small></a>
+      <button class="icon-button" type="button" aria-label="저장 해제" title="저장 해제">
+        <Trash2 size={17} />
+      </button>
+    </li>
+  </template>
+</Base>
+
+<style>
+  .profile-page { padding-top: 48px; }
+
+  .profile-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 28px;
+    margin-bottom: 30px;
+  }
+
+  .profile-header > div > p:last-child {
+    margin: 10px 0 0;
+    color: var(--muted);
+  }
+
+  .profile-loading,
+  .profile-error {
+    min-height: 360px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .profile-loading[hidden],
+  .profile-error[hidden] {
+    display: none;
+  }
+
+  .profile-error h2 { margin: 0; color: var(--ink); font-size: 1.1rem; }
+
+  .loading-mark {
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: var(--green);
+    background: var(--green-soft);
+  }
+
+  .metric-band {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 48px;
+    border-block: 1px solid var(--line);
+  }
+
+  .metric-band > div {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 20px 22px;
+    border-right: 1px solid var(--line);
+  }
+
+  .metric-band > div:first-child { padding-left: 0; }
+  .metric-band > div:last-child { padding-right: 0; border-right: 0; }
+
+  .metric-band span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 720;
+  }
+
+  .metric-band strong { font-size: 1.45rem; line-height: 1.3; }
+  .metric-band strong b { font-size: 2rem; }
+  .metric-band small { color: var(--muted); font-size: 0.7rem; }
+
+  .profile-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(420px, 1.2fr);
+    gap: 52px;
+  }
+
+  .profile-section { min-width: 0; margin-bottom: 52px; }
+  .compact-heading { align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .saved-summary, .preference-count { color: var(--muted); font-size: 0.74rem; }
+  .saved-summary { display: inline-flex; align-items: center; gap: 5px; }
+  .saved-summary strong, .preference-count strong { color: var(--ink); }
+
+  .activity-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(38px, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 6px 0 0;
+    list-style: none;
+  }
+
+  .activity-grid li {
+    min-width: 0;
+    min-height: 106px;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 7px;
+    border-bottom: 3px solid var(--line);
+  }
+
+  .activity-grid li[data-state="complete"] { border-color: var(--green); }
+  .activity-grid li[data-state="partial"] { border-color: var(--yellow); }
+  .activity-grid small { color: var(--muted); font-size: 0.64rem; }
+
+  .activity-mark {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--muted);
+    background: var(--surface-strong);
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+
+  [data-state="complete"] .activity-mark { color: white; background: var(--green); }
+  [data-state="partial"] .activity-mark { color: #76570d; background: var(--yellow-soft); }
+  .activity-grid strong { font-size: 0.7rem; }
+
+  .preference-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; }
+  .preference-groups fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .preference-groups legend { margin-bottom: 8px; color: var(--muted); font-size: 0.68rem; font-weight: 800; }
+  .preference-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+
+  .preference-options label {
+    min-width: 0;
+    min-height: 38px;
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) 14px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--paper);
+    cursor: pointer;
+    font-size: 0.72rem;
+    font-weight: 720;
+  }
+
+  .preference-options input { position: absolute; opacity: 0; pointer-events: none; }
+  .preference-options .check-icon { color: transparent; }
+  .preference-options label:has(input:checked) { border-color: var(--category-color); background: var(--category-soft); }
+  .preference-options label:has(input:checked) .check-icon { color: var(--category-color); }
+  .preference-options label:has(input:disabled) { cursor: not-allowed; opacity: 0.45; }
+
+  .preference-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 18px;
+  }
+
+  .preference-actions p { margin: 0; color: var(--muted); font-size: 0.7rem; }
+
+  .category-progress { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 32px; }
+  .category-progress-row { min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 10px; padding: 10px 0; }
+  .category-progress-row > div { min-width: 0; }
+  .progress-copy { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .progress-copy strong { overflow: hidden; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .progress-copy span { color: var(--muted); font-size: 0.66rem; white-space: nowrap; }
+  .progress-track { height: 5px; display: block; overflow: hidden; border-radius: 2px; background: var(--surface-strong); }
+  .progress-fill { height: 100%; display: block; background: var(--category-color); }
+
+  .saved-section .section-heading a {
+    display: inline-flex;
+    align-items: center;
+    color: var(--green-deep);
+    font-size: 0.73rem;
+    font-weight: 760;
+    text-decoration: none;
+  }
+
+  .saved-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; margin: 0; padding: 0; list-style: none; }
+  .saved-list li { min-width: 0; display: grid; grid-template-columns: 8px minmax(0, 1fr) 38px; align-items: center; gap: 11px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+  .saved-list a { min-width: 0; display: grid; gap: 2px; color: var(--ink); text-decoration: none; }
+  .saved-list a:hover strong { color: var(--green-deep); text-decoration: underline; }
+  .saved-list strong, .saved-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .saved-list strong { font-size: 0.79rem; }
+  .saved-list small { color: var(--muted); font-size: 0.66rem; }
+  .saved-list .icon-button { width: 36px; height: 36px; flex-basis: 36px; color: var(--muted); }
+
+  .empty-state { min-height: 116px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: 0.78rem; }
+
+  @media (max-width: 900px) {
+    .profile-grid { grid-template-columns: 1fr; gap: 0; }
+    .metric-band { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metric-band > div:nth-child(2) { border-right: 0; }
+    .metric-band > div:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+    .metric-band > div:nth-child(3) { padding-left: 0; }
+    .category-progress, .saved-list { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 620px) {
+    .profile-page { padding-top: 30px; }
+    .profile-header { align-items: stretch; flex-direction: column; }
+    .profile-header .button { width: 100%; }
+    .metric-band > div { padding: 16px 12px; }
+    .metric-band > div:first-child, .metric-band > div:nth-child(3) { padding-left: 0; }
+    .metric-band > div:nth-child(2), .metric-band > div:last-child { padding-right: 0; }
+    .metric-band strong { font-size: 1.1rem; }
+    .metric-band strong b { font-size: 1.55rem; }
+    .activity-grid { gap: 4px; }
+    .activity-grid li { min-height: 92px; }
+    .activity-mark { width: 30px; height: 30px; }
+    .preference-groups { grid-template-columns: 1fr; }
+    .preference-actions { align-items: stretch; flex-direction: column; }
+    .preference-actions .button { width: 100%; }
+  }
+</style>
+
+<script>
+  import { getAnonymousUserId } from "../lib/anonymous-user";
+
+  type CategoryStat = {
+    category: string;
+    reviewCount: number;
+    memorySuccessRate: number;
+    averageStability: number;
+  };
+
+  type SavedItem = {
+    contentItemId: number;
+    title: string;
+    category: string;
+    citationLabel: string;
+    savedAt: string;
+  };
+
+  type LearningProfile = {
+    preferences: string[];
+    report: {
+      currentStreak: number;
+      longestStreak: number;
+      completedDays: number;
+      learnedCount: number;
+      reviewCount: number;
+      memorySuccessRate: number;
+      dueCount: number;
+      savedCount: number;
+    };
+    activity: Array<{
+      date: string;
+      totalCount: number;
+      completedCount: number;
+      isComplete: boolean;
+    }>;
+    categoryStats: CategoryStat[];
+    savedItems: SavedItem[];
+  };
+
+  const userId = getAnonymousUserId();
+  const loading = document.querySelector<HTMLElement>("#profile-loading");
+  const content = document.querySelector<HTMLElement>("#profile-content");
+  const errorPanel = document.querySelector<HTMLElement>("#profile-error");
+  const retryButton = document.querySelector<HTMLButtonElement>("#profile-retry");
+  const preferenceForm = document.querySelector<HTMLFormElement>("#preference-form");
+  const preferenceStatus = document.querySelector<HTMLElement>("#preference-status");
+  const preferenceCount = document.querySelector<HTMLElement>("#preference-count");
+  const categoryInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="category"]'));
+  const categoryLabels = Object.fromEntries(categoryInputs.map((input) => [input.value, input.dataset.label ?? input.value]));
+
+  let profile: LearningProfile | null = null;
+
+  async function loadProfile() {
+    loading?.removeAttribute("hidden");
+    content?.setAttribute("hidden", "");
+    errorPanel?.setAttribute("hidden", "");
+
+    try {
+      const response = await fetch(`/api/profile?userId=${encodeURIComponent(userId)}`, {
+        headers: { accept: "application/json" },
+      });
+      const result = await response.json() as LearningProfile & { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "학습 기록을 불러오지 못했습니다.");
+      profile = result;
+      renderProfile(result);
+      loading?.setAttribute("hidden", "");
+      content?.removeAttribute("hidden");
+    } catch {
+      loading?.setAttribute("hidden", "");
+      errorPanel?.removeAttribute("hidden");
+    }
+  }
+
+  function renderProfile(result: LearningProfile) {
+    setText("#current-streak", result.report.currentStreak);
+    setText("#longest-streak", result.report.longestStreak);
+    setText("#completed-days", result.report.completedDays);
+    setText("#review-count", result.report.reviewCount);
+    setText("#due-count", result.report.dueCount >= 100 ? "100+" : result.report.dueCount);
+    setText("#success-rate", result.report.memorySuccessRate);
+    setText("#learned-count", result.report.learnedCount);
+    setText("#saved-count", result.report.savedCount);
+
+    renderActivity(result.activity);
+    renderPreferences(result.preferences);
+    renderCategoryStats(result.categoryStats);
+    renderSavedItems(result.savedItems);
+  }
+
+  function renderActivity(items: LearningProfile["activity"]) {
+    const grid = document.querySelector<HTMLOListElement>("#activity-grid");
+    if (!grid) return;
+    grid.replaceChildren();
+
+    const dayFormatter = new Intl.DateTimeFormat("ko-KR", { weekday: "short", timeZone: "UTC" });
+    const dateFormatter = new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", timeZone: "UTC" });
+    for (const item of items) {
+      const date = new Date(`${item.date}T00:00:00Z`);
+      const state = item.isComplete ? "complete" : item.completedCount > 0 ? "partial" : "empty";
+      const row = document.createElement("li");
+      row.dataset.state = state;
+      row.title = `${item.date} ${item.completedCount}/${item.totalCount || 5} 완료`;
+
+      const day = document.createElement("small");
+      day.textContent = dayFormatter.format(date);
+      const mark = document.createElement("span");
+      mark.className = "activity-mark";
+      mark.textContent = item.isComplete ? "완료" : item.completedCount > 0 ? `${item.completedCount}/5` : "·";
+      const dateLabel = document.createElement("strong");
+      dateLabel.textContent = dateFormatter.format(date);
+      row.append(day, mark, dateLabel);
+      grid.append(row);
+    }
+  }
+
+  function renderPreferences(preferences: string[]) {
+    const selected = new Set(preferences);
+    categoryInputs.forEach((input) => { input.checked = selected.has(input.value); });
+    updatePreferenceLimit();
+  }
+
+  function updatePreferenceLimit() {
+    const checked = categoryInputs.filter((input) => input.checked);
+    categoryInputs.forEach((input) => {
+      input.disabled = checked.length >= 5 && !input.checked;
+    });
+    if (preferenceCount) preferenceCount.textContent = String(checked.length);
+  }
+
+  function renderCategoryStats(items: CategoryStat[]) {
+    const container = document.querySelector<HTMLElement>("#category-progress");
+    const empty = document.querySelector<HTMLElement>("#category-empty");
+    const template = document.querySelector<HTMLTemplateElement>("#category-progress-template");
+    if (!container || !template) return;
+    container.replaceChildren();
+    empty?.toggleAttribute("hidden", items.length > 0);
+
+    for (const item of items) {
+      const fragment = template.content.cloneNode(true) as DocumentFragment;
+      const row = fragment.querySelector<HTMLElement>(".category-progress-row");
+      const swatch = fragment.querySelector<HTMLElement>(".category-swatch");
+      const title = fragment.querySelector<HTMLElement>(".progress-copy strong");
+      const meta = fragment.querySelector<HTMLElement>(".progress-copy span");
+      const fill = fragment.querySelector<HTMLElement>(".progress-fill");
+      if (row) row.dataset.category = item.category;
+      if (swatch) swatch.dataset.category = item.category;
+      if (title) title.textContent = categoryLabels[item.category] ?? item.category;
+      if (meta) meta.textContent = `${item.reviewCount}회 · 성공 ${item.memorySuccessRate}% · 안정도 ${item.averageStability}일`;
+      if (fill) fill.style.width = `${Math.max(4, item.memorySuccessRate)}%`;
+      container.append(fragment);
+    }
+  }
+
+  function renderSavedItems(items: SavedItem[]) {
+    const list = document.querySelector<HTMLUListElement>("#saved-list");
+    const empty = document.querySelector<HTMLElement>("#saved-empty");
+    const template = document.querySelector<HTMLTemplateElement>("#saved-item-template");
+    if (!list || !template) return;
+    list.replaceChildren();
+    empty?.toggleAttribute("hidden", items.length > 0);
+
+    for (const item of items) {
+      const fragment = template.content.cloneNode(true) as DocumentFragment;
+      const row = fragment.querySelector<HTMLLIElement>("li");
+      const swatch = fragment.querySelector<HTMLElement>(".category-swatch");
+      const link = fragment.querySelector<HTMLAnchorElement>("a");
+      const title = fragment.querySelector<HTMLElement>("strong");
+      const meta = fragment.querySelector<HTMLElement>("small");
+      const removeButton = fragment.querySelector<HTMLButtonElement>("button");
+      if (row) row.dataset.savedContentId = String(item.contentItemId);
+      if (swatch) swatch.dataset.category = item.category;
+      if (link) link.href = `/articles/${item.contentItemId}`;
+      if (title) title.textContent = item.title;
+      if (meta) meta.textContent = `${categoryLabels[item.category] ?? item.category} · ${item.citationLabel}`;
+      removeButton?.addEventListener("click", () => removeSavedItem(item.contentItemId, removeButton));
+      list.append(fragment);
+    }
+  }
+
+  async function removeSavedItem(contentItemId: number, button: HTMLButtonElement) {
+    button.disabled = true;
+    try {
+      const response = await fetch(`/api/saved/${contentItemId}`, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "저장을 해제하지 못했습니다.");
+      await loadProfile();
+    } catch {
+      button.disabled = false;
+    }
+  }
+
+  categoryInputs.forEach((input) => input.addEventListener("change", updatePreferenceLimit));
+  preferenceForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const categories = categoryInputs.filter((input) => input.checked).map((input) => input.value);
+    const submitButton = preferenceForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    if (preferenceStatus) preferenceStatus.textContent = "관심 분야를 저장하는 중입니다.";
+
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ userId, categories }),
+      });
+      const result = await response.json() as { categories?: string[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "관심 분야를 저장하지 못했습니다.");
+      if (profile && result.categories) profile.preferences = result.categories;
+      if (preferenceStatus) preferenceStatus.textContent = "다음에 만드는 5분 학습부터 반영됩니다.";
+    } catch (error) {
+      if (preferenceStatus) preferenceStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
+  });
+
+  retryButton?.addEventListener("click", loadProfile);
+  loadProfile();
+
+  function setText(selector: string, value: string | number) {
+    const element = document.querySelector<HTMLElement>(selector);
+    if (element) element.textContent = String(value);
+  }
+</script>

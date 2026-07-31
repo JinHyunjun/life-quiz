@@ -3,6 +3,7 @@ import type { AppDb } from "../db/client";
 import { contentItems, dailySessionItems, learningItems, quizItems } from "../db/schema";
 import { selectBalancedDailyCandidates } from "./daily-selection";
 import { kstDateKey } from "./dates";
+import { getPreferredCategories } from "./personalization";
 import {
   ensureReviewUser,
   getDueReviewCards,
@@ -68,10 +69,14 @@ export async function getOrCreateDailySession(
     const newCandidates = newSlots > 0
       ? await loadNewCandidates(db, userId)
       : [];
+    const preferredCategories = newSlots > 0
+      ? await getPreferredCategories(db, userId)
+      : new Set<string>();
     const selectedNew = selectBalancedDailyCandidates(
       newCandidates.filter(({ quizItemId }) => !reservedQuizIds.has(quizItemId)),
       usedCategories,
       newSlots,
+      preferredCategories,
     );
 
     if (selectedNew.length > 0) {

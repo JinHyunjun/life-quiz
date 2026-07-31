@@ -1,6 +1,16 @@
 import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
-import { contentFeedback, contentItems, ingestionRuns, quizItems, sources, type IngestionCollectorDiagnostic } from "../db/schema";
+import {
+  contentFeedback,
+  contentItems,
+  dailySessionItems,
+  ingestionRuns,
+  quizItems,
+  savedContentItems,
+  sources,
+  userPreferences,
+  type IngestionCollectorDiagnostic,
+} from "../db/schema";
 import { kstDateKey, todayKstRange } from "./dates";
 import { DAILY_PUBLISHING_TARGETS } from "./publishing-policy";
 
@@ -21,7 +31,19 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
   const today = todayKstRange(now);
   const historyStart = new Date(today.start.getTime() - 13 * DAY_MS);
 
-  const [contentRows, hiddenRows, todayCategories, dailyRows, sourceRows, runs, feedbackCounts, openFeedback] = await Promise.all([
+  const [
+    contentRows,
+    hiddenRows,
+    todayCategories,
+    dailyRows,
+    sourceRows,
+    runs,
+    feedbackCounts,
+    openFeedback,
+    preferenceUserRows,
+    savedItemRows,
+    completedSessionRows,
+  ] = await Promise.all([
     db
       .select({
         total: sql<number>`count(distinct ${contentItems.id})`.mapWith(Number),
@@ -96,6 +118,20 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
       ))
       .orderBy(desc(contentFeedback.createdAt))
       .limit(30),
+    db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(userPreferences),
+    db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(savedContentItems),
+    db
+      .select({
+        userId: dailySessionItems.userId,
+        date: dailySessionItems.kstDate,
+      })
+      .from(dailySessionItems)
+      .groupBy(dailySessionItems.userId, dailySessionItems.kstDate)
+      .having(sql`count(*) > 0 and sum(case when ${dailySessionItems.completedAt} is not null then 1 else 0 end) = count(*)`),
   ]);
 
   const content = contentRows[0] ?? { total: 0, cited: 0, fourCards: 0, detailed: 0, quizzed: 0 };
@@ -189,6 +225,11 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
       helpfulCount,
       openCount: openFeedbackCount,
       queue: openFeedback,
+    },
+    engagement: {
+      preferenceUsers: preferenceUserRows[0]?.count ?? 0,
+      savedItems: savedItemRows[0]?.count ?? 0,
+      completedDailySessions: completedSessionRows.length,
     },
     latestDiagnostics: (latestRun?.collectorDiagnostics ?? []) as IngestionCollectorDiagnostic[],
     checkedAt: now,

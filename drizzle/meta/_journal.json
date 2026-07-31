@@ -120,6 +120,13 @@
       "when": 1785154870424,
       "tag": "0016_add_daily_learning_feedback",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1785473898978,
+      "tag": "0017_add_personalization_profile",
+      "breakpoints": true
     }
   ]
 }

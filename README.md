@@ -7,6 +7,9 @@
 - KST 00시 기준 오늘 피드와 키워드·날짜·분야·출처·페이지별 지난 상식 보관함
 - 돈과 집, 일과 권리, 안전한 생활, 교양과 쉼으로 묶은 12개 주제 지식 지도와 오늘 분야별 생성 수
 - FSRS 복습 최대 2장과 서로 다른 분야의 새 상식을 합친 브라우저별 `오늘의 5분 학습` (`/daily`)
+- 최대 5개 관심 분야를 고르면 다음에 만드는 5분 학습에서 선호 분야를 먼저 보여주는 개인화
+- 연속 학습일·최근 7일 활동·누적 복습·기억 성공률·분야별 기억 현황을 모아보는 `내 학습` (`/me`)
+- 글 상세에서 다시 보고 싶은 상식을 저장하고 `내 학습`에서 모아보거나 해제하는 브라우저별 보관 기능
 - 서울 25개 자치구 중 배치마다 4개 구를 순환하고 매매·전월세·생활정보를 구별 반복 카드가 아닌 비교 브리핑으로 통합
 - 분야별 상식 피드와 실제 외부 원문으로 이동하는 SOURCE 영역
 - 금융·투자·주거 기초를 생성 순서대로 묶어 주는 사회초년생 시작 코스 (`/start`)
@@ -35,9 +38,9 @@
 
 ```text
 Astro 7 + Cloudflare Workers Static Assets
-├─ /, /start, /archive, /articles/:id, /daily, /review, /chat, /changelog
-├─ Astro API: /api/daily*, /api/feedback/*, /api/learning/*, /api/reviews/*, /api/chat
-├─ D1: 콘텐츠, 일일 학습, 사용자 피드백, 퀴즈, 복습 로그, 챗 사용량
+├─ /, /start, /archive, /articles/:id, /daily, /review, /me, /chat, /changelog
+├─ Astro API: /api/daily*, /api/feedback/*, /api/learning/*, /api/reviews/*, /api/profile, /api/saved/*, /api/chat
+├─ D1: 콘텐츠, 일일 학습, 관심 분야, 저장한 상식, 사용자 피드백, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
    ├─ Hono 수집 API와 KST 00/06/12/18시 통합 Cron
    └─ Gemini 생성 및 근거형 챗 응답 (D1 공용 RPM 예산 적용)
@@ -51,10 +54,10 @@ Gemini 키는 `life-quiz-ingest` Worker에만 저장합니다. 앱 Worker는 공
 
 | 기술 | 쉽게 말하면 | 이 프로젝트에서 하는 일 |
 | --- | --- | --- |
-| Astro | 웹페이지를 만드는 틀 | 홈, 보관함, 상세, 복습, 채팅, 릴리즈 노트 화면을 렌더링 |
+| Astro | 웹페이지를 만드는 틀 | 홈, 보관함, 상세, 5분 학습, 내 학습, 복습, 채팅, 릴리즈 노트 화면을 렌더링 |
 | Cloudflare Workers | 서버를 따로 빌리지 않고 Cloudflare 위에서 코드를 실행하는 공간 | 프론트와 API를 같은 배포 단위로 실행 |
 | Hono | Workers용 가벼운 API 라우터 | 수집 Worker의 health, 채팅, 수동 수집 요청 처리 |
-| Cloudflare D1 | Cloudflare 안의 SQLite 데이터베이스 | 콘텐츠, 5분 학습 진행, 사용자 QA 제보, 퀴즈, 복습 기록, 채팅 사용량 저장 |
+| Cloudflare D1 | Cloudflare 안의 SQLite 데이터베이스 | 콘텐츠, 5분 학습 진행, 관심 분야, 저장한 상식, 사용자 QA 제보, 퀴즈, 복습 기록, 채팅 사용량 저장 |
 | Drizzle ORM | DB 테이블을 TypeScript 코드처럼 다루게 해 주는 도구 | 테이블 구조와 쿼리를 타입으로 검증 |
 | ts-fsrs | 망각 곡선을 고려해 다음 복습일을 정하는 엔진 | 사용자가 맞힘/틀림을 누르면 다음 복습 시점 계산 |
 | Gemini 3.1 Flash Lite | 텍스트를 요약하고 구조화하는 AI 모델 | 배치 수집 때 카드뉴스·퀴즈 초안을 만들고, 저장 콘텐츠 근거로만 챗 응답 |
@@ -102,7 +105,7 @@ npx wrangler deploy --dry-run
 npx wrangler deploy --dry-run --config workers/ingest/wrangler.jsonc
 ```
 
-Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 홈, 시작 코스, 상세, 5분 학습, 피드백, 복습, 챗 흐름을 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
+Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 홈, 시작 코스, 상세, 5분 학습, 관심 분야, 저장한 상식, 내 학습 리포트, 피드백, 복습, 챗 흐름을 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
 
 ## 배포 순서
 
@@ -117,8 +120,8 @@ Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱�
 
 ## 남은 큰 작업
 
-- better-auth 세션과 사용자별 복습 이력
-- 공공데이터 지역·관심 분야 개인화
+- better-auth 세션과 브라우저별 익명 학습 이력의 계정 귀속
+- 공공데이터 지역 개인화와 기기 간 관심 분야 동기화
 - 수집 소스별 오류율·중복률과 무료 티어 추세 모니터링
 - Gemini 서비스 전체 일일 예산과 관리자 사용량 화면
 - 챗 사용량을 로그인 사용자 정책과 연결

@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-27T12:35:00.000Z",
+  fetchedAt: "2026-07-31T06:00:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.15",
+      title: "관심 분야와 내 학습 리포트",
+      date: "2026-07-31",
+      changes: [
+        { type: "bullet", text: "관심 분야를 최대 5개까지 고르고 다음 오늘의 5분 학습에서 선호 주제를 먼저 만나는 개인화 기능 추가" },
+        { type: "bullet", text: "현재·최장 연속 학습일, 완료한 날, 누적 복습, 기억 성공률과 최근 7일 활동을 한 화면에서 확인하는 내 학습 페이지 추가" },
+        { type: "bullet", text: "글 상세에서 다시 보고 싶은 상식을 저장하고 내 학습에서 모아보거나 저장을 해제하는 보관 기능 추가" },
+        { type: "bullet", text: "분야별 복습 횟수·기억 성공률·평균 안정성을 표시해 어떤 주제를 더 복습할지 판단할 수 있도록 개선" },
+        { type: "bullet", text: "운영 대시보드에 관심 분야 설정 사용자, 저장한 상식, 완료된 5분 학습 수를 보여주는 채택 지표 추가" },
+        { type: "bullet", text: "새 Cron이나 Gemini 호출 없이 D1 개인화 테이블과 기존 학습 데이터를 재사용하고 로직 28건·E2E 22건으로 검증" },
+      ],
+    },
     {
       version: "v0.14",
       title: "5분 학습과 사용자 QA",

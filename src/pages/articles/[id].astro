@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { AlertCircle, ArrowLeft, BookmarkPlus, ChevronLeft, ChevronRight, CircleHelp, Copy, ExternalLink, FileQuestion, Flag, MessageCircle, PanelsTopLeft, RefreshCcw, ShieldAlert, ThumbsUp } from "lucide-astro";
+import { AlertCircle, ArrowLeft, Bookmark, ChevronLeft, ChevronRight, CircleHelp, Copy, ExternalLink, FileQuestion, Flag, MessageCircle, PanelsTopLeft, RefreshCcw, RotateCcw, ShieldAlert, ThumbsUp } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
@@ -190,13 +190,19 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
           <span><strong>이 글에 대해 질문하기</strong><small>라이프 메이트가 맥락을 이어받아요</small></span>
           <ChevronRight size={18} />
         </a>
+        <button class="action-link save" id="saved-button" type="button" data-content-id={item.id} disabled>
+          <Bookmark size={19} />
+          <span><strong id="saved-label">상식 저장하기</strong><small id="saved-description">다시 볼 글을 내 학습에 모아둬요</small></span>
+          <ChevronRight size={18} />
+        </button>
         {quizzes.length > 0 && (
           <button class="action-link review" id="learning-button" type="button" data-content-id={item.id} disabled>
-            <BookmarkPlus size={19} />
+            <RotateCcw size={19} />
             <span><strong id="learning-label">복습에 담기</strong><small id="learning-description">이 글의 퀴즈만 내 복습에 추가해요</small></span>
             <ChevronRight size={18} />
           </button>
         )}
+        <p class="saved-status" id="saved-status" aria-live="polite"></p>
         <p class="learning-status" id="learning-status" aria-live="polite"></p>
       </aside>
     </div>
@@ -726,6 +732,10 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     background: var(--yellow-soft);
   }
 
+  .action-link.save.saved {
+    background: var(--blue-soft);
+  }
+
   .action-link.review.enrolled {
     background: var(--green-soft);
   }
@@ -752,11 +762,16 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     white-space: nowrap;
   }
 
+  .saved-status,
   .learning-status {
     min-height: 18px;
     margin: 7px 2px 0;
     color: #9eaaa4;
     font-size: 0.68rem;
+  }
+
+  .saved-status + .learning-status {
+    margin-top: -13px;
   }
 
   @media (max-width: 900px) {
@@ -890,6 +905,11 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   const learningStatus = document.querySelector<HTMLElement>("#learning-status");
   const learningUserId = getAnonymousUserId();
   let learningEnrolled = false;
+  const savedButton = document.querySelector<HTMLButtonElement>("#saved-button");
+  const savedLabel = document.querySelector<HTMLElement>("#saved-label");
+  const savedDescription = document.querySelector<HTMLElement>("#saved-description");
+  const savedStatus = document.querySelector<HTMLElement>("#saved-status");
+  let contentSaved = false;
 
   const feedbackPanel = document.querySelector<HTMLElement>("#content-feedback");
   const feedbackStatus = document.querySelector<HTMLElement>("#feedback-status");
@@ -948,6 +968,60 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   });
 
   void initializeLearningState();
+
+  function renderSavedState(saved: boolean) {
+    contentSaved = saved;
+    if (!savedButton || !savedLabel || !savedDescription) return;
+    savedButton.disabled = false;
+    savedButton.classList.toggle("saved", saved);
+    savedLabel.textContent = saved ? "저장한 상식 보기" : "상식 저장하기";
+    savedDescription.textContent = saved
+      ? "내 학습에 이 글이 저장되어 있어요"
+      : "다시 볼 글을 내 학습에 모아둬요";
+  }
+
+  async function initializeSavedState() {
+    const contentItemId = Number(savedButton?.dataset.contentId);
+    if (!savedButton || !Number.isInteger(contentItemId)) return;
+    try {
+      const response = await fetch(`/api/saved/${contentItemId}?userId=${encodeURIComponent(learningUserId)}`, {
+        headers: { accept: "application/json" },
+      });
+      if (!response.ok) throw new Error();
+      const result = await response.json() as { saved?: boolean };
+      renderSavedState(result.saved === true);
+    } catch {
+      renderSavedState(false);
+      if (savedStatus) savedStatus.textContent = "저장 상태를 확인하지 못했어요.";
+    }
+  }
+
+  savedButton?.addEventListener("click", async () => {
+    if (contentSaved) {
+      window.location.href = "/me#saved-title";
+      return;
+    }
+
+    const contentItemId = Number(savedButton.dataset.contentId);
+    savedButton.disabled = true;
+    if (savedStatus) savedStatus.textContent = "상식을 저장하는 중이에요.";
+    try {
+      const response = await fetch(`/api/saved/${contentItemId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ userId: learningUserId }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "상식을 저장하지 못했습니다.");
+      renderSavedState(true);
+      if (savedStatus) savedStatus.textContent = "내 학습에 저장했습니다.";
+    } catch (error) {
+      renderSavedState(false);
+      if (savedStatus) savedStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+    }
+  });
+
+  void initializeSavedState();
 
   function markSubmittedFeedback(kinds: string[]) {
     const submitted = new Set(kinds);
