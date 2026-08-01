@@ -5,7 +5,8 @@
 	"name": "life-quiz",
 	"main": "@astrojs/cloudflare/entrypoints/server",
 	"vars": {
-		"CHAT_HOURLY_LIMIT": "8"
+		"CHAT_HOURLY_LIMIT": "8",
+		"GEMINI_DAILY_BUDGET": "400"
 	},
 	"secrets": {
 		"required": ["INGEST_ADMIN_TOKEN"]

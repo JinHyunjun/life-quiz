@@ -522,7 +522,11 @@ function previousYearMonth(now = new Date()) {
 
 function createGeminiRequestGate(env: Env, purpose: GeminiRequestPurpose): BeforeGeminiRequest {
   const maxRequests = normalizeGeminiRpmBudget(Number(env.GEMINI_RPM_BUDGET));
-  return () => reserveGeminiRequest(env.DB, { purpose, maxRequests }).then(() => undefined);
+  return () => reserveGeminiRequest(env.DB, {
+    purpose,
+    maxRequests,
+    maxDailyRequests: Number(env.GEMINI_DAILY_BUDGET),
+  }).then(() => undefined);
 }
 
 function normalizeIngestionBatchLimit(value: number) {

@@ -1,3 +1,8 @@
+import {
+  kstDayWindowMs,
+  normalizeGeminiDailyBudget,
+} from "../../../src/lib/operations.ts";
+
 export type GeminiRequestPurpose = "ingestion" | "chat";
 
 const WINDOW_MS = 60_000;
@@ -5,11 +10,13 @@ const DEFAULT_RPM_BUDGET = 12;
 
 export class GeminiRateLimitError extends Error {
   readonly retryAfterSeconds: number;
+  readonly limitKind: "rpm" | "daily";
 
-  constructor(retryAfterSeconds: number) {
+  constructor(retryAfterSeconds: number, limitKind: "rpm" | "daily" = "rpm") {
     super("Gemini request budget is exhausted");
     this.name = "GeminiRateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
+    this.limitKind = limitKind;
   }
 }
 
@@ -19,11 +26,19 @@ export function normalizeGeminiRpmBudget(value: number) {
 
 export async function reserveGeminiRequest(
   db: D1Database,
-  options: { purpose: GeminiRequestPurpose; maxRequests: number; now?: Date },
+  options: {
+    purpose: GeminiRequestPurpose;
+    maxRequests: number;
+    maxDailyRequests: number;
+    now?: Date;
+  },
 ) {
-  const nowMs = (options.now ?? new Date()).getTime();
+  const now = options.now ?? new Date();
+  const nowMs = now.getTime();
   const cutoffMs = nowMs - WINDOW_MS;
   const maxRequests = normalizeGeminiRpmBudget(options.maxRequests);
+  const maxDailyRequests = normalizeGeminiDailyBudget(options.maxDailyRequests);
+  const dailyWindow = kstDayWindowMs(now);
   const requestId = crypto.randomUUID();
 
   // D1 serializes statements for a database. Keeping the count check and insert in one
@@ -37,34 +52,48 @@ export async function reserveGeminiRequest(
         FROM gemini_request_log
         WHERE requested_at_ms > ?4
       ) < ?5
+      AND (
+        SELECT COUNT(*)
+        FROM gemini_request_log
+        WHERE requested_at_ms >= ?6
+      ) < ?7
       RETURNING request_id
     `)
-    .bind(requestId, nowMs, options.purpose, cutoffMs, maxRequests)
+    .bind(requestId, nowMs, options.purpose, cutoffMs, maxRequests, dailyWindow.start, maxDailyRequests)
     .first<{ request_id: string }>();
 
-  if (inserted) return { requestId, maxRequests };
+  if (inserted) return { requestId, maxRequests, maxDailyRequests };
 
-  const oldest = await db
+  const usage = await db
     .prepare(`
-      SELECT MIN(requested_at_ms) AS requested_at_ms
+      SELECT
+        SUM(CASE WHEN requested_at_ms > ?1 THEN 1 ELSE 0 END) AS minute_count,
+        SUM(CASE WHEN requested_at_ms >= ?2 THEN 1 ELSE 0 END) AS daily_count,
+        MIN(CASE WHEN requested_at_ms > ?1 THEN requested_at_ms END) AS oldest_minute_request
       FROM gemini_request_log
-      WHERE requested_at_ms > ?1
+      WHERE requested_at_ms >= MIN(?1, ?2)
     `)
-    .bind(cutoffMs)
-    .first<{ requested_at_ms: number | null }>();
-  const retryAtMs = (oldest?.requested_at_ms ?? nowMs) + WINDOW_MS;
+    .bind(cutoffMs, dailyWindow.start)
+    .first<{ minute_count: number | null; daily_count: number | null; oldest_minute_request: number | null }>();
+  const dailyLimitReached = (usage?.daily_count ?? 0) >= maxDailyRequests;
+  const retryAtMs = dailyLimitReached
+    ? dailyWindow.end
+    : (usage?.oldest_minute_request ?? nowMs) + WINDOW_MS;
   const retryAfterSeconds = Math.max(1, Math.ceil((retryAtMs - nowMs) / 1_000));
 
   console.warn(JSON.stringify({
-    message: "gemini request blocked by local RPM budget",
+    message: dailyLimitReached
+      ? "gemini request blocked by local daily budget"
+      : "gemini request blocked by local RPM budget",
     purpose: options.purpose,
     maxRequests,
+    maxDailyRequests,
     retryAfterSeconds,
   }));
-  throw new GeminiRateLimitError(retryAfterSeconds);
+  throw new GeminiRateLimitError(retryAfterSeconds, dailyLimitReached ? "daily" : "rpm");
 }
 
 export async function pruneGeminiRequestLog(db: D1Database, now = new Date()) {
-  const retentionCutoffMs = now.getTime() - 24 * 60 * 60 * 1_000;
+  const retentionCutoffMs = now.getTime() - 14 * 24 * 60 * 60 * 1_000;
   await db.prepare("DELETE FROM gemini_request_log WHERE requested_at_ms < ?1").bind(retentionCutoffMs).run();
 }

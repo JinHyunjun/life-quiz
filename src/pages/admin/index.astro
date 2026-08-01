@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { AlertTriangle, Bookmark, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, LogOut, MessageSquareWarning, Radio, RefreshCw, ThumbsUp, UsersRound } from "lucide-astro";
+import { Activity, AlertTriangle, Bookmark, Bot, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, Gauge, LogOut, MessageSquareWarning, Radio, RefreshCw, ThumbsUp, UsersRound } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import { createDb } from "../../db/client";
 import { isAuthorizedAdminSession } from "../../lib/admin";
@@ -16,13 +16,22 @@ if (!(await isAuthorizedAdminSession(Astro.request, env.INGEST_ADMIN_TOKEN))) {
 }
 
 Astro.response.headers.set("cache-control", "no-store");
-const dashboard = await getQualityDashboard(createDb(env.DB));
+const dashboard = await getQualityDashboard(createDb(env.DB), new Date(), Number(env.GEMINI_DAILY_BUDGET));
 const maxDailyCount = Math.max(1, ...dashboard.daily.map(({ count }) => count));
+const maxGeminiDailyCount = Math.max(1, ...dashboard.operations.gemini.daily.map(({ count }) => count));
 const diagnosticSummary = dashboard.latestDiagnostics.reduce(
   (summary, diagnostic) => ({ ...summary, [diagnostic.status]: summary[diagnostic.status] + 1 }),
   { success: 0, empty: 0, error: 0 },
 );
+const collectorHealthStatus = dashboard.checks.find(({ key }) => key === "collector-health")?.status ?? "fail";
 const sourceLabels = { gov: "공공데이터", news: "뉴스·RSS", youtube: "YouTube", ai_trivia: "AI 큐레이션" };
+const collectorFamilyLabels = {
+  rss: "뉴스·정책 RSS",
+  youtube: "YouTube",
+  public_data: "공공데이터",
+  curriculum: "출처형 커리큘럼",
+  other: "기타",
+};
 const overallCopy = {
   pass: { label: "정상", detail: "핵심 품질 기준을 모두 충족하고 있습니다." },
   warning: { label: "점검 필요", detail: "서비스는 동작 중이며 일부 지표를 확인해야 합니다." },
@@ -91,6 +100,94 @@ function statusLabel(status: QualityStatus) {
           </li>
         ))}
       </ul>
+    </section>
+
+    <section class="operations-section" aria-labelledby="operations-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">AI &amp; SOURCE OPERATIONS</p>
+          <h2 id="operations-title">AI 예산과 수집원 안정성</h2>
+        </div>
+        <span class="section-note"><Activity size={14} /> KST 기준 자동 집계</span>
+      </div>
+
+      <div class="operations-grid">
+        <div class="ai-operations">
+          <div class="operation-heading">
+            <span class="operation-icon" data-status={dashboard.operations.gemini.status}><Bot size={18} /></span>
+            <div>
+              <h3>Gemini 일일 요청 예산</h3>
+              <p>콘텐츠 생성과 라이프 메이트 호출을 한 예산으로 관리합니다.</p>
+            </div>
+          </div>
+          <div class="budget-summary">
+            <div>
+              <strong>{dashboard.operations.gemini.used}<small> / {dashboard.operations.gemini.budget}회</small></strong>
+              <span>오늘 사용량</span>
+            </div>
+            <div>
+              <strong>{dashboard.operations.gemini.remaining}<small>회</small></strong>
+              <span>남은 요청</span>
+            </div>
+            <div>
+              <strong>{dashboard.operations.gemini.percentage}<small>%</small></strong>
+              <span>예산 소진율</span>
+            </div>
+          </div>
+          <div class="budget-progress" data-status={dashboard.operations.gemini.status}>
+            <progress max={dashboard.operations.gemini.budget} value={dashboard.operations.gemini.used} aria-label={`Gemini 일일 예산 ${dashboard.operations.gemini.percentage}% 사용`}></progress>
+            <div class="purpose-split">
+              <span><Gauge size={14} /> 콘텐츠 생성 <strong>{dashboard.operations.gemini.ingestion}회</strong></span>
+              <span><MessageSquareWarning size={14} /> 라이프 메이트 <strong>{dashboard.operations.gemini.chat}회</strong></span>
+            </div>
+          </div>
+          <div class="ai-daily-chart" role="img" aria-label="최근 14일 Gemini 요청량">
+            {dashboard.operations.gemini.daily.map(({ day, count }) => (
+              <div class="ai-daily-column" title={`${formatKstDate(day)} ${count}회`}>
+                <strong>{count}</strong>
+                <span class="bar-track"><span class="bar-fill" style={`height: ${Math.max(4, Math.round((count / maxGeminiDailyCount) * 100))}%`}></span></span>
+                <small>{day.slice(5).replace("-", "/")}</small>
+              </div>
+            ))}
+          </div>
+          <p class="operation-note">요청 기록은 14일간 보관합니다. 이 기능 도입 전 날짜는 기존 24시간 보관 정책 때문에 0으로 표시될 수 있습니다.</p>
+        </div>
+
+        <div class="collector-operations">
+          <div class="operation-heading">
+            <span class="operation-icon" data-status={collectorHealthStatus}><Radio size={18} /></span>
+            <div>
+              <h3>최근 {dashboard.operations.collectorWindowDays}일 수집원 건강 상태</h3>
+              <p>후보 수, 빈 응답, 오류 비율을 경로별로 합산합니다.</p>
+            </div>
+          </div>
+          {dashboard.operations.collectorHealth.length > 0 ? (
+            <div class="table-scroll health-table">
+              <table>
+                <thead>
+                  <tr><th>수집 경로</th><th>검사</th><th>후보</th><th>성공</th><th>빈 응답</th><th>오류</th><th>오류율</th><th>상태</th></tr>
+                </thead>
+                <tbody>
+                  {dashboard.operations.collectorHealth.map((health) => (
+                    <tr>
+                      <td><strong>{collectorFamilyLabels[health.family]}</strong></td>
+                      <td>{health.checks}</td>
+                      <td>{health.candidates}</td>
+                      <td>{health.success}</td>
+                      <td>{health.empty}</td>
+                      <td class:list={{ danger: health.error > 0 }}>{health.error}</td>
+                      <td>{health.errorRate}%</td>
+                      <td><span class="table-status" data-status={health.status}>{statusLabel(health.status)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div class="empty-diagnostics"><Database size={24} /><span>최근 7일 수집원 진단 기록이 없습니다.</span></div>
+          )}
+        </div>
+      </div>
     </section>
 
     <div class="admin-columns">
@@ -351,6 +448,51 @@ function statusLabel(status: QualityStatus) {
   .check-card > strong { margin: 4px 0 10px; font-size: 1.45rem; }
   .check-card > small { margin-top: auto; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
 
+  .operations-section { margin-bottom: 48px; }
+  .operations-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(480px, 1.1fr);
+    gap: 34px;
+  }
+  .ai-operations, .collector-operations { min-width: 0; }
+  .operation-heading { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 10px; margin-bottom: 18px; }
+  .operation-heading h3 { margin: 0; font-size: 0.9rem; }
+  .operation-heading p { margin: 3px 0 0; color: var(--muted); font-size: 0.7rem; line-height: 1.45; }
+  .operation-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--status-color); background: var(--status-soft); }
+  .budget-summary { display: grid; grid-template-columns: 1.2fr 1fr 1fr; border-block: 1px solid var(--line); }
+  .budget-summary > div { min-width: 0; padding: 15px 14px; border-right: 1px solid var(--line); }
+  .budget-summary > div:first-child { padding-left: 0; }
+  .budget-summary > div:last-child { padding-right: 0; border-right: 0; }
+  .budget-summary strong { display: block; font-size: 1.35rem; }
+  .budget-summary strong small { color: var(--muted); font-size: 0.67rem; }
+  .budget-summary span { color: var(--muted); font-size: 0.67rem; }
+  .budget-progress { margin-top: 16px; }
+  .budget-progress progress { width: 100%; height: 8px; display: block; overflow: hidden; border: 0; border-radius: 4px; background: var(--surface-strong); }
+  .budget-progress progress::-webkit-progress-bar { background: var(--surface-strong); }
+  .budget-progress progress::-webkit-progress-value { background: var(--status-color); }
+  .budget-progress progress::-moz-progress-bar { background: var(--status-color); }
+  .purpose-split { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 9px; }
+  .purpose-split span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.68rem; }
+  .purpose-split strong { color: var(--ink); }
+  .ai-daily-chart {
+    height: 142px;
+    display: grid;
+    grid-template-columns: repeat(14, minmax(18px, 1fr));
+    align-items: end;
+    gap: 5px;
+    margin-top: 18px;
+    overflow-x: auto;
+  }
+  .ai-daily-column { min-width: 18px; height: 100%; display: grid; grid-template-rows: 18px minmax(72px, 1fr) 18px; justify-items: center; gap: 4px; }
+  .ai-daily-column strong { font-size: 0.61rem; }
+  .ai-daily-column small { color: var(--muted); font-size: 0.55rem; white-space: nowrap; }
+  .ai-daily-chart .bar-track { max-width: 18px; }
+  .ai-daily-chart .bar-fill { background: #3978a8; }
+  .operation-note { margin: 10px 0 0; color: var(--muted); font-size: 0.65rem; line-height: 1.5; }
+  .health-table table { font-size: 0.72rem; }
+  .health-table th, .health-table td { padding: 11px 8px; }
+  .health-table th:first-child, .health-table td:first-child { min-width: 116px; }
+
   .admin-columns { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr); gap: 32px; }
   .admin-section { min-width: 0; margin-bottom: 44px; }
   .compact-heading { align-items: center; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
@@ -484,6 +626,7 @@ function statusLabel(status: QualityStatus) {
 
   @media (max-width: 1020px) {
     .check-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .operations-grid { grid-template-columns: 1fr; }
     .admin-columns { grid-template-columns: 1fr; gap: 0; }
     .diagnostic-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
@@ -497,7 +640,8 @@ function statusLabel(status: QualityStatus) {
     .check-grid, .diagnostic-list { grid-template-columns: 1fr; }
     .check-card { min-height: 160px; }
     .coverage-split { grid-template-columns: 1fr; }
-    .daily-chart { min-width: 620px; }
+    .daily-chart { min-width: 0; grid-template-columns: repeat(14, 42px); }
+    .ai-daily-chart { min-width: 0; grid-template-columns: repeat(14, 30px); }
     .compact-heading { align-items: start; }
     .diagnostic-counts { justify-content: start; }
     .feedback-metrics { justify-content: start; }

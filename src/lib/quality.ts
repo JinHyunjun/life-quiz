@@ -4,6 +4,7 @@ import {
   contentFeedback,
   contentItems,
   dailySessionItems,
+  geminiRequestLog,
   ingestionRuns,
   quizItems,
   savedContentItems,
@@ -12,6 +13,12 @@ import {
   type IngestionCollectorDiagnostic,
 } from "../db/schema";
 import { kstDateKey, todayKstRange } from "./dates";
+import {
+  DEFAULT_GEMINI_DAILY_BUDGET,
+  geminiBudgetStatus,
+  normalizeGeminiDailyBudget,
+  summarizeCollectorHealth,
+} from "./operations";
 import { DAILY_PUBLISHING_TARGETS } from "./publishing-policy";
 
 export type QualityStatus = "pass" | "warning" | "fail";
@@ -27,9 +34,11 @@ export interface QualityCheck {
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const publishedContent = eq(contentItems.moderationStatus, "published");
 
-export async function getQualityDashboard(db: AppDb, now = new Date()) {
+export async function getQualityDashboard(db: AppDb, now = new Date(), dailyGeminiBudgetValue = DEFAULT_GEMINI_DAILY_BUDGET) {
   const today = todayKstRange(now);
   const historyStart = new Date(today.start.getTime() - 13 * DAY_MS);
+  const collectorHistoryStart = new Date(now.getTime() - 7 * DAY_MS);
+  const dailyGeminiBudget = normalizeGeminiDailyBudget(dailyGeminiBudgetValue);
 
   const [
     contentRows,
@@ -43,6 +52,9 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
     preferenceUserRows,
     savedItemRows,
     completedSessionRows,
+    geminiPurposeRows,
+    geminiDailyRows,
+    collectorRuns,
   ] = await Promise.all([
     db
       .select({
@@ -132,6 +144,29 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
       .from(dailySessionItems)
       .groupBy(dailySessionItems.userId, dailySessionItems.kstDate)
       .having(sql`count(*) > 0 and sum(case when ${dailySessionItems.completedAt} is not null then 1 else 0 end) = count(*)`),
+    db
+      .select({
+        purpose: geminiRequestLog.purpose,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(geminiRequestLog)
+      .where(gte(geminiRequestLog.requestedAtMs, today.start.getTime()))
+      .groupBy(geminiRequestLog.purpose),
+    db
+      .select({
+        day: sql<string>`date(${geminiRequestLog.requestedAtMs} / 1000, 'unixepoch', '+9 hours')`,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(geminiRequestLog)
+      .where(gte(geminiRequestLog.requestedAtMs, historyStart.getTime()))
+      .groupBy(sql`date(${geminiRequestLog.requestedAtMs} / 1000, 'unixepoch', '+9 hours')`)
+      .orderBy(sql`date(${geminiRequestLog.requestedAtMs} / 1000, 'unixepoch', '+9 hours')`),
+    db
+      .select({ collectorDiagnostics: ingestionRuns.collectorDiagnostics })
+      .from(ingestionRuns)
+      .where(gte(ingestionRuns.startedAt, collectorHistoryStart))
+      .orderBy(desc(ingestionRuns.startedAt))
+      .limit(40),
   ]);
 
   const content = contentRows[0] ?? { total: 0, cited: 0, fourCards: 0, detailed: 0, quizzed: 0 };
@@ -147,6 +182,18 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
   const helpfulCount = feedbackCounts
     .filter(({ kind }) => kind === "helpful")
     .reduce((sum, { count }) => sum + count, 0);
+  const geminiPurposeCounts = new Map(geminiPurposeRows.map(({ purpose, count }) => [purpose, count]));
+  const geminiTodayCount = geminiPurposeRows.reduce((sum, { count }) => sum + count, 0);
+  const geminiBudget = geminiBudgetStatus(geminiTodayCount, dailyGeminiBudget);
+  const collectorHealth = summarizeCollectorHealth(collectorRuns);
+  const collectorChecks = collectorHealth.reduce((sum, row) => sum + row.checks, 0);
+  const collectorErrors = collectorHealth.reduce((sum, row) => sum + row.error, 0);
+  const collectorEmpty = collectorHealth.reduce((sum, row) => sum + row.empty, 0);
+  const collectorStatus: QualityStatus = collectorChecks === 0 || collectorHealth.some(({ status }) => status === "fail")
+    ? "fail"
+    : collectorHealth.some(({ status }) => status === "warning")
+      ? "warning"
+      : "pass";
 
   const checks: QualityCheck[] = [
     {
@@ -185,6 +232,20 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
       detail: openFeedbackCount > 0 ? "아래 QA 큐에서 내용과 출처를 확인하세요." : "처리할 콘텐츠 문제가 없습니다.",
       status: maximumStatus(openFeedbackCount, 0, 5),
     },
+    {
+      key: "gemini-budget",
+      label: "Gemini 일일 예산",
+      value: `${geminiBudget.used}/${geminiBudget.budget}회`,
+      detail: `KST 00시 초기화 · ${geminiBudget.remaining}회 남음`,
+      status: geminiBudget.status,
+    },
+    {
+      key: "collector-health",
+      label: "수집원 7일 안정성",
+      value: collectorChecks > 0 ? `오류 ${collectorErrors} · 빈 응답 ${collectorEmpty}` : "진단 기록 없음",
+      detail: "RSS·YouTube·공공데이터·커리큘럼 진단 합계",
+      status: collectorStatus,
+    },
   ];
 
   const overallStatus: QualityStatus = checks.some((check) => check.status === "fail")
@@ -197,6 +258,11 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
   const daily = Array.from({ length: 14 }, (_, index) => {
     const day = kstDateKey(new Date(historyStart.getTime() + index * DAY_MS));
     return { day, count: dayCounts.get(day) ?? 0 };
+  });
+  const geminiDayCounts = new Map(geminiDailyRows.map((row) => [row.day, row.count]));
+  const geminiDaily = Array.from({ length: 14 }, (_, index) => {
+    const day = kstDateKey(new Date(historyStart.getTime() + index * DAY_MS));
+    return { day, count: geminiDayCounts.get(day) ?? 0 };
   });
   const todayCountMap = new Map(todayCategories.map(({ category, count }) => [category, count]));
   const publishingTargets = Object.entries(DAILY_PUBLISHING_TARGETS).map(([category, target]) => {
@@ -230,6 +296,16 @@ export async function getQualityDashboard(db: AppDb, now = new Date()) {
       preferenceUsers: preferenceUserRows[0]?.count ?? 0,
       savedItems: savedItemRows[0]?.count ?? 0,
       completedDailySessions: completedSessionRows.length,
+    },
+    operations: {
+      gemini: {
+        ...geminiBudget,
+        ingestion: geminiPurposeCounts.get("ingestion") ?? 0,
+        chat: geminiPurposeCounts.get("chat") ?? 0,
+        daily: geminiDaily,
+      },
+      collectorHealth,
+      collectorWindowDays: 7,
     },
     latestDiagnostics: (latestRun?.collectorDiagnostics ?? []) as IngestionCollectorDiagnostic[],
     checkedAt: now,

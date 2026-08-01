@@ -21,13 +21,14 @@
 - D1 기반 익명 챗 사용량 제한: IP와 User-Agent의 SHA-256 해시 기준 시간당 8회
 - Cloudflare에서 실제 응답이 검증된 금융위원회 공식 RSS의 분야 균형 선별, YouTube 8개 주제별 후보 3개 메타데이터, data.go.kr, 위키백과 원문 기반 AI 상식 수집 Cron
 - D1 `ingestion_runs`에 회차별 생성·중복·지연·실패와 RSS·YouTube·공공 API별 후보 수·오류를 남기는 수집 진단 로그
+- 운영자 대시보드에서 최근 14일 Gemini 요청량·용도별 사용량·KST 일일 예산과 최근 7일 수집원별 성공·빈 응답·오류율 확인
 - 12개 분야의 일일 최소 1개를 우선하고 주거 6개·서울살이 4개 등 상한을 적용하는 분야별 발행량 제어
 - 무작위 secret과 비공개 Service Binding으로 보호되는 운영자용 즉시 수집 API
 - 홈에서 날짜와 무관하게 최근 출처 확인형 AI 상식을 다시 발견하는 `CURATED DISCOVERY` 영역
 - 사회초년생 관련성 검사와 소스별 고정 카테고리로 일반 뉴스·오분류 차단
 - 공개·숨김 검수 상태로 품질이 낮거나 출처가 없는 콘텐츠를 모든 노출면에서 일괄 제외
 - 검수 대기 AI 상식 중 외부 자료로 재검증한 항목은 본문·카드·퀴즈를 다시 쓰고 SOURCE를 연결해 선별 복구
-- Gemini 호출 보호: 8초 배치 간격, 60초 슬라이딩 윈도우 12회 상한, 성공·실패를 합친 회차당 최대 12번 생성 시도, 일시적인 429·5xx 응답 1회 재시도
+- Gemini 호출 보호: 8초 배치 간격, 60초 슬라이딩 윈도우 12회와 KST 하루 400회 통합 상한, 성공·실패를 합친 회차당 최대 12번 생성 시도, 일시적인 429·5xx 응답 1회 재시도
 - Notion에서 관리하고 5분 D1 캐시로 동기화하는 공개 릴리즈 노트 (`/changelog`)
 
 각 AI 학습 섹션은 `summary`와 `details`로 구성됩니다. Quick Read는 `summary`만 사용하고 Deep Read는 같은 `summary`에 `details`를 이어 붙이므로, 카드에만 있고 본문에는 없는 정보가 저장되지 않습니다. 4번 카드는 확인 행동을 맡으며 상세 화면 아래에서 같은 내용을 다시 반복하지 않습니다.
@@ -43,7 +44,7 @@ Astro 7 + Cloudflare Workers Static Assets
 ├─ D1: 콘텐츠, 일일 학습, 관심 분야, 저장한 상식, 사용자 피드백, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
    ├─ Hono 수집 API와 KST 00/06/12/18시 통합 Cron
-   └─ Gemini 생성 및 근거형 챗 응답 (D1 공용 RPM 예산 적용)
+   └─ Gemini 생성 및 근거형 챗 응답 (D1 공용 RPM·KST 일일 예산 적용)
 ```
 
 설치된 오픈소스, 서비스 구성, 무료 티어 한도와 운영 기준은 [`docs/TECH_STACK_AND_FREE_TIER.md`](docs/TECH_STACK_AND_FREE_TIER.md)에 정리되어 있습니다.
@@ -105,7 +106,7 @@ npx wrangler deploy --dry-run
 npx wrangler deploy --dry-run --config workers/ingest/wrangler.jsonc
 ```
 
-Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 홈, 시작 코스, 상세, 5분 학습, 관심 분야, 저장한 상식, 내 학습 리포트, 피드백, 복습, 챗 흐름을 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
+Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 홈, 시작 코스, 상세, 5분 학습, 관심 분야, 저장한 상식, 내 학습 리포트, 피드백, 복습, 챗과 운영 대시보드 흐름을 순차 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
 
 ## 배포 순서
 
@@ -122,6 +123,6 @@ Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱�
 
 - better-auth 세션과 브라우저별 익명 학습 이력의 계정 귀속
 - 공공데이터 지역 개인화와 기기 간 관심 분야 동기화
-- 수집 소스별 오류율·중복률과 무료 티어 추세 모니터링
-- Gemini 서비스 전체 일일 예산과 관리자 사용량 화면
+- 수집 소스별 중복률과 Cloudflare·YouTube 무료 티어 사용량 추세 모니터링
 - 챗 사용량을 로그인 사용자 정책과 연결
+- 개인정보 처리방침·이용약관과 배포 CI smoke test

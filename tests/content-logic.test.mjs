@@ -9,6 +9,12 @@ import {
   normalizePreferenceCategories,
 } from "../src/lib/personalization-logic.ts";
 import {
+  geminiBudgetStatus,
+  kstDayWindowMs,
+  normalizeGeminiDailyBudget,
+  summarizeCollectorHealth,
+} from "../src/lib/operations.ts";
+import {
   hasDailyPublishingCapacity,
   prioritizeByDailyPublishingTargets,
 } from "../src/lib/publishing-policy.ts";
@@ -362,8 +368,54 @@ test("only verified legacy AI articles are restored with complete learning conte
 test("Gemini safeguards leave quota headroom and pace ingestion", () => {
   assert.equal(normalizeGeminiRpmBudget(Number.NaN), 12);
   assert.equal(normalizeGeminiRpmBudget(15), 14);
+  assert.equal(normalizeGeminiDailyBudget(Number.NaN), 400);
+  assert.equal(normalizeGeminiDailyBudget(1), 20);
+  assert.equal(normalizeGeminiDailyBudget(10_000), 5_000);
   assert.equal(ingestionPacingDelayMs(1_000, 8_000, 4_000), 5_000);
   assert.equal(ingestionPacingDelayMs(1_000, 8_000, 10_000), 0);
+});
+
+test("Gemini daily budget resets at KST midnight and reports risk levels", () => {
+  const beforeMidnight = kstDayWindowMs(new Date("2026-07-31T14:59:00Z"));
+  const afterMidnight = kstDayWindowMs(new Date("2026-07-31T15:00:00Z"));
+
+  assert.equal(new Date(beforeMidnight.start).toISOString(), "2026-07-30T15:00:00.000Z");
+  assert.equal(new Date(beforeMidnight.end).toISOString(), "2026-07-31T15:00:00.000Z");
+  assert.equal(new Date(afterMidnight.start).toISOString(), "2026-07-31T15:00:00.000Z");
+  assert.equal(geminiBudgetStatus(260, 400).status, "pass");
+  assert.equal(geminiBudgetStatus(300, 400).status, "warning");
+  assert.equal(geminiBudgetStatus(360, 400).status, "fail");
+  assert.equal(geminiBudgetStatus(420, 400).remaining, 0);
+});
+
+test("collector health groups seven-day diagnostics by source family", () => {
+  const health = summarizeCollectorHealth([
+    {
+      collectorDiagnostics: [
+        { source: "rss:policy", status: "success", candidateCount: 8 },
+        { source: "rss:finance", status: "empty", candidateCount: 0 },
+        { source: "youtube:career", status: "error", candidateCount: 0 },
+        { source: "gov:apartment", status: "success", candidateCount: 12 },
+        { source: "curriculum:finance", status: "success", candidateCount: 3 },
+      ],
+    },
+    { collectorDiagnostics: [{ source: "youtube:housing", status: "success", candidateCount: 4 }] },
+  ]);
+
+  assert.deepEqual(health.find(({ family }) => family === "rss"), {
+    family: "rss",
+    checks: 2,
+    candidates: 8,
+    success: 1,
+    empty: 1,
+    error: 0,
+    errorRate: 0,
+    status: "warning",
+  });
+  assert.equal(health.find(({ family }) => family === "youtube")?.errorRate, 50);
+  assert.equal(health.find(({ family }) => family === "youtube")?.status, "fail");
+  assert.equal(health.find(({ family }) => family === "public_data")?.candidates, 12);
+  assert.equal(health.length, 4);
 });
 
 test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", () => {

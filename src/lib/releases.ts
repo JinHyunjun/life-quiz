@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-07-31T06:00:00.000Z",
+  fetchedAt: "2026-08-01T06:00:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.16",
+      title: "AI 예산과 수집원 건강 상태",
+      date: "2026-08-01",
+      changes: [
+        { type: "bullet", text: "Gemini 3.1 Flash Lite의 콘텐츠 생성과 라이프 메이트 호출을 합산해 KST 하루 400회에서 외부 요청 전에 차단하는 서비스 전체 예산 추가" },
+        { type: "bullet", text: "운영 대시보드에 오늘 사용량·남은 요청·용도별 호출 수와 최근 14일 Gemini 요청량 차트 추가" },
+        { type: "bullet", text: "Gemini 요청 로그 보관 기간을 24시간에서 14일로 늘려 일별 사용 추세를 비교할 수 있도록 개선" },
+        { type: "bullet", text: "최근 7일 수집 진단을 RSS·YouTube·공공데이터·커리큘럼으로 묶고 성공·빈 응답·오류율을 한 화면에서 확인" },
+        { type: "bullet", text: "오류가 없어도 후보가 반복해서 비는 수집 경로는 주의 상태로 표시해 YouTube 등의 조용한 수집 중단을 조기에 발견" },
+        { type: "bullet", text: "새 DB 테이블이나 Cron 없이 기존 로그를 재사용하고 로직 30건·데스크톱/모바일 E2E 22건으로 검증" },
+      ],
+    },
     {
       version: "v0.15",
       title: "관심 분야와 내 학습 리포트",

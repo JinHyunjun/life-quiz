@@ -181,10 +181,20 @@ test("article feedback records a helpful response", async ({ page }) => {
   await expect(page.locator("#feedback-status")).toContainText("고마워요");
 });
 
-test("operations dashboard requires an administrator session", async ({ page }) => {
+test("operations dashboard requires a session and renders AI and collector health", async ({ page }) => {
   await page.goto("/admin");
 
   await expect(page).toHaveURL(/\/admin\/login\?returnTo=/);
   await expect(page.getByRole("heading", { level: 1, name: "운영 품질 대시보드" })).toBeVisible();
-  await expect(page.getByLabel("운영 토큰")).toBeVisible();
+  await page.getByLabel("운영 토큰").fill("playwright-admin-token");
+  await page.getByRole("button", { name: "로그인" }).click();
+
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { level: 1, name: "품질 검증 대시보드" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "AI 예산과 수집원 안정성" })).toBeVisible();
+  await expect(page.getByText("Gemini 일일 요청 예산")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /최근 7일 수집원 건강 상태/ })).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
 });
