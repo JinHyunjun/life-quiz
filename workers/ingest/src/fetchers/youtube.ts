@@ -18,19 +18,18 @@ export async function searchRecentYoutubeVideos({
   query,
   apiKey,
   maxResults = 2,
-  publishedAfter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000),
+  publishedAfter = new Date(Date.now() - 180 * 24 * 60 * 60 * 1_000),
 }: YoutubeSearchOptions): Promise<YoutubeVideoMeta[]> {
   const url = new URL("https://www.googleapis.com/youtube/v3/search");
   url.searchParams.set("part", "snippet");
   url.searchParams.set("q", query);
   url.searchParams.set("type", "video");
   url.searchParams.set("order", "date");
-  url.searchParams.set("maxResults", String(Math.min(Math.max(Math.trunc(maxResults), 1), 10)));
+  url.searchParams.set("maxResults", String(Math.min(Math.max(Math.trunc(maxResults), 1), 20)));
   url.searchParams.set("publishedAfter", publishedAfter.toISOString());
   url.searchParams.set("regionCode", "KR");
   url.searchParams.set("relevanceLanguage", "ko");
-  url.searchParams.set("safeSearch", "strict");
-  url.searchParams.set("videoEmbeddable", "true");
+  url.searchParams.set("safeSearch", "moderate");
   url.searchParams.set("key", apiKey);
 
   const res = await fetch(url.toString());

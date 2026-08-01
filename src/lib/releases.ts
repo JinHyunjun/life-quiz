@@ -23,10 +23,24 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-01T06:00:00.000Z",
+  fetchedAt: "2026-08-01T06:10:11.794Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.17",
+      title: "주제 다양성 자동 복구",
+      date: "2026-08-01",
+      changes: [
+        { type: "bullet", text: "원격 D1과 수집 로그에서 오늘 발행이 주거·금융·투자 3/12개 분야에 그친 원인을 위키 조회 429, 순환 소스 영구 중복, YouTube 빈 응답으로 확인" },
+        { type: "bullet", text: "앞 시간대에 실패한 출처형 상식을 같은 날 다음 회차마다 다시 후보에 올리고, 이미 성공한 항목은 외부 조회와 Gemini 호출 전에 제외하는 자동 복구 추가" },
+        { type: "bullet", text: "위키백과 직접 경로가 모두 실패하면 Gemini URL Context의 조회 성공 메타데이터를 검증한 경우에만 생성하도록 복구 경로 강화" },
+        { type: "bullet", text: "20일·32일 커리큘럼 재등장 시 학습판별 중복 키와 네 가지 편집 관점을 적용해 같은 출처를 그대로 반복하던 문제 해결" },
+        { type: "bullet", text: "부동산 비교는 전월세·매매를 회차마다 교대해 한 번에 한 건만 만들고 주거 일일 상한을 6개에서 4개로 조정" },
+        { type: "bullet", text: "YouTube 검색 범위를 최근 180일·후보 5개로 넓히고 운영 대시보드에 누락 분야명과 지금 수집·검증 버튼 추가" },
+        { type: "bullet", text: "타입체크·프로덕션 빌드·로직 32건과 데스크톱/모바일 E2E 22건으로 검증" },
+      ],
+    },
     {
       version: "v0.16",
       title: "AI 예산과 수집원 건강 상태",

@@ -13,6 +13,7 @@ import {
   type IngestionCollectorDiagnostic,
 } from "../db/schema";
 import { kstDateKey, todayKstRange } from "./dates";
+import { CATEGORY_LABELS } from "./categories";
 import {
   DEFAULT_GEMINI_DAILY_BUDGET,
   geminiBudgetStatus,
@@ -194,6 +195,10 @@ export async function getQualityDashboard(db: AppDb, now = new Date(), dailyGemi
     : collectorHealth.some(({ status }) => status === "warning")
       ? "warning"
       : "pass";
+  const publishedCategories = new Set(todayCategories.map(({ category }) => category));
+  const missingCategories = (Object.keys(DAILY_PUBLISHING_TARGETS) as Array<keyof typeof DAILY_PUBLISHING_TARGETS>)
+    .filter((category) => !publishedCategories.has(category))
+    .map((category) => CATEGORY_LABELS[category]);
 
   const checks: QualityCheck[] = [
     {
@@ -207,7 +212,9 @@ export async function getQualityDashboard(db: AppDb, now = new Date(), dailyGemi
       key: "topic-breadth",
       label: "오늘 주제 다양성",
       value: `${todayCategories.length}/12개 분야`,
-      detail: "8개 이상 분야가 있으면 정상",
+      detail: missingCategories.length > 0
+        ? `미발행: ${missingCategories.join(" · ")}`
+        : "12개 분야가 모두 발행되었습니다.",
       status: minimumStatus(todayCategories.length, 8, 5),
     },
     ratioCheck("citation", "원문 출처 연결", content.cited, content.total, 90, 80),

@@ -27,6 +27,10 @@ export function kstSixHourSlot(now = new Date()) {
   return Math.floor(kstHour / 6);
 }
 
+export function apartmentBriefKindForKstRun(now = new Date()): "rent" | "sale" {
+  return kstSixHourSlot(now) % 2 === 0 ? "rent" : "sale";
+}
+
 export function scheduledAiCurriculumForKstRun(now = new Date()) {
   const slot = kstSixHourSlot(now);
   const glossaryTopics = glossaryTopicsForKstDay(now);
@@ -41,13 +45,14 @@ export function scheduledAiCurriculumForKstRun(now = new Date()) {
 export function scheduledAiCurriculumBatchForKstRun(now = new Date()) {
   const slot = kstSixHourSlot(now);
   const glossaryTopics = glossaryTopicsForKstDay(now);
-  const triviaOffset = slot * 2;
 
   return {
     // Keep each Worker invocation comfortably below the free-plan external
     // subrequest limit while still covering the full curriculum every day.
     glossary: glossaryTopics[slot] ? [glossaryTopics[slot]] : [],
-    trivia: TRIVIA_CATEGORIES.slice(triviaOffset, triviaOffset + 2).map((category) =>
+    // Re-include earlier slots so a transient source or Gemini failure can recover
+    // later the same day. Successfully published editions are skipped before fetch.
+    trivia: TRIVIA_CATEGORIES.slice(0, (slot + 1) * 2).map((category) =>
       triviaSourceForKstDay(category, now),
     ),
   };

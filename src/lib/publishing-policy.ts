@@ -8,7 +8,7 @@ export interface DailyPublishingTarget {
 export const DAILY_PUBLISHING_TARGETS: Record<Category, DailyPublishingTarget> = {
   finance: { minimum: 1, maximum: 4 },
   investment: { minimum: 1, maximum: 4 },
-  housing: { minimum: 1, maximum: 6 },
+  housing: { minimum: 1, maximum: 4 },
   seoul_life: { minimum: 1, maximum: 4 },
   career: { minimum: 1, maximum: 3 },
   rights: { minimum: 1, maximum: 3 },

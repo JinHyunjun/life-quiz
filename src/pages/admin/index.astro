@@ -308,8 +308,14 @@ function statusLabel(status: QualityStatus) {
           <p class="eyebrow">INGESTION HISTORY</p>
           <h2 id="runs-title">수집·검증 실행 이력</h2>
         </div>
-        <span class="section-note"><CalendarClock size={14} /> KST 00·06·12·18시</span>
+        <div class="run-actions">
+          <span class="section-note"><CalendarClock size={14} /> KST 00·06·12·18시</span>
+          <button class="button button-secondary run-ingestion-button" id="run-ingestion" type="button">
+            <RefreshCw size={16} /> 지금 수집·검증
+          </button>
+        </div>
       </div>
+      <p class="ingestion-action-status" id="ingestion-action-status" aria-live="polite"></p>
       <div class="table-scroll">
         <table>
           <thead>
@@ -605,6 +611,11 @@ function statusLabel(status: QualityStatus) {
   .adoption-metrics dd small { margin-left: 4px; color: var(--muted); font-size: 0.68rem; font-weight: 650; }
 
   .table-scroll { overflow-x: auto; }
+  .run-actions { display: flex; align-items: center; justify-content: end; gap: 10px; }
+  .run-ingestion-button { min-height: 38px; padding: 8px 11px; font-size: 0.72rem; }
+  .run-ingestion-button[disabled] svg { animation: spin 1s linear infinite; }
+  .ingestion-action-status { min-height: 18px; margin: -6px 0 8px; color: var(--muted); font-size: 0.72rem; text-align: right; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
   th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
   th:first-child, td:first-child { text-align: left; }
@@ -645,6 +656,10 @@ function statusLabel(status: QualityStatus) {
     .compact-heading { align-items: start; }
     .diagnostic-counts { justify-content: start; }
     .feedback-metrics { justify-content: start; }
+    .run-actions { width: 100%; align-items: stretch; flex-direction: column; }
+    .run-actions .section-note { justify-content: start; }
+    .run-ingestion-button { width: 100%; }
+    .ingestion-action-status { text-align: left; }
     .feedback-queue li { grid-template-columns: 8px minmax(0, 1fr); }
     .feedback-actions { grid-column: 2; }
     .adoption-metrics { grid-template-columns: 1fr; }
@@ -658,6 +673,24 @@ function statusLabel(status: QualityStatus) {
   const feedbackActionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-feedback-action]"));
   const actionStatus = document.querySelector<HTMLElement>("#admin-action-status");
   const openCount = document.querySelector<HTMLElement>("#open-feedback-count");
+  const runIngestionButton = document.querySelector<HTMLButtonElement>("#run-ingestion");
+  const ingestionActionStatus = document.querySelector<HTMLElement>("#ingestion-action-status");
+
+  runIngestionButton?.addEventListener("click", async () => {
+    runIngestionButton.disabled = true;
+    if (ingestionActionStatus) ingestionActionStatus.textContent = "누락 분야를 포함해 수집·검증을 실행하고 있습니다. 최대 2분 정도 걸릴 수 있습니다.";
+
+    try {
+      const response = await fetch("/api/admin/ingest", { method: "POST", headers: { accept: "application/json" } });
+      const result = await response.json() as { created?: unknown[]; failed?: unknown[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "수집을 실행하지 못했습니다.");
+      if (ingestionActionStatus) ingestionActionStatus.textContent = `생성 ${result.created?.length ?? 0}개 · 실패 ${result.failed?.length ?? 0}건. 최신 결과를 불러옵니다.`;
+      window.setTimeout(() => window.location.reload(), 900);
+    } catch (error) {
+      runIngestionButton.disabled = false;
+      if (ingestionActionStatus) ingestionActionStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+    }
+  });
 
   feedbackActionButtons.forEach((button) => {
     button.addEventListener("click", async () => {

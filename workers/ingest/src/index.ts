@@ -35,6 +35,7 @@ import {
   type GeminiRequestPurpose,
 } from "./rate-limit";
 import {
+  apartmentBriefKindForKstRun,
   hasIngestionAttemptBudget,
   ingestionPacingDelayMs,
   normalizeIngestionIntervalMs,
@@ -101,7 +102,7 @@ const CATEGORY_ORDER: readonly BalancedContentCategory[] = [
 const DEFAULT_MAX_INGEST_ITEMS = 12;
 const MAX_NEWS_ITEMS_PER_RUN = 6;
 const MAX_NEWS_ITEMS_PER_CATEGORY = 2;
-const MAX_YOUTUBE_RESULTS_PER_TOPIC = 3;
+const MAX_YOUTUBE_RESULTS_PER_TOPIC = 5;
 const MAX_DISTRICTS_PER_BRIEF = 4;
 
 interface CollectionResult {
@@ -326,10 +327,11 @@ async function collectPendingItems(env: Env): Promise<CollectionResult> {
     }
   }
 
-  const aptJobs: { kind: "rent" | "sale"; key: string; label: string }[] = [
+  const allAptJobs: { kind: "rent" | "sale"; key: string; label: string }[] = [
     { kind: "rent", key: env.DATA_GO_KR_KEY_APT_RENT, label: "국토교통부 아파트 전월세 실거래가" },
     { kind: "sale", key: env.DATA_GO_KR_KEY_APT_SALE, label: "국토교통부 아파트 매매 실거래가" },
   ];
+  const aptJobs = allAptJobs.filter(({ kind }) => kind === apartmentBriefKindForKstRun(now));
   const districts = seoulDistrictsForKstRun(now, MAX_DISTRICTS_PER_BRIEF);
   const dealYmd = previousYearMonth(now);
 
@@ -638,13 +640,30 @@ async function ingestTriviaItem(
   item: Extract<PendingItem, { kind: "trivia" }>,
   beforeRequest: BeforeGeminiRequest,
 ) {
-  const sourceMaterial = await fetchWikipediaSummary(item);
+  const avoidTitles = await recentTitlesForCategory(db, item.category);
+  let sourceMaterial: Awaited<ReturnType<typeof fetchWikipediaSummary>> | null = null;
+  try {
+    sourceMaterial = await fetchWikipediaSummary(item);
+  } catch (error) {
+    console.warn(JSON.stringify({
+      message: "Wikipedia fetch failed; trying verified Gemini URL Context",
+      category: item.category,
+      wikipediaTitle: item.wikipediaTitle,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  const citationLabel = sourceMaterial?.citationLabel ?? `위키백과 '${item.wikipediaTitle}' · CC BY-SA`;
+  const citationUrl = sourceMaterial?.url ?? item.sourceUrl;
   const generated = await generateTrivia({
     category: item.category,
     topic: item.topic,
-    sourceText: sourceMaterial.extract,
-    citationLabel: sourceMaterial.citationLabel,
-    sourceUrl: sourceMaterial.url,
+    sourceText: sourceMaterial?.extract ?? "",
+    citationLabel,
+    sourceUrl: citationUrl,
+    useUrlContext: sourceMaterial === null,
+    editorialFocus: item.editorialFocus,
+    avoidTitles,
     apiKey: env.GEMINI_API_KEY,
     model: env.GEMINI_MODEL,
     beforeRequest,
@@ -652,7 +671,7 @@ async function ingestTriviaItem(
 
   const [source] = await db
     .insert(schema.sources)
-    .values({ originType: "ai_trivia", url: item.sourceUrl, lastFetchedAt: new Date() })
+    .values({ originType: "ai_trivia", url: item.dedupeKey, lastFetchedAt: new Date() })
     .returning();
 
   return insertContentAndQuiz(db, {
@@ -662,8 +681,8 @@ async function ingestTriviaItem(
     cards: generated.cards,
     contentFormat: "article",
     category: item.category,
-    citationUrl: sourceMaterial.url,
-    citationLabel: sourceMaterial.citationLabel,
+    citationUrl,
+    citationLabel,
     question: generated.question,
     choices: generated.choices,
     answer: generated.answer,
@@ -811,7 +830,7 @@ async function loadTodayPublishingCounts(db: AppDb): Promise<DailyPublishingCoun
 }
 
 function pendingItemKey(item: PendingItem) {
-  if (item.kind === "trivia") return item.sourceUrl;
+  if (item.kind === "trivia") return item.dedupeKey;
   if (item.kind === "sourced") return item.dedupeKey;
   return item.url;
 }

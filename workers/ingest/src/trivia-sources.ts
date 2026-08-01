@@ -6,6 +6,9 @@ export interface TriviaSourceTopic {
   topic: string;
   wikipediaTitle: string;
   sourceUrl: string;
+  dedupeKey: string;
+  edition: number;
+  editorialFocus: string;
 }
 
 const CURRICULUM: Record<ScheduledTriviaCategory, readonly { topic: string; wikipediaTitle: string }[]> = {
@@ -240,6 +243,13 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 const CURRICULUM_START_DAY = Math.floor(Date.UTC(2026, 5, 29) / DAY_MS);
 const MIN_TRIVIA_EXTRACT_LENGTH = 70;
 
+const EDITORIAL_FOCUSES = [
+  "핵심 원리와 배경을 처음 배우는 사람의 눈높이에서 설명하세요.",
+  "초보자가 흔히 하는 오해를 바로잡고 실제 생활이나 직장에서 마주칠 상황을 중심으로 설명하세요.",
+  "알아둔 내용을 행동으로 옮길 수 있도록 비교 기준과 확인 체크리스트를 중심으로 설명하세요.",
+  "다른 사람에게 다시 설명할 수 있도록 원인과 결과를 연결하고 기억할 한 문장을 제시하세요.",
+] as const;
+
 const WIKIPEDIA_HEADERS = {
   accept: "application/json",
   "api-user-agent": "LifeQuiz/0.7 (https://github.com/JinHyunjun/life-quiz)",
@@ -248,11 +258,17 @@ const WIKIPEDIA_HEADERS = {
 export function triviaSourceForKstDay(category: ScheduledTriviaCategory, now = new Date()): TriviaSourceTopic {
   const dayNumber = Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS);
   const curriculumDay = Math.max(0, dayNumber - CURRICULUM_START_DAY);
-  const source = CURRICULUM[category][curriculumDay % CURRICULUM[category].length];
+  const curriculum = CURRICULUM[category];
+  const edition = Math.floor(curriculumDay / curriculum.length);
+  const source = curriculum[curriculumDay % curriculum.length];
+  const sourceUrl = wikipediaPageUrl(source.wikipediaTitle);
   return {
     category,
     ...source,
-    sourceUrl: wikipediaPageUrl(source.wikipediaTitle),
+    sourceUrl,
+    dedupeKey: edition === 0 ? sourceUrl : `${sourceUrl}#life-quiz-edition=${edition}`,
+    edition,
+    editorialFocus: EDITORIAL_FOCUSES[edition % EDITORIAL_FOCUSES.length],
   };
 }
 
@@ -284,15 +300,7 @@ export async function fetchWikipediaSummary(topic: TriviaSourceTopic) {
     // Try the alternate endpoints below.
   }
 
-  try {
-    return await fetchWikipediaIntro(topic);
-  } catch {
-    try {
-      return await fetchWikimediaPageSource(topic);
-    } catch {
-      return fetchWikipediaReaderFallback(topic);
-    }
-  }
+  return fetchWikimediaPageSource(topic);
 }
 
 export function isUsableWikipediaExtract(extract: string) {
@@ -327,24 +335,6 @@ async function fetchWikipediaIntro(topic: TriviaSourceTopic) {
   return wikipediaSource(topic, page.title?.trim() || topic.wikipediaTitle, extract, page.fullurl);
 }
 
-async function fetchWikipediaReaderFallback(topic: TriviaSourceTopic) {
-  const readerUrl = `https://r.jina.ai/http://ko.wikipedia.org/wiki/${encodeURIComponent(topic.wikipediaTitle.replace(/ /g, "_"))}`;
-  const response = await fetch(readerUrl, {
-    headers: {
-      accept: "text/plain",
-      "x-return-format": "markdown",
-    },
-  });
-  if (!response.ok) throw new Error(`Wikipedia reader fallback failed: ${response.status} ${topic.wikipediaTitle}`);
-
-  const markdown = await readTextLimited(response, 18_000);
-  const extract = normalizeReaderExtract(markdown).slice(0, 7_000);
-  if (!isUsableWikipediaExtract(extract)) {
-    throw new Error(`Wikipedia reader fallback had too little source text: ${topic.wikipediaTitle}`);
-  }
-  return wikipediaSource(topic, topic.wikipediaTitle, extract, topic.sourceUrl);
-}
-
 async function fetchWikimediaPageSource(topic: TriviaSourceTopic) {
   const url = `https://api.wikimedia.org/core/v1/wikipedia/ko/page/${encodeURIComponent(topic.wikipediaTitle.replace(/ /g, "_"))}`;
   const response = await fetch(url, { headers: WIKIPEDIA_HEADERS });
@@ -370,17 +360,6 @@ function wikipediaSource(topic: TriviaSourceTopic, title: string, extract: strin
 
 function normalizeExtract(value: string | undefined) {
   return value?.replace(/\s+/g, " ").trim() ?? "";
-}
-
-function normalizeReaderExtract(value: string) {
-  return value
-    .replace(/^.*?Markdown Content:\s*/s, "")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\[\[?\d+\]?\]/g, " ")
-    .replace(/[*#>`_|~-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 export function normalizeWikitextLead(value: string | undefined) {

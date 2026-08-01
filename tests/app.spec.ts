@@ -194,6 +194,7 @@ test("operations dashboard requires a session and renders AI and collector healt
   await expect(page.getByRole("heading", { name: "AI 예산과 수집원 안정성" })).toBeVisible();
   await expect(page.getByText("Gemini 일일 요청 예산")).toBeVisible();
   await expect(page.getByRole("heading", { name: /최근 7일 수집원 건강 상태/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "지금 수집·검증" })).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);

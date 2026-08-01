@@ -28,6 +28,7 @@ import { hasSuccessfulUrlContext } from "../workers/ingest/src/gemini-url-contex
 import { contentFingerprint } from "../workers/ingest/src/fingerprint.ts";
 import { isUsableWikipediaExtract, normalizeWikitextLead, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
+  apartmentBriefKindForKstRun,
   hasIngestionAttemptBudget,
   ingestionPacingDelayMs,
   scheduledAiCurriculumBatchForKstRun,
@@ -191,8 +192,18 @@ test("daily publishing policy prioritizes missing fields and enforces category c
     prioritizeByDailyPublishingTargets(candidates, counts).map(({ id }) => id),
     ["career", "health", "finance", "housing"],
   );
-  assert.equal(hasDailyPublishingCapacity("housing", counts), true);
-  assert.equal(hasDailyPublishingCapacity("housing", { ...counts, housing: 6 }), false);
+  assert.equal(hasDailyPublishingCapacity("housing", { ...counts, housing: 3 }), true);
+  assert.equal(hasDailyPublishingCapacity("housing", { ...counts, housing: 4 }), false);
+});
+
+test("apartment brief alternates rent and sale once per six-hour run", () => {
+  const firstRun = new Date("2026-06-26T15:00:00Z");
+  assert.deepEqual(
+    Array.from({ length: 4 }, (_, index) =>
+      apartmentBriefKindForKstRun(new Date(firstRun.getTime() + index * 6 * 60 * 60 * 1_000)),
+    ),
+    ["rent", "sale", "rent", "sale"],
+  );
 });
 
 test("district briefing compares four distinct districts per run", () => {
@@ -212,11 +223,15 @@ test("daily AI curriculum batch covers all core categories across four runs", ()
     ["finance", "housing", "investment"],
   );
   assert.deepEqual(
-    schedules.flatMap((schedule) => schedule.trivia.map((topic) => topic.category)).sort(),
+    [...new Set(schedules.flatMap((schedule) => schedule.trivia.map((topic) => topic.category)))].sort(),
     ["career", "daily_tips", "digital_safety", "health", "history", "humor", "rights", "social_skills"],
   );
   assert.ok(schedules.every((schedule) => schedule.glossary.length <= 1));
-  assert.ok(schedules.every((schedule) => schedule.trivia.length === 2));
+  assert.deepEqual(schedules.map((schedule) => schedule.trivia.length), [2, 4, 6, 8]);
+  assert.deepEqual(
+    schedules[3].trivia.map((topic) => topic.category),
+    ["history", "humor", "social_skills", "daily_tips", "career", "rights", "digital_safety", "health"],
+  );
 });
 
 test("only transient Gemini HTTP failures are retried", () => {
@@ -263,6 +278,18 @@ test("new practical curricula cover four additional subjects without early repet
     );
     assert.equal(urls.size, 20, `${category} repeated before 20 days`);
   }
+});
+
+test("repeated trivia sources get a new edition key and learning angle", () => {
+  const firstDay = new Date("2026-06-28T15:00:00Z");
+  const first = triviaSourceForKstDay("career", firstDay);
+  const nextEdition = triviaSourceForKstDay("career", new Date(firstDay.getTime() + 20 * 24 * 60 * 60 * 1_000));
+
+  assert.equal(first.sourceUrl, nextEdition.sourceUrl);
+  assert.notEqual(first.dedupeKey, nextEdition.dedupeKey);
+  assert.notEqual(first.editorialFocus, nextEdition.editorialFocus);
+  assert.equal(first.edition, 0);
+  assert.equal(nextEdition.edition, 1);
 });
 
 test("public-data snapshots deduplicate identical responses but allow changed data", async () => {

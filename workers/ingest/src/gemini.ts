@@ -349,6 +349,8 @@ export async function generateTrivia(params: {
   citationLabel: string;
   sourceUrl?: string;
   useUrlContext?: boolean;
+  editorialFocus: string;
+  avoidTitles: string[];
   apiKey: string;
   model: string;
   beforeRequest: BeforeGeminiRequest;
@@ -357,6 +359,7 @@ export async function generateTrivia(params: {
     "당신은 사회초년생을 위한 생활상식 큐레이션 서비스의 에디터입니다.",
     TRIVIA_PROMPTS[params.category],
     `오늘 다룰 주제는 '${params.topic}'입니다. 다른 주제로 바꾸지 마세요.`,
+    `이번 학습 관점: ${params.editorialFocus}`,
     params.useUrlContext
       ? "URL Context 도구로 아래 참고 URL을 직접 읽고, 그 문서에서 확인한 사실만 사용하세요. URL 조회가 되지 않으면 내용을 만들지 마세요."
       : "아래 참고 문서에 적힌 사실만 사용하세요. 참고 문서에 없는 수치, 일화, 원인, 행동 요령은 추측하거나 보태지 마세요.",
@@ -365,6 +368,7 @@ export async function generateTrivia(params: {
     "학습 섹션은 정확히 4개로 구성하세요. 배경 → 핵심 원리 → 실제 사례 → 기억할 행동 순서이며, 같은 사실이나 조언을 표현만 바꿔 반복하지 마세요.",
     "각 section의 summary는 Quick Read에 그대로 노출됩니다. details는 summary를 반복하지 말고 근거·맥락·예외·실천 방법을 3~5문장으로 더 깊게 설명하세요.",
     "Deep Read는 summary와 details를 합쳐 만들므로 Quick Read의 모든 정보가 반드시 Deep Read 안에 포함되어야 합니다.",
+    params.avoidTitles.length > 0 ? `최근 콘텐츠와 제목이나 설명 구성을 반복하지 마세요: ${params.avoidTitles.join(", ")}` : "",
     `출처: ${params.citationLabel}`,
     params.useUrlContext ? "참고 URL:" : "참고 문서:",
     params.useUrlContext ? params.sourceUrl ?? "" : params.sourceText,
