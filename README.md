@@ -49,6 +49,16 @@ Astro 7 + Cloudflare Workers Static Assets
 
 설치된 오픈소스, 서비스 구성, 무료 티어 한도와 운영 기준은 [`docs/TECH_STACK_AND_FREE_TIER.md`](docs/TECH_STACK_AND_FREE_TIER.md)에 정리되어 있습니다.
 
+## PM 포트폴리오
+
+서비스 기능 소개와 별도로 문제 정의, 가설, 우선순위, 핵심 PRD, 출시 판단, 실제 결과와 미검증 항목을 정리한 지원용 문서를 제공합니다.
+
+- [PM 사례 원고](docs/portfolio/LIFE_QUIZ_PM_CASE_STUDY.md)
+- [잡코리아 가이드 대조 분석](docs/portfolio/JOBKOREA_PORTFOLIO_GAP_ANALYSIS.md)
+- [수치·근거 관리대장](docs/portfolio/LIFE_QUIZ_EVIDENCE_LEDGER.md)
+- [제출용 10쪽 PDF](output/pdf/Life_Quiz_PM_Portfolio_2026-08.pdf)
+- [1쪽 의사결정 맵](output/pdf/Life_Quiz_Decision_Map_2026-08.pdf)
+
 Gemini 키는 `life-quiz-ingest` Worker에만 저장합니다. 앱 Worker는 공개 URL 대신 Cloudflare Service Binding으로 수집 Worker를 호출합니다.
 
 ## 처음 보는 사람을 위한 기술 스택

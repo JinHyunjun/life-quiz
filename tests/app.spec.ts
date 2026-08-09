@@ -1,5 +1,29 @@
 import { expect, test } from "@playwright/test";
 
+test("global navigation adapts from sidebar to the compact mobile menu", async ({ page }) => {
+  await page.goto("/");
+
+  const viewportWidth = page.viewportSize()?.width ?? 1440;
+  const sidebar = page.locator(".site-sidebar");
+  const mobileHeader = page.locator(".mobile-header");
+
+  if (viewportWidth > 900) {
+    await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "5분 학습 시작" })).toBeVisible();
+    await expect(mobileHeader).toBeHidden();
+  } else {
+    await expect(sidebar).toBeHidden();
+    await expect(mobileHeader).toBeVisible();
+    await page.getByRole("button", { name: "전체 메뉴 열기" }).click();
+    await expect(page.getByRole("dialog", { name: "전체 메뉴" })).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("link", { name: /시작 코스/ })).toBeVisible();
+    await page.getByRole("button", { name: "전체 메뉴 닫기" }).click();
+  }
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test("home feed renders without horizontal overflow", async ({ page }) => {
   await page.goto("/");
 

@@ -47,7 +47,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     <div class="hero-content shell">
       <p class="hero-kicker"><Sparkles size={16} /> 오늘의 생활력 한 칸</p>
       <h1 id="hero-title">사회초년생을 위한<br />생활 상식</h1>
-      <p>막막할 때 찾아보고, 궁금하면 바로 묻고, 잊을 때쯤 다시 만나요.</p>
+      <p>오늘 필요한 상식을 5분 안에 읽고 오래 기억하세요.</p>
       <div class="hero-actions">
         <a class="button button-primary" href="/daily">
           <RotateCcw size={17} /> 5분 학습 시작
@@ -80,10 +80,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
               <section class="topic-group" aria-labelledby={`group-${group.id}`}>
                 <header>
                   <span class="topic-group-icon" aria-hidden="true"><GroupIcon size={19} /></span>
-                  <span>
-                    <strong id={`group-${group.id}`}>{group.label}</strong>
-                    <small>{group.description}</small>
-                  </span>
+                  <strong id={`group-${group.id}`}>{group.label}</strong>
                 </header>
                 <div class="topic-links">
                   {group.categories.map((category) => (
@@ -91,9 +88,11 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
                       class:list={["topic-link", { active: activeCategory === category }]}
                       href={`/?category=${category}`}
                       aria-current={activeCategory === category ? "page" : undefined}
+                      aria-label={`${CATEGORY_LABELS[category]}: ${CATEGORY_DESCRIPTIONS[category]}, 오늘 ${todayCategoryCounts.get(category) ?? 0}개`}
+                      title={CATEGORY_DESCRIPTIONS[category]}
                     >
                       <span class="category-swatch" data-category={category}></span>
-                      <span><strong>{CATEGORY_LABELS[category]}</strong><small>{CATEGORY_DESCRIPTIONS[category]}</small></span>
+                      <strong>{CATEGORY_LABELS[category]}</strong>
                       <b>{todayCategoryCounts.get(category) ?? 0}</b>
                     </a>
                   ))}
@@ -192,8 +191,8 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
                     <a href={`/articles/${guide.id}`} data-category={guide.category}>
                       <span class="rail-icon"><PanelsTopLeft size={16} /></span>
                       <span class="rail-copy">
+                        <small>{categoryLabel(guide.category)} · 4컷 설명</small>
                         <strong>{guide.title}</strong>
-                        <small>{guide.cards?.[0]?.body ?? excerpt(guide.bodyMd, 60)}</small>
                       </span>
                     </a>
                   </li>
@@ -214,8 +213,8 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
                     <a href={`/articles/${item.id}`} data-category={item.category}>
                       <span class="rail-icon"><MapPinned size={16} /></span>
                       <span class="rail-copy">
+                        <small>서울 자치구</small>
                         <strong>{item.title}</strong>
-                        <small>{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 60)}</small>
                       </span>
                     </a>
                   </li>
@@ -234,10 +233,10 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
                 {aiDiscoveries.map((item) => (
                   <li>
                     <a href={`/articles/${item.id}`} data-category={item.category}>
-                      <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
+                      <span class="rail-icon"><Sparkles size={16} /></span>
                       <span class="rail-copy">
+                        <small>{categoryLabel(item.category)}</small>
                         <strong>{item.title}</strong>
-                        <small>{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 60)}</small>
                       </span>
                     </a>
                   </li>
@@ -269,7 +268,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 <style>
   .hero {
     position: relative;
-    min-height: 340px;
+    min-height: 248px;
     overflow: hidden;
     isolation: isolate;
     background: #eef2ef;
@@ -286,7 +285,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .hero-content {
-    min-height: 340px;
+    min-height: 248px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -297,7 +296,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: var(--green-deep);
     font-size: 0.82rem;
     font-weight: 800;
@@ -305,13 +304,13 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 
   .hero h1 {
     margin: 0;
-    font-size: clamp(2.2rem, 4.4vw, 3.8rem);
-    line-height: 1.07;
+    font-size: clamp(2rem, 3.6vw, 3.15rem);
+    line-height: 1.1;
   }
 
   .hero-content > p:not(.hero-kicker) {
     max-width: 470px;
-    margin: 16px 0 0;
+    margin: 10px 0 0;
     color: var(--muted-strong);
     font-size: 1rem;
   }
@@ -319,16 +318,16 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   .hero-actions {
     display: flex;
     gap: 10px;
-    margin-top: 24px;
+    margin-top: 18px;
   }
 
   .home-layout {
-    padding-top: 40px;
+    padding-top: 30px;
     padding-bottom: 12px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: minmax(0, 1fr) 300px;
     align-items: start;
-    gap: 32px;
+    gap: 24px;
   }
 
   .home-main {
@@ -337,7 +336,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 
   .home-sidebar {
     position: sticky;
-    top: 88px;
+    top: 20px;
     display: grid;
     gap: 16px;
   }
@@ -345,7 +344,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   .category-section,
   .featured-section,
   .feed-section {
-    margin-bottom: 40px;
+    margin-bottom: 32px;
   }
 
   .content-count {
@@ -356,21 +355,19 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 
   .topic-map {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1px;
-    overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--line);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .all-topics {
     grid-column: 1 / -1;
-    min-height: 48px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
     color: var(--ink);
     background: var(--paper);
     text-decoration: none;
@@ -393,50 +390,45 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 
   .topic-group {
     min-width: 0;
-    padding: 16px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
     background: var(--paper);
   }
 
   .topic-group > header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
+    gap: 8px;
+    margin-bottom: 9px;
   }
 
   .topic-group-icon {
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     display: grid;
     place-items: center;
-    flex: 0 0 36px;
+    flex: 0 0 30px;
     border-radius: var(--radius-sm);
     color: var(--green-deep);
     background: var(--green-soft);
   }
 
-  .topic-group > header > span:last-child {
-    min-width: 0;
-    display: grid;
-  }
-
-  .topic-group > header strong { font-size: 0.92rem; }
-  .topic-group > header small { color: var(--muted); font-size: 0.72rem; }
+  .topic-group > header strong { min-width: 0; font-size: 0.8rem; }
 
   .topic-links {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    gap: 3px;
   }
 
   .topic-link {
     min-width: 0;
-    min-height: 54px;
+    min-height: 34px;
     display: grid;
-    grid-template-columns: 8px minmax(0, 1fr) 24px;
+    grid-template-columns: 7px minmax(0, 1fr) 20px;
     align-items: center;
-    gap: 9px;
-    padding: 8px 10px;
+    gap: 7px;
+    padding: 5px 7px;
     border-radius: var(--radius-sm);
     color: var(--ink);
     background: var(--surface);
@@ -449,26 +441,20 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 25%, var(--line));
   }
 
-  .topic-link > span:nth-child(2) {
+  .topic-link strong {
     min-width: 0;
-    display: grid;
-  }
-
-  .topic-link strong,
-  .topic-link small {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .topic-link strong { font-size: 0.79rem; }
-  .topic-link small { color: var(--muted); font-size: 0.67rem; }
-  .topic-link b { color: var(--muted); font-size: 0.73rem; text-align: right; }
+  .topic-link strong { font-size: 0.74rem; }
+  .topic-link b { color: var(--muted); font-size: 0.68rem; text-align: right; }
 
   .featured-story {
-    min-height: 210px;
+    min-height: 178px;
     display: grid;
-    grid-template-columns: 100px minmax(0, 1fr) 46px;
+    grid-template-columns: 70px minmax(0, 1fr) 42px;
     align-items: stretch;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--green) 25%, var(--line));
@@ -484,13 +470,13 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     place-items: center;
     background: var(--green);
     color: white;
-    font-size: 2rem;
+    font-size: 1.45rem;
     font-weight: 850;
   }
 
   .featured-copy {
     align-self: center;
-    padding: 30px 34px;
+    padding: 24px 26px;
   }
 
   .featured-tags,
@@ -511,7 +497,11 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   .featured-copy p {
     max-width: 620px;
     margin: 0 0 16px;
+    display: -webkit-box;
+    overflow: hidden;
     color: var(--muted-strong);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .story-meta,
@@ -545,11 +535,11 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .content-card {
-    min-height: 220px;
+    min-height: 176px;
     height: 100%;
     display: flex;
     flex-direction: column;
-    padding: 20px;
+    padding: 16px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
@@ -579,9 +569,13 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .content-card h3 {
-    margin: 16px 0 9px;
+    display: -webkit-box;
+    margin: 12px 0 7px;
+    overflow: hidden;
     font-size: 1.02rem;
     line-height: 1.42;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .content-card > p {
@@ -591,7 +585,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     color: var(--muted-strong);
     font-size: 0.85rem;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
   }
 
   .card-footer {
@@ -627,14 +621,14 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .sidebar-card {
-    padding: 20px;
+    padding: 16px;
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--paper);
   }
 
   .sidebar-card-heading {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
 
   .sidebar-card-heading h2 {
@@ -643,8 +637,8 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .sidebar-group + .sidebar-group {
-    margin-top: 20px;
-    padding-top: 18px;
+    margin-top: 14px;
+    padding-top: 14px;
     border-top: 1px solid var(--line);
   }
 
@@ -718,25 +712,25 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   .rail-copy {
     min-width: 0;
     display: grid;
-    gap: 2px;
+    gap: 1px;
   }
 
   .rail-copy strong {
+    display: -webkit-box;
     overflow: hidden;
     font-size: 0.83rem;
     line-height: 1.35;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 
   .rail-copy small {
-    display: -webkit-box;
     overflow: hidden;
     color: var(--muted);
     font-size: 0.72rem;
-    line-height: 1.4;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .archive-card {
@@ -799,8 +793,12 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 
   @media (max-width: 1080px) {
     .home-layout {
-      grid-template-columns: minmax(0, 1fr) 300px;
+      grid-template-columns: minmax(0, 1fr) 280px;
       gap: 24px;
+    }
+
+    .topic-map {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
 
@@ -832,17 +830,13 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
       padding: 15px;
     }
 
-    .topic-links {
-      grid-template-columns: 1fr;
-    }
-
     .topic-link {
-      min-height: 50px;
+      min-height: 36px;
     }
 
     .hero,
     .hero-content {
-      min-height: 400px;
+      min-height: 320px;
     }
 
     .hero-image {
@@ -851,7 +845,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     }
 
     .hero h1 {
-      font-size: 2.2rem;
+      font-size: 2rem;
     }
 
     .hero-content > p:not(.hero-kicker) {
@@ -865,7 +859,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     }
 
     .home-layout {
-      padding-top: 30px;
+      padding-top: 24px;
     }
 
     .home-sidebar {
