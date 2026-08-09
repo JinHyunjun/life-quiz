@@ -8,6 +8,17 @@ astro dev --background
 
 Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
 
+## Release workflow
+
+After completing and verifying an application update or bug fix:
+
+1. Commit only the intended project changes.
+2. Push the commit to `origin/main`.
+3. Run `npm run build` and `npm run deploy:app`.
+4. Confirm `https://life-quiz.life-quiz.workers.dev/` serves the new version.
+
+Do not commit secrets, local caches, temporary screenshots, or test artifacts.
+
 ## Documentation
 
 Full documentation: https://docs.astro.build
