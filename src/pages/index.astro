@@ -271,7 +271,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     min-height: 248px;
     overflow: hidden;
     isolation: isolate;
-    background: #eef2ef;
+    background: var(--surface-strong);
     border-bottom: 1px solid var(--line);
   }
 
@@ -382,8 +382,8 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .all-topics.active {
-    color: white;
-    background: var(--ink);
+    color: var(--contrast-ink);
+    background: var(--contrast-surface);
   }
 
   .all-topics.active strong { color: #c5ddd2; }
@@ -736,8 +736,8 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   .archive-card {
     display: grid;
     gap: 12px;
-    color: white;
-    background: var(--ink);
+    color: var(--contrast-ink);
+    background: var(--contrast-surface);
     text-decoration: none;
   }
 
@@ -749,7 +749,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .archive-card-heading > svg {
-    color: #9bd0b9;
+    color: var(--contrast-accent);
   }
 
   .archive-card-heading div {
@@ -758,7 +758,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
   }
 
   .archive-card-heading span {
-    color: #b8c3bd;
+    color: var(--contrast-muted);
     font-size: 0.72rem;
   }
 
@@ -776,7 +776,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #c6d0ca;
+    color: var(--contrast-muted);
     font-size: 0.72rem;
   }
 
@@ -785,8 +785,8 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
     align-items: center;
     gap: 5px;
     padding-top: 10px;
-    border-top: 1px solid #37423d;
-    color: white;
+    border-top: 1px solid var(--contrast-line);
+    color: var(--contrast-ink);
     font-size: 0.78rem;
     font-weight: 750;
   }

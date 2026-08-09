@@ -19,11 +19,50 @@
   --blue-soft: #e8eefb;
   --yellow: #e9b83d;
   --yellow-soft: #fff3cf;
+  --contrast-surface: #17211d;
+  --contrast-ink: #ffffff;
+  --contrast-muted: #b8c3bd;
+  --contrast-accent: #9bd0b9;
+  --contrast-line: #37423d;
+  --contrast-action-surface: #ffffff;
+  --contrast-action-ink: #17211d;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --shadow-sm: 0 1px 2px rgba(22, 34, 28, 0.05), 0 5px 18px rgba(22, 34, 28, 0.05);
   --shadow-lg: 0 18px 50px rgba(22, 34, 28, 0.16);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #171d1a;
+  --canvas: #0f1412;
+  --surface: #1c2420;
+  --surface-strong: #26312c;
+  --ink: #edf4f0;
+  --muted-strong: #bdc9c3;
+  --muted: #8f9e96;
+  --line: #344139;
+  --green: #1f7658;
+  --green-deep: #7dd3ae;
+  --green-soft: #18372a;
+  --berry: #dc7aa3;
+  --berry-soft: #3a2130;
+  --coral: #f08073;
+  --coral-soft: #3b2422;
+  --blue: #82a7f4;
+  --blue-soft: #1d2b48;
+  --yellow: #e7ba4c;
+  --yellow-soft: #3b321b;
+  --contrast-surface: #222d28;
+  --contrast-ink: #edf4f0;
+  --contrast-muted: #b8c3bd;
+  --contrast-accent: #7dd3ae;
+  --contrast-line: #425048;
+  --contrast-action-surface: #303c36;
+  --contrast-action-ink: #edf4f0;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 5px 18px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.42);
 }
 
 * {
@@ -143,7 +182,7 @@ img {
 }
 
 .button-primary:hover {
-  background: var(--green-deep);
+  background: color-mix(in srgb, var(--green) 82%, black);
 }
 
 .button-secondary {
@@ -199,6 +238,19 @@ img {
 [data-category="humor"] { --category-color: #bd5b22; --category-soft: #faeadf; }
 [data-category="social_skills"] { --category-color: #287483; --category-soft: #e1f1f2; }
 
+:root[data-theme="dark"] [data-category] { --category-color: #5cc79a; --category-soft: #18372a; }
+:root[data-theme="dark"] [data-category="housing"] { --category-color: #ff8b7d; --category-soft: #3b2422; }
+:root[data-theme="dark"] [data-category="investment"] { --category-color: #dc7aa3; --category-soft: #3a2130; }
+:root[data-theme="dark"] [data-category="seoul_life"] { --category-color: #82a7f4; --category-soft: #1d2b48; }
+:root[data-theme="dark"] [data-category="career"] { --category-color: #d7b96c; --category-soft: #352f1f; }
+:root[data-theme="dark"] [data-category="rights"] { --category-color: #df906f; --category-soft: #3a2720; }
+:root[data-theme="dark"] [data-category="digital_safety"] { --category-color: #70b6d6; --category-soft: #1e3340; }
+:root[data-theme="dark"] [data-category="health"] { --category-color: #e8788d; --category-soft: #3c2329; }
+:root[data-theme="dark"] [data-category="daily_tips"] { --category-color: #e7ba4c; --category-soft: #3b321b; }
+:root[data-theme="dark"] [data-category="history"] { --category-color: #b693de; --category-soft: #30263e; }
+:root[data-theme="dark"] [data-category="humor"] { --category-color: #ed8b54; --category-soft: #3e271c; }
+:root[data-theme="dark"] [data-category="social_skills"] { --category-color: #64bac7; --category-soft: #1d3538; }
+
 .category-swatch {
   width: 8px;
   height: 8px;
@@ -218,6 +270,16 @@ img {
   font-size: 0.67rem;
   font-weight: 850;
   white-space: nowrap;
+}
+
+:root[data-theme="dark"] .visual-format-badge {
+  border-color: #786a2a;
+  color: #f1d66f;
+  background: #332e18;
+}
+
+:root[data-theme="dark"] .hero-image {
+  filter: brightness(0.42) saturate(0.72);
 }
 
 .visually-hidden {

@@ -9,8 +9,10 @@ import {
   Map,
   Menu,
   MessageCircle,
+  Moon,
   RotateCcw,
   Sparkles,
+  Sun,
   X,
 } from "lucide-astro";
 import "../styles/global.css";
@@ -49,9 +51,21 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#f4f6f4" />
+    <meta id="theme-color" name="theme-color" content="#f4f6f4" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title} | 라이프퀴즈</title>
+    <script is:inline>
+      (() => {
+        const storageKey = "life-quiz-theme";
+        let theme = "light";
+        try {
+          const savedTheme = localStorage.getItem(storageKey);
+          if (savedTheme === "light" || savedTheme === "dark") theme = savedTheme;
+        } catch {}
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">본문으로 바로가기</a>
@@ -94,6 +108,17 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
       </aside>
 
       <div class="app-frame">
+        <div class="app-tools">
+          <div class="theme-switcher" role="group" aria-label="화면 모드 선택">
+            <button type="button" data-theme-value="light" aria-label="라이트 모드" aria-pressed="true" title="라이트 모드">
+              <Sun size={17} />
+            </button>
+            <button type="button" data-theme-value="dark" aria-label="다크 모드" aria-pressed="false" title="다크 모드">
+              <Moon size={17} />
+            </button>
+          </div>
+        </div>
+
         <header class="mobile-header">
           <a class="mobile-brand" href="/" aria-label="라이프퀴즈 홈">
             <span class="brand-mark" aria-hidden="true"><BookOpenCheck size={19} strokeWidth={2.2} /></span>
@@ -164,6 +189,33 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
       dialog?.addEventListener("click", (event) => {
         if (event.target === dialog) dialog.close();
       });
+
+      const themeStorageKey = "life-quiz-theme";
+      const themeButtons = document.querySelectorAll<HTMLButtonElement>("[data-theme-value]");
+      const themeColor = document.querySelector<HTMLMetaElement>("#theme-color");
+
+      const applyTheme = (theme: "light" | "dark", persist = false) => {
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        themeColor?.setAttribute("content", theme === "dark" ? "#0f1412" : "#f4f6f4");
+        themeButtons.forEach((button) => {
+          button.setAttribute("aria-pressed", String(button.dataset.themeValue === theme));
+        });
+        if (persist) {
+          try {
+            localStorage.setItem(themeStorageKey, theme);
+          } catch {}
+        }
+      };
+
+      const initialTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+      applyTheme(initialTheme);
+      themeButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const theme = button.dataset.themeValue;
+          if (theme === "light" || theme === "dark") applyTheme(theme, true);
+        });
+      });
     </script>
   </body>
 </html>
@@ -177,8 +229,8 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     transform: translateY(-150%);
     padding: 10px 14px;
     border-radius: var(--radius-sm);
-    color: white;
-    background: var(--ink);
+    color: var(--contrast-ink);
+    background: var(--contrast-surface);
   }
 
   .skip-link:focus { transform: translateY(0); }
@@ -299,6 +351,48 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
   .app-frame main { min-width: 0; flex: 1; }
   .mobile-header { display: none; }
 
+  .app-tools {
+    position: fixed;
+    top: 14px;
+    right: 18px;
+    z-index: 55;
+  }
+
+  .theme-switcher {
+    width: 82px;
+    height: 40px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(14px);
+  }
+
+  .theme-switcher button {
+    min-width: 0;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border-radius: 5px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .theme-switcher button:hover {
+    color: var(--ink);
+    background: var(--surface-strong);
+  }
+
+  .theme-switcher button[aria-pressed="true"] {
+    color: var(--green-deep);
+    background: var(--green-soft);
+  }
+
   .site-footer {
     margin-top: 52px;
     padding: 24px 0 30px;
@@ -359,6 +453,8 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     .mobile-brand { font-size: 0.94rem; }
     .mobile-brand .brand-mark { width: 34px; height: 34px; flex-basis: 34px; }
     .mobile-menu-button { width: 40px; height: 40px; flex-basis: 40px; }
+    .app-tools { top: 9px; right: 64px; }
+    .theme-switcher { width: 76px; height: 40px; }
 
     .mobile-menu-dialog {
       width: min(430px, calc(100% - 24px));

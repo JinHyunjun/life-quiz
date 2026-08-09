@@ -513,7 +513,7 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
 });
 
 test("checked-in release snapshot keeps the latest deployed version first", () => {
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.18");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.19");
   assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-09");
   assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
 });

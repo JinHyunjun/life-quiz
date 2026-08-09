@@ -24,6 +24,29 @@ test("global navigation adapts from sidebar to the compact mobile menu", async (
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("light and dark modes can be selected and persist after reload", async ({ page }) => {
+  await page.goto("/");
+
+  const lightMode = page.getByRole("button", { name: "라이트 모드" });
+  const darkMode = page.getByRole("button", { name: "다크 모드" });
+  await expect(lightMode).toBeVisible();
+  await expect(darkMode).toBeVisible();
+  await expect(lightMode).toHaveAttribute("aria-pressed", "true");
+
+  await darkMode.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(darkMode).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(15, 20, 18)");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(darkMode).toHaveAttribute("aria-pressed", "true");
+
+  await lightMode.click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(lightMode).toHaveAttribute("aria-pressed", "true");
+});
+
 test("home feed renders without horizontal overflow", async ({ page }) => {
   await page.goto("/");
 

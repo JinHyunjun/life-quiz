@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-09T09:15:00.000Z",
+  fetchedAt: "2026-08-09T09:35:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.19",
+      title: "라이트·다크 화면 모드",
+      date: "2026-08-09",
+      changes: [
+        { type: "bullet", text: "웹서비스 우측 상단에 해·달 아이콘으로 구성한 2분할 화면 모드 선택기를 추가하고 데스크톱·태블릿·모바일에서 같은 위치 체계로 제공" },
+        { type: "bullet", text: "선택한 라이트·다크 모드를 브라우저에 저장해 새로고침과 페이지 이동 뒤에도 유지하고, 화면이 그려지기 전에 적용해 색상이 번쩍이는 현상 방지" },
+        { type: "bullet", text: "배경·표면·본문·보조 글자·경계선·그림자와 12개 콘텐츠 분야 색상을 공통 테마 토큰으로 재구성해 전체 페이지에 일관된 다크 화면 적용" },
+        { type: "bullet", text: "홈 지식 지도와 보관함 강조 카드, 카드뉴스·Deep Read·다음 단계 패널, 라이프 메이트 추천 질문, 시작 코스 등 화면별 명암과 가독성 보정" },
+        { type: "bullet", text: "모드 버튼에 현재 선택 상태를 알리는 aria-pressed와 설명을 제공하고 브라우저 기본 색상 체계·상단 테마 색상도 선택 모드와 함께 전환" },
+        { type: "bullet", text: "타입체크·프로덕션 빌드·로직 33건과 데스크톱/모바일 E2E 26건을 통과하고 주요 화면을 두 모드의 데스크톱·모바일 뷰포트에서 시각 검증" },
+      ],
+    },
     {
       version: "v0.18",
       title: "탐색 중심 레이아웃 개편",

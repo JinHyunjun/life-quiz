@@ -258,7 +258,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     padding: 10px 12px;
     border: 1px solid color-mix(in srgb, var(--berry) 28%, var(--line));
     border-radius: var(--radius-md);
-    color: #71304d;
+    color: var(--berry);
     background: var(--berry-soft);
     font-size: 0.76rem;
     font-weight: 700;
@@ -419,8 +419,8 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   }
 
   .card-news:nth-child(even) {
-    background: var(--ink);
-    color: white;
+    background: var(--contrast-surface);
+    color: var(--contrast-ink);
   }
 
   .card-index,
@@ -526,7 +526,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
 
   .deep-read-section p {
     margin: 0;
-    color: #2f3b35;
+    color: var(--muted-strong);
     font-size: 1rem;
     line-height: 1.9;
     word-break: keep-all;
@@ -690,12 +690,12 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     top: 96px;
     padding: 25px;
     border-radius: var(--radius-md);
-    background: var(--ink);
-    color: white;
+    background: var(--contrast-surface);
+    color: var(--contrast-ink);
   }
 
   .article-actions .eyebrow {
-    color: #93cbb3;
+    color: var(--contrast-accent);
   }
 
   .article-actions > h2 {
@@ -706,7 +706,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
 
   .article-actions > p:not(.eyebrow) {
     margin: 10px 0 22px;
-    color: #b8c3bd;
+    color: var(--contrast-muted);
     font-size: 0.84rem;
   }
 
@@ -720,8 +720,8 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     margin-top: 9px;
     padding: 10px 12px;
     border-radius: var(--radius-md);
-    color: var(--ink);
-    background: white;
+    color: var(--contrast-action-ink);
+    background: var(--contrast-action-surface);
     text-decoration: none;
     font: inherit;
     text-align: left;
@@ -766,7 +766,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   .learning-status {
     min-height: 18px;
     margin: 7px 2px 0;
-    color: #9eaaa4;
+    color: var(--contrast-muted);
     font-size: 0.68rem;
   }
 
