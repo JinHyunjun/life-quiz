@@ -34,7 +34,7 @@ import {
   scheduledAiCurriculumBatchForKstRun,
   scheduledAiCurriculumForKstRun,
 } from "../workers/ingest/src/schedule.ts";
-import { parseNotionReleaseBlocks } from "../src/lib/releases.ts";
+import { FALLBACK_RELEASE_FEED, parseNotionReleaseBlocks } from "../src/lib/releases.ts";
 
 const verifiedAiRestorationSql = readFileSync(
   new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
@@ -510,4 +510,10 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
       changes: [{ type: "callout", text: "안정성 개선" }],
     },
   ]);
+});
+
+test("checked-in release snapshot keeps the latest deployed version first", () => {
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.18");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-09");
+  assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
 });

@@ -23,10 +23,24 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-01T06:10:11.794Z",
+  fetchedAt: "2026-08-09T09:15:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.18",
+      title: "탐색 중심 레이아웃 개편",
+      date: "2026-08-09",
+      changes: [
+        { type: "bullet", text: "데스크톱 전역 메뉴를 탐색·학습·기록으로 구분한 고정 사이드바로 재구성하고 오늘의 5분 학습과 운영 품질 바로가기 추가" },
+        { type: "bullet", text: "901~1180px 화면에서는 아이콘 레일, 900px 이하에서는 상단 전체 메뉴로 전환해 화면 너비에 맞는 탐색 구조 제공" },
+        { type: "bullet", text: "모바일 하단의 홈·보관함·5분 학습·AI 질문·내 학습 핵심 메뉴를 유지하면서 전체 기능은 메뉴 대화상자에서 바로 접근하도록 개선" },
+        { type: "bullet", text: "홈 히어로와 설명문을 줄이고 12개 분야를 네 묶음의 스캔형 지식 지도로 압축해 첫 화면의 정보 밀도와 가독성 개선" },
+        { type: "bullet", text: "콘텐츠 제목과 본문을 두 줄 중심으로 정리하고 큐레이션 분야명이 좁은 열에서 글자 단위로 세로 분절되던 레이아웃 오류 수정" },
+        { type: "bullet", text: "PM 사례 원고·근거 관리대장·잡코리아 가이드 대조 분석과 제출용 PDF 포트폴리오를 저장소에 추가" },
+        { type: "bullet", text: "타입체크·프로덕션 빌드·로직 32건과 데스크톱/모바일 E2E 24건을 통과하고 Cloudflare Workers 운영 화면에서 최종 확인" },
+      ],
+    },
     {
       version: "v0.17",
       title: "주제 다양성 자동 복구",
