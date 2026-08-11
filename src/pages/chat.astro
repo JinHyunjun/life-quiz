@@ -572,6 +572,7 @@ const initialSuggestions = selectedTopic
 
 <script>
   import { element } from "../lib/dom";
+  import { trackProductEvent } from "../lib/product-events-client";
 
   interface ClientMessage {
     role: "user" | "assistant";
@@ -729,6 +730,9 @@ const initialSuggestions = selectedTopic
       typing?.remove();
 
       if (!response.ok) throw new Error(result.error ?? "답변을 가져오지 못했습니다.");
+      trackProductEvent("chat_asked", {
+        contentItemId: Number.isInteger(contentItemId) ? contentItemId : undefined,
+      });
       const assistantMessage = { role: "assistant", text: result.answer } satisfies ClientMessage;
       messages.push(assistantMessage);
       messages = messages.slice(-8);

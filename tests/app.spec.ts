@@ -1,7 +1,18 @@
 import { expect, test } from "@playwright/test";
 
+async function dismissFirstVisitOnboarding(page: import("@playwright/test").Page) {
+  const dialog = page.getByRole("dialog", { name: "지금 가장 필요한 분야는?" });
+  try {
+    await dialog.waitFor({ state: "visible", timeout: 4_000 });
+    await dialog.getByRole("button", { name: "나중에" }).click();
+  } catch {
+    // Existing preferences or browser state can make the first-visit dialog unnecessary.
+  }
+}
+
 test("global navigation adapts from sidebar to the compact mobile menu", async ({ page }) => {
   await page.goto("/");
+  await dismissFirstVisitOnboarding(page);
 
   const viewportWidth = page.viewportSize()?.width ?? 1440;
   const sidebar = page.locator(".site-sidebar");
@@ -26,6 +37,7 @@ test("global navigation adapts from sidebar to the compact mobile menu", async (
 
 test("light and dark modes can be selected and persist after reload", async ({ page }) => {
   await page.goto("/");
+  await dismissFirstVisitOnboarding(page);
 
   const lightMode = page.getByRole("button", { name: "라이트 모드" });
   const darkMode = page.getByRole("button", { name: "다크 모드" });
@@ -49,6 +61,7 @@ test("light and dark modes can be selected and persist after reload", async ({ p
 
 test("home feed renders without horizontal overflow", async ({ page }) => {
   await page.goto("/");
+  await dismissFirstVisitOnboarding(page);
 
   await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
   await expect(page.locator(".topic-link").filter({ hasText: "주식·투자" })).toBeVisible();
@@ -122,6 +135,20 @@ test("review queue only includes content explicitly added by this browser", asyn
   await choice.click();
   await expect(page.locator(".answer-feedback")).toBeVisible();
   await expect(page.locator(".feedback-explanation")).toBeVisible();
+});
+
+test("first visit interests create a personalized daily learning entry", async ({ page }) => {
+  await page.goto("/");
+
+  const dialog = page.getByRole("dialog", { name: "지금 가장 필요한 분야는?" });
+  await expect(dialog).toBeVisible();
+  await dialog.locator('label:has(input[value="finance"])').click();
+  await dialog.locator('label:has(input[value="health"])').click();
+  await expect(dialog.locator("#onboarding-count")).toHaveText("2");
+  await dialog.getByRole("button", { name: "내 5분 학습 만들기" }).click();
+
+  await expect(page).toHaveURL(/\/daily\/?\?from=onboarding/);
+  await expect(page.locator(".daily-card")).toBeVisible();
 });
 
 test("daily five creates a stable session and saves progress", async ({ page }) => {
@@ -238,6 +265,7 @@ test("operations dashboard requires a session and renders AI and collector healt
 
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { level: 1, name: "품질 검증 대시보드" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "방문에서 학습 완료까지" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "AI 예산과 수집원 안정성" })).toBeVisible();
   await expect(page.getByText("Gemini 일일 요청 예산")).toBeVisible();
   await expect(page.getByRole("heading", { name: /최근 7일 수집원 건강 상태/ })).toBeVisible();

@@ -388,6 +388,7 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
 
 <script>
   import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { trackProductEvent } from "../lib/product-events-client";
 
   type CategoryStat = {
     category: string;
@@ -599,6 +600,7 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
       const result = await response.json() as { categories?: string[]; error?: string };
       if (!response.ok) throw new Error(result.error ?? "관심 분야를 저장하지 못했습니다.");
       if (profile && result.categories) profile.preferences = result.categories;
+      trackProductEvent("preference_saved");
       if (preferenceStatus) preferenceStatus.textContent = "다음에 만드는 5분 학습부터 반영됩니다.";
     } catch (error) {
       if (preferenceStatus) preferenceStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";

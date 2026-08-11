@@ -203,6 +203,38 @@ export const savedContentItems = sqliteTable(
   ],
 );
 
+export const PRODUCT_EVENT_NAMES = [
+  "site_visit",
+  "home_view",
+  "preference_saved",
+  "daily_start",
+  "first_answer",
+  "daily_complete",
+  "source_open",
+  "content_saved",
+  "review_enrolled",
+  "chat_asked",
+] as const;
+
+export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];
+
+export const productEvents = sqliteTable(
+  "product_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    visitorId: text("visitor_id").notNull(),
+    eventName: text("event_name", { enum: PRODUCT_EVENT_NAMES }).notNull(),
+    path: text("path"),
+    contentItemId: integer("content_item_id").references(() => contentItems.id),
+    category: text("category"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  },
+  (table) => [
+    index("product_events_created_name_visitor_idx").on(table.createdAt, table.eventName, table.visitorId),
+    index("product_events_visitor_created_idx").on(table.visitorId, table.createdAt),
+  ],
+);
+
 export type ContentFeedbackKind =
   | "helpful"
   | "hard_to_understand"

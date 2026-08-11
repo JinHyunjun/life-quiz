@@ -256,20 +256,32 @@ const WIKIPEDIA_HEADERS = {
 };
 
 export function triviaSourceForKstDay(category: ScheduledTriviaCategory, now = new Date()): TriviaSourceTopic {
+  return triviaSourceCandidatesForKstDay(category, now, 1)[0];
+}
+
+export function triviaSourceCandidatesForKstDay(
+  category: ScheduledTriviaCategory,
+  now = new Date(),
+  count = 2,
+): TriviaSourceTopic[] {
   const dayNumber = Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS);
   const curriculumDay = Math.max(0, dayNumber - CURRICULUM_START_DAY);
   const curriculum = CURRICULUM[category];
-  const edition = Math.floor(curriculumDay / curriculum.length);
-  const source = curriculum[curriculumDay % curriculum.length];
-  const sourceUrl = wikipediaPageUrl(source.wikipediaTitle);
-  return {
-    category,
-    ...source,
-    sourceUrl,
-    dedupeKey: edition === 0 ? sourceUrl : `${sourceUrl}#life-quiz-edition=${edition}`,
-    edition,
-    editorialFocus: EDITORIAL_FOCUSES[edition % EDITORIAL_FOCUSES.length],
-  };
+
+  return Array.from({ length: Math.max(1, count) }, (_, offset) => {
+    const position = curriculumDay + offset;
+    const edition = Math.floor(position / curriculum.length);
+    const source = curriculum[position % curriculum.length];
+    const sourceUrl = wikipediaPageUrl(source.wikipediaTitle);
+    return {
+      category,
+      ...source,
+      sourceUrl,
+      dedupeKey: edition === 0 ? sourceUrl : `${sourceUrl}#life-quiz-edition=${edition}`,
+      edition,
+      editorialFocus: EDITORIAL_FOCUSES[edition % EDITORIAL_FOCUSES.length],
+    };
+  });
 }
 
 export async function fetchWikipediaSummary(topic: TriviaSourceTopic) {

@@ -19,14 +19,15 @@ import {
   prioritizeByDailyPublishingTargets,
 } from "../src/lib/publishing-policy.ts";
 import { SEOUL_DISTRICTS, seoulDistrictForKstRun, seoulDistrictsForKstRun } from "../workers/ingest/src/districts.ts";
-import { glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
+import { glossaryTopicCandidatesForKstDay, glossaryTopicsForKstDay } from "../workers/ingest/src/glossary.ts";
+import { officialGuideCandidatesForKstDay } from "../workers/ingest/src/official-guides.ts";
 import { rowMatchesRegion } from "../workers/ingest/src/fetchers/gov.ts";
 import { classifyNewsForBeginners, youtubeEditorialPlanForKstSlot, youtubeEditorialPlansForKstRun } from "../workers/ingest/src/editorial.ts";
 import { normalizeGeminiRpmBudget } from "../workers/ingest/src/rate-limit.ts";
 import { isRetryableGeminiStatus } from "../workers/ingest/src/gemini-retry.ts";
 import { hasSuccessfulUrlContext } from "../workers/ingest/src/gemini-url-context.ts";
 import { contentFingerprint } from "../workers/ingest/src/fingerprint.ts";
-import { isUsableWikipediaExtract, normalizeWikitextLead, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
+import { isUsableWikipediaExtract, normalizeWikitextLead, triviaSourceCandidatesForKstDay, triviaSourceForKstDay } from "../workers/ingest/src/trivia-sources.ts";
 import {
   apartmentBriefKindForKstRun,
   hasIngestionAttemptBudget,
@@ -35,6 +36,7 @@ import {
   scheduledAiCurriculumForKstRun,
 } from "../workers/ingest/src/schedule.ts";
 import { FALLBACK_RELEASE_FEED, parseNotionReleaseBlocks } from "../src/lib/releases.ts";
+import { normalizeProductEvent } from "../src/lib/product-events.ts";
 
 const verifiedAiRestorationSql = readFileSync(
   new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
@@ -118,6 +120,22 @@ test("daily AI curriculum is distributed across four six-hour slots", () => {
     ["history", "humor", "social_skills", "daily_tips"],
   );
   assert.ok(schedules.every((schedule) => schedule.trivia.sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
+});
+
+test("glossary look-ahead advances past duplicates and creates a new edition after a full cycle", () => {
+  const firstDay = new Date("2026-06-26T15:00:00Z");
+  const candidates = glossaryTopicCandidatesForKstDay("finance", firstDay, 3);
+  const nextEdition = glossaryTopicCandidatesForKstDay(
+    "finance",
+    new Date(firstDay.getTime() + 40 * 24 * 60 * 60 * 1_000),
+    1,
+  )[0];
+
+  assert.equal(candidates.length, 3);
+  assert.equal(new Set(candidates.map(({ url }) => url)).size, 3);
+  assert.equal(candidates[0].term, nextEdition.term);
+  assert.notEqual(candidates[0].url, nextEdition.url);
+  assert.equal(nextEdition.edition, 1);
 });
 
 test("daily five fills unused categories before repeating a subject", () => {
@@ -219,19 +237,23 @@ test("daily AI curriculum batch covers all core categories across four runs", ()
   );
 
   assert.deepEqual(
-    schedules.flatMap((schedule) => schedule.glossary.map((topic) => topic.category)).sort(),
+    [...new Set(schedules.flatMap((schedule) => schedule.glossary.map((topic) => topic.category)))].sort(),
     ["finance", "housing", "investment"],
   );
   assert.deepEqual(
     [...new Set(schedules.flatMap((schedule) => schedule.trivia.map((topic) => topic.category)))].sort(),
     ["career", "daily_tips", "digital_safety", "health", "history", "humor", "rights", "social_skills"],
   );
-  assert.ok(schedules.every((schedule) => schedule.glossary.length <= 1));
-  assert.deepEqual(schedules.map((schedule) => schedule.trivia.length), [2, 4, 6, 8]);
+  assert.deepEqual(schedules.map((schedule) => schedule.glossary.length), [3, 6, 9, 9]);
+  assert.deepEqual(schedules.map((schedule) => schedule.trivia.length), [4, 8, 12, 16]);
   assert.deepEqual(
     schedules[3].trivia.map((topic) => topic.category),
-    ["history", "humor", "social_skills", "daily_tips", "career", "rights", "digital_safety", "health"],
+    [
+      "history", "history", "humor", "humor", "social_skills", "social_skills", "daily_tips", "daily_tips",
+      "career", "career", "rights", "rights", "digital_safety", "digital_safety", "health", "health",
+    ],
   );
+  assert.ok(schedules.every((schedule) => schedule.officialGuides.length === 8));
 });
 
 test("only transient Gemini HTTP failures are retried", () => {
@@ -254,6 +276,22 @@ test("AI general knowledge rotates through externally grounded topics", () => {
   assert.notEqual(first.wikipediaTitle, second.wikipediaTitle);
   assert.match(first.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
   assert.match(second.sourceUrl, /^https:\/\/ko\.wikipedia\.org\/wiki\//);
+});
+
+test("AI curriculum provides a second grounded candidate after a source failure", () => {
+  const candidates = triviaSourceCandidatesForKstDay("rights", new Date("2026-08-11T03:00:00Z"), 2);
+  assert.equal(candidates.length, 2);
+  assert.notEqual(candidates[0].dedupeKey, candidates[1].dedupeKey);
+  assert.ok(candidates.every(({ sourceUrl }) => sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
+});
+
+test("official fallback guides cover Seoul life and practical risk categories", () => {
+  for (const category of ["seoul_life", "rights", "digital_safety", "health"]) {
+    const guides = officialGuideCandidatesForKstDay(category, new Date("2026-08-11T09:00:00Z"), 2);
+    assert.equal(guides.length, 2);
+    assert.ok(guides.every(({ sourceUrl }) => sourceUrl.startsWith("https://")));
+    assert.equal(new Set(guides.map(({ dedupeKey }) => dedupeKey)).size, 2);
+  }
 });
 
 test("AI general knowledge does not repeat a source during a 32-day curriculum", () => {
@@ -445,6 +483,25 @@ test("collector health groups seven-day diagnostics by source family", () => {
   assert.equal(health.length, 4);
 });
 
+test("product events accept only anonymous visitors and allowlisted metadata", () => {
+  const normalized = normalizeProductEvent({
+    visitorId: "anon:123e4567-e89b-42d3-a456-426614174000",
+    eventName: "daily_start",
+    path: "/daily?ignored=true",
+    contentItemId: 42,
+    category: "finance",
+  });
+
+  assert.equal(normalized.eventName, "daily_start");
+  assert.equal(normalized.contentItemId, 42);
+  assert.equal(normalized.category, "finance");
+  assert.throws(() => normalizeProductEvent({ visitorId: "email@example.com", eventName: "site_visit" }));
+  assert.throws(() => normalizeProductEvent({
+    visitorId: "anon:123e4567-e89b-42d3-a456-426614174000",
+    eventName: "unknown",
+  }));
+});
+
 test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", () => {
   const finance = classifyNewsForBeginners(
     "예금 금리 하락기에 대출 이자 확인하는 법",
@@ -513,7 +570,7 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
 });
 
 test("checked-in release snapshot keeps the latest deployed version first", () => {
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.19");
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-09");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.20");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-11");
   assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
 });

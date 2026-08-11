@@ -180,6 +180,8 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     </nav>
 
     <script>
+      import { trackProductEvent } from "../lib/product-events-client";
+
       const dialog = document.querySelector<HTMLDialogElement>("#mobile-menu");
       const openButton = document.querySelector<HTMLButtonElement>(".mobile-menu-button");
       const closeButton = document.querySelector<HTMLButtonElement>(".mobile-menu-close");
@@ -216,6 +218,12 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
           if (theme === "light" || theme === "dark") applyTheme(theme, true);
         });
       });
+
+      const kstDate = new Date(Date.now() + 9 * 60 * 60 * 1_000).toISOString().slice(0, 10);
+      trackProductEvent("site_visit", {}, { oncePerSessionKey: `site-visit:${kstDate}` });
+      if (window.location.pathname === "/") {
+        trackProductEvent("home_view", {}, { oncePerSessionKey: `home-view:${kstDate}` });
+      }
     </script>
   </body>
 </html>

@@ -1,4 +1,12 @@
 export type GlossaryCategory = "finance" | "investment" | "housing";
+export const GLOSSARY_CATEGORIES: readonly GlossaryCategory[] = ["finance", "investment", "housing"];
+
+export interface GlossaryTopic {
+  category: GlossaryCategory;
+  term: string;
+  url: string;
+  edition: number;
+}
 
 const GLOSSARY_CURRICULUM: Record<GlossaryCategory, readonly string[]> = {
   finance: [
@@ -134,16 +142,28 @@ const DAY_MS = 24 * 60 * 60 * 1_000;
 const CURRICULUM_START_DAY = Math.floor(Date.UTC(2026, 5, 27) / DAY_MS);
 
 export function glossaryTopicsForKstDay(now = new Date()) {
+  return GLOSSARY_CATEGORIES.map((category) => glossaryTopicCandidatesForKstDay(category, now, 1)[0]);
+}
+
+export function glossaryTopicCandidatesForKstDay(
+  category: GlossaryCategory,
+  now = new Date(),
+  count = 3,
+): GlossaryTopic[] {
   const dayNumber = Math.floor((now.getTime() + KST_OFFSET_MS) / DAY_MS);
   const curriculumDay = Math.max(0, dayNumber - CURRICULUM_START_DAY);
+  const curriculum = GLOSSARY_CURRICULUM[category];
 
-  return (["finance", "investment", "housing"] as const).map((category) => {
-    const curriculum = GLOSSARY_CURRICULUM[category];
-    const term = curriculum[curriculumDay % curriculum.length];
+  return Array.from({ length: Math.max(1, count) }, (_, offset) => {
+    const position = curriculumDay + offset;
+    const term = curriculum[position % curriculum.length];
+    const edition = Math.floor(position / curriculum.length);
+    const baseUrl = `internal://glossary/${category}/${encodeURIComponent(term)}`;
     return {
       category,
       term,
-      url: `internal://glossary/${category}/${encodeURIComponent(term)}`,
+      url: edition === 0 ? baseUrl : `${baseUrl}#life-quiz-edition=${edition}`,
+      edition,
     };
   });
 }

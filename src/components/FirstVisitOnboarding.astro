@@ -1,0 +1,222 @@
+---
+import { Sparkles, X } from "lucide-astro";
+import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
+---
+
+<dialog class="onboarding-dialog" id="first-visit-onboarding" aria-labelledby="onboarding-title">
+  <form class="onboarding-form" id="onboarding-form">
+    <header>
+      <span class="onboarding-mark" aria-hidden="true"><Sparkles size={20} /></span>
+      <div>
+        <p class="eyebrow">MY FIRST FIVE</p>
+        <h2 id="onboarding-title">지금 가장 필요한 분야는?</h2>
+        <p>2~3개를 고르면 첫 5분 학습부터 먼저 보여드려요.</p>
+      </div>
+      <button class="icon-button onboarding-close" id="onboarding-close" type="button" aria-label="관심 분야 설정 닫기" title="나중에 설정">
+        <X size={19} />
+      </button>
+    </header>
+
+    <div class="onboarding-groups">
+      {CATEGORY_GROUPS.map((group) => (
+        <fieldset>
+          <legend>{group.label}</legend>
+          <div class="onboarding-options">
+            {group.categories.map((category) => (
+              <label data-category={category}>
+                <input type="checkbox" name="onboarding-category" value={category} />
+                <span class="category-swatch" data-category={category}></span>
+                <span>{CATEGORY_LABELS[category]}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ))}
+    </div>
+
+    <footer>
+      <p id="onboarding-status" aria-live="polite">선택 <strong id="onboarding-count">0</strong> / 3</p>
+      <div>
+        <button class="button button-secondary" id="onboarding-skip" type="button">나중에</button>
+        <button class="button button-primary" id="onboarding-submit" type="submit" disabled>내 5분 학습 만들기</button>
+      </div>
+    </footer>
+  </form>
+</dialog>
+
+<style is:global>
+  .onboarding-dialog {
+    width: min(720px, calc(100vw - 28px));
+    max-height: min(760px, calc(100vh - 28px));
+    padding: 0;
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--ink);
+    background: var(--paper);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .onboarding-dialog::backdrop { background: color-mix(in srgb, #08110d 62%, transparent); }
+  .onboarding-form { padding: 28px; }
+  .onboarding-form > header {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 38px;
+    align-items: start;
+    gap: 13px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .onboarding-mark {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--green-deep);
+    background: var(--green-soft);
+  }
+
+  .onboarding-form h2 { margin: 3px 0 5px; font-size: 1.42rem; }
+  .onboarding-form header p:last-child { margin: 0; color: var(--muted); font-size: 0.82rem; }
+  .onboarding-close { width: 38px; height: 38px; flex-basis: 38px; }
+  .onboarding-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; padding: 22px 0; }
+  .onboarding-groups fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+  .onboarding-groups legend { margin-bottom: 8px; color: var(--muted); font-size: 0.7rem; font-weight: 800; }
+  .onboarding-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .onboarding-options label {
+    min-width: 0;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    font-size: 0.74rem;
+    font-weight: 760;
+  }
+
+  .onboarding-options label:has(input:checked) {
+    border-color: var(--category-color, var(--green));
+    background: var(--category-soft, var(--green-soft));
+  }
+
+  .onboarding-options input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .onboarding-options label > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .onboarding-form > footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .onboarding-form > footer p { margin: 0; color: var(--muted); font-size: 0.75rem; }
+  .onboarding-form > footer p strong { color: var(--ink); }
+  .onboarding-form > footer > div { display: flex; gap: 8px; }
+
+  @media (max-width: 620px) {
+    .onboarding-form { padding: 20px; }
+    .onboarding-form > header { grid-template-columns: 38px minmax(0, 1fr) 36px; }
+    .onboarding-mark { width: 38px; height: 38px; }
+    .onboarding-groups { grid-template-columns: 1fr; gap: 14px; }
+    .onboarding-form > footer { align-items: stretch; flex-direction: column; }
+    .onboarding-form > footer > div { display: grid; grid-template-columns: 0.7fr 1.3fr; }
+  }
+</style>
+
+<script>
+  import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { trackProductEvent } from "../lib/product-events-client";
+
+  const ONBOARDING_KEY = "life-quiz-first-visit-onboarding";
+  const dialog = document.querySelector<HTMLDialogElement>("#first-visit-onboarding");
+  const form = document.querySelector<HTMLFormElement>("#onboarding-form");
+  const inputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="onboarding-category"]'));
+  const submitButton = document.querySelector<HTMLButtonElement>("#onboarding-submit");
+  const countLabel = document.querySelector<HTMLElement>("#onboarding-count");
+  const status = document.querySelector<HTMLElement>("#onboarding-status");
+  const skipButton = document.querySelector<HTMLButtonElement>("#onboarding-skip");
+  const closeButton = document.querySelector<HTMLButtonElement>("#onboarding-close");
+  const userId = getAnonymousUserId();
+
+  function onboardingState() {
+    try {
+      return localStorage.getItem(ONBOARDING_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function saveOnboardingState(value: "complete" | "skipped") {
+    try {
+      localStorage.setItem(ONBOARDING_KEY, value);
+    } catch {}
+  }
+
+  function selectedCategories() {
+    return inputs.filter((input) => input.checked).map((input) => input.value);
+  }
+
+  function updateSelection() {
+    const selected = selectedCategories();
+    inputs.forEach((input) => { input.disabled = selected.length >= 3 && !input.checked; });
+    if (countLabel) countLabel.textContent = String(selected.length);
+    if (submitButton) submitButton.disabled = selected.length < 2 || selected.length > 3;
+    if (status) status.firstChild!.textContent = selected.length < 2 ? "2개 이상 선택 " : "선택 ";
+  }
+
+  function dismissOnboarding() {
+    saveOnboardingState("skipped");
+    dialog?.close();
+  }
+
+  async function initializeOnboarding() {
+    if (!dialog || onboardingState()) return;
+    try {
+      const response = await fetch(`/api/onboarding?userId=${encodeURIComponent(userId)}`, {
+        headers: { accept: "application/json" },
+      });
+      const result = await response.json() as { categories?: string[] };
+      if (response.ok && (result.categories?.length ?? 0) > 0) {
+        saveOnboardingState("complete");
+        return;
+      }
+    } catch {
+      // The user can still choose interests when the status lookup is unavailable.
+    }
+    dialog.showModal();
+  }
+
+  inputs.forEach((input) => input.addEventListener("change", updateSelection));
+  skipButton?.addEventListener("click", dismissOnboarding);
+  closeButton?.addEventListener("click", dismissOnboarding);
+  dialog?.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    dismissOnboarding();
+  });
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const categories = selectedCategories();
+    if (categories.length < 2 || categories.length > 3 || !submitButton) return;
+    submitButton.disabled = true;
+    if (status) status.textContent = "첫 학습을 준비하고 있어요.";
+
+    try {
+      const response = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ userId, categories }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "관심 분야를 저장하지 못했습니다.");
+      saveOnboardingState("complete");
+      trackProductEvent("preference_saved", {}, { oncePerSessionKey: "first-preference" });
+      window.location.href = "/daily?from=onboarding";
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+      submitButton.disabled = false;
+    }
+  });
+
+  updateSelection();
+  void initializeOnboarding();
+</script>

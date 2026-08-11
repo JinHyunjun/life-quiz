@@ -23,10 +23,24 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-09T09:35:00.000Z",
+  fetchedAt: "2026-08-11T06:30:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.20",
+      title: "첫 학습 활성화와 공급 SLO",
+      date: "2026-08-11",
+      changes: [
+        { type: "bullet", text: "첫 방문에서 지금 필요한 관심 분야 2~3개를 고르고 기존 개인화 선택기를 통해 바로 오늘의 5분 학습으로 이어지는 온보딩 추가" },
+        { type: "bullet", text: "방문·관심사 저장·학습 시작·첫 답변·완료·출처 확인·저장·복습 등록·채팅 사용을 익명 브라우저 기준으로 기록하는 D1 행동 계측 추가" },
+        { type: "bullet", text: "운영 품질 대시보드에 최근 7일·28일 방문→학습 시작→첫 답변→완료 전환율과 서로 다른 날 재방문율을 표시하는 활성화 퍼널 추가" },
+        { type: "bullet", text: "행동 기록에는 질문·답변·이메일을 저장하지 않고 기존 통합 Cron에서 90일이 지난 기록을 정리해 새 Cron 없이 운영" },
+        { type: "bullet", text: "이미 발행한 용어와 출처는 다음 후보로 자동 이동하고, 한 분야가 일일 최소를 채우면 나머지 커리큘럼 생성을 멈춰 부족 분야에 Gemini 예산을 우선 배분" },
+        { type: "bullet", text: "서울시·고용노동부·KISA·질병관리청 공식 페이지 폴백과 분야별 두 번째 출처 후보를 추가하고 18:15 이후 10/12개 분야·12개 이상·단일 분야 35% 이하를 최종 공급 SLO로 판정" },
+        { type: "bullet", text: "D1 마이그레이션, 타입체크, 프로덕션 빌드, 로직 37건과 데스크톱·모바일 E2E 28건으로 온보딩·계측·기존 사용자 흐름 검증" },
+      ],
+    },
     {
       version: "v0.19",
       title: "라이트·다크 화면 모드",

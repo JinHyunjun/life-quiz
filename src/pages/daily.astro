@@ -315,6 +315,7 @@ import Base from "../layouts/Base.astro";
 
 <script>
   import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { trackProductEvent } from "../lib/product-events-client";
 
   type DailyCard = {
     quizItemId: number;
@@ -330,6 +331,7 @@ import Base from "../layouts/Base.astro";
   };
 
   type DailySession = {
+    date: string;
     totalCount: number;
     completedCount: number;
     isComplete: boolean;
@@ -385,9 +387,13 @@ import Base from "../layouts/Base.astro";
       const data = await response.json() as DailySession & { error?: string };
       if (!response.ok) throw new Error(data.error ?? "오늘의 카드를 불러오지 못했습니다.");
       session = data;
+      trackProductEvent("daily_start", {}, { oncePerSessionKey: `daily-start:${data.date}` });
       currentIndex = Math.max(0, data.cards.findIndex(({ completedAt }) => completedAt === null));
       renderOverview();
-      if (data.isComplete) renderComplete();
+      if (data.isComplete) {
+        trackProductEvent("daily_complete", {}, { oncePerSessionKey: `daily-complete:${data.date}` });
+        renderComplete();
+      }
       else if (data.cards.length === 0) renderEmpty();
       else renderCard();
     } catch (error) {
@@ -462,6 +468,13 @@ import Base from "../layouts/Base.astro";
       });
       const result = await response.json() as SubmitResult & { error?: string };
       if (!response.ok) throw new Error(result.error ?? "학습 결과를 저장하지 못했습니다.");
+      trackProductEvent("first_answer", {
+        contentItemId: card.contentItemId,
+        category: card.category,
+      }, { oncePerSessionKey: `first-answer:${session?.date ?? "today"}` });
+      if (result.isComplete) {
+        trackProductEvent("daily_complete", {}, { oncePerSessionKey: `daily-complete:${session?.date ?? "today"}` });
+      }
 
       buttons.forEach((button) => {
         if (button.dataset.choice === selected.dataset.choice) {
@@ -519,11 +532,12 @@ import Base from "../layouts/Base.astro";
     const state = makeElement("div", "daily-state");
     state.append(makeElement("h2", "", "오늘의 5분 학습 완료"), makeElement("p", "", "다섯 가지 기억을 모두 확인했어요. 다음 복습일은 FSRS가 각 카드마다 정해두었습니다."));
     const actions = makeElement("div", "state-actions");
-    const home = makeElement("a", "button button-primary", "오늘의 상식 보기");
-    home.href = "/";
-    const review = makeElement("a", "button button-secondary", "전체 복습 큐");
-    review.href = "/review";
-    actions.append(home, review);
+    const learnedArticle = session?.cards[0];
+    const next = makeElement("a", "button button-primary", learnedArticle ? "오늘 배운 상식 다시 보기" : "오늘의 상식 보기");
+    next.href = learnedArticle ? `/articles/${learnedArticle.contentItemId}` : "/";
+    const profile = makeElement("a", "button button-secondary", "내 학습 확인");
+    profile.href = "/me";
+    actions.append(next, profile);
     state.append(actions);
     root.append(state);
   }

@@ -4,6 +4,7 @@ export const prerender = false;
 import { env } from "cloudflare:workers";
 import { Archive, ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, Landmark, MapPinned, MessageCircle, PanelsTopLeft, RotateCcw, ShieldCheck, Sparkles } from "lucide-astro";
 import Base from "../layouts/Base.astro";
+import FirstVisitOnboarding from "../components/FirstVisitOnboarding.astro";
 import { createDb } from "../db/client";
 import { getContentStats, getTodayCategoryCounts, listArchiveDays, listRecentAiDiscoveries, listRecentDistrictBriefs, listRecentVisualGuides, listTodayContentItems } from "../lib/content";
 import { CATEGORY_DESCRIPTIONS, CATEGORY_GROUPS, CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
@@ -42,6 +43,7 @@ const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && distric
 ---
 
 <Base title="읽고, 묻고, 오래 기억하는 생활 상식">
+  <FirstVisitOnboarding />
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-image" aria-hidden="true"></div>
     <div class="hero-content shell">

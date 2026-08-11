@@ -3,6 +3,7 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { ContentCard, IngestionCollectorDiagnostic } from "../../../src/db/schema";
 import { todayKstRange } from "../../../src/lib/dates";
 import {
+  DAILY_PUBLISHING_TARGETS,
   hasDailyPublishingCapacity,
   prioritizeByDailyPublishingTargets,
   type DailyPublishingCounts,
@@ -27,6 +28,7 @@ import { fetchAptTransactions, fetchTrashInfo, flattenRowsToText, type AptTransa
 import { fetchRssFeed, type RssItem } from "./fetchers/rss";
 import { contentFingerprint } from "./fingerprint";
 import type { GlossaryCategory } from "./glossary";
+import type { OfficialGuideTopic } from "./official-guides";
 import {
   GeminiRateLimitError,
   normalizeGeminiRpmBudget,
@@ -60,9 +62,10 @@ type PendingItem =
       matchedTerms: string[];
     }
   | { kind: "glossary"; url: string; category: GlossaryCategory; term: string; citationLabel: string; citationUrl: string | null }
+  | ({ kind: "official_guide" } & OfficialGuideTopic)
   | ({ kind: "trivia" } & TriviaSourceTopic);
 
-type BalancedContentCategory = SourcedContentCategory | TriviaSourceTopic["category"];
+type BalancedContentCategory = SourcedContentCategory | TriviaSourceTopic["category"] | OfficialGuideTopic["category"];
 
 const GLOSSARY_SOURCES: Record<GlossaryCategory, { citationLabel: string; citationUrl: string | null }> = {
   finance: {
@@ -421,8 +424,12 @@ async function collectPendingItems(env: Env): Promise<CollectionResult> {
   for (const trivia of scheduledCurriculum.trivia) {
     items.push({ kind: "trivia", ...trivia });
   }
+  for (const guide of scheduledCurriculum.officialGuides) {
+    items.push({ kind: "official_guide", ...guide });
+  }
   diagnostics.push(collectorDiagnostic("curriculum:glossary", scheduledCurriculum.glossary.length));
   diagnostics.push(collectorDiagnostic("curriculum:trivia", scheduledCurriculum.trivia.length));
+  diagnostics.push(collectorDiagnostic("curriculum:official-guides", scheduledCurriculum.officialGuides.length));
 
   return { items: sortPendingItemsByCategory(items), diagnostics };
 }
@@ -496,7 +503,8 @@ function pendingItemCategory(item: PendingItem): BalancedContentCategory {
 function pendingKindPriority(item: PendingItem) {
   if (item.kind === "sourced") return 0;
   if (item.kind === "glossary") return 1;
-  return 2;
+  if (item.kind === "trivia") return 2;
+  return 3;
 }
 
 function summarizeAptDistricts(
@@ -733,6 +741,48 @@ async function insertContentAndQuiz(
   return { contentItemId: contentItem.id, title: params.title, category: contentItem.category };
 }
 
+async function ingestOfficialGuideItem(
+  db: AppDb,
+  env: Env,
+  item: Extract<PendingItem, { kind: "official_guide" }>,
+  beforeRequest: BeforeGeminiRequest,
+) {
+  const avoidTitles = await recentTitlesForCategory(db, item.category);
+  const generated = await generateTrivia({
+    category: item.category,
+    topic: item.topic,
+    sourceText: "",
+    citationLabel: item.citationLabel,
+    sourceUrl: item.sourceUrl,
+    useUrlContext: true,
+    editorialFocus: item.editorialFocus,
+    avoidTitles,
+    apiKey: env.GEMINI_API_KEY,
+    model: env.GEMINI_MODEL,
+    beforeRequest,
+  });
+
+  const [source] = await db
+    .insert(schema.sources)
+    .values({ originType: "gov", url: item.dedupeKey, lastFetchedAt: new Date() })
+    .returning();
+
+  return insertContentAndQuiz(db, {
+    sourceId: source.id,
+    title: generated.title,
+    bodyMd: generated.bodyMd,
+    cards: generated.cards,
+    contentFormat: "article",
+    category: item.category,
+    citationUrl: item.sourceUrl,
+    citationLabel: item.citationLabel,
+    question: generated.question,
+    choices: generated.choices,
+    answer: generated.answer,
+    explanation: generated.explanation,
+  });
+}
+
 async function runIngestion(env: Env) {
   const db = createDb(env.DB);
   const collection = await collectPendingItems(env);
@@ -765,6 +815,10 @@ async function runIngestion(env: Env) {
     }
 
     const category = pendingItemCategory(item);
+    if (item.kind !== "sourced" && (dailyCounts[category] ?? 0) >= DAILY_PUBLISHING_TARGETS[category].minimum) {
+      skipped.push(`daily-category-min-met:${category}:${label}`);
+      continue;
+    }
     if (!hasDailyPublishingCapacity(category, dailyCounts)) {
       skipped.push(`daily-category-cap:${category}:${label}`);
       continue;
@@ -785,7 +839,9 @@ async function runIngestion(env: Env) {
         ? await ingestSourcedItem(db, env, item, beforeRequest)
         : item.kind === "glossary"
           ? await ingestGlossaryItem(db, env, item, beforeRequest)
-          : await ingestTriviaItem(db, env, item, beforeRequest);
+          : item.kind === "trivia"
+            ? await ingestTriviaItem(db, env, item, beforeRequest)
+            : await ingestOfficialGuideItem(db, env, item, beforeRequest);
       created.push(createdItem);
       dailyCounts[createdItem.category] = (dailyCounts[createdItem.category] ?? 0) + 1;
     } catch (err) {
@@ -832,6 +888,7 @@ async function loadTodayPublishingCounts(db: AppDb): Promise<DailyPublishingCoun
 function pendingItemKey(item: PendingItem) {
   if (item.kind === "trivia") return item.dedupeKey;
   if (item.kind === "sourced") return item.dedupeKey;
+  if (item.kind === "official_guide") return item.dedupeKey;
   return item.url;
 }
 
@@ -898,6 +955,7 @@ export default {
       const expiry = new Date(Date.now() - 48 * 60 * 60 * 1_000);
       await Promise.all([
         db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry)),
+        db.delete(schema.productEvents).where(lt(schema.productEvents.createdAt, new Date(Date.now() - 90 * 24 * 60 * 60 * 1_000))),
         pruneGeminiRequestLog(env.DB),
       ]);
     } catch (error) {

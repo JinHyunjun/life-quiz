@@ -1,5 +1,6 @@
-import { glossaryTopicsForKstDay } from "./glossary.ts";
-import { triviaSourceForKstDay } from "./trivia-sources.ts";
+import { GLOSSARY_CATEGORIES, glossaryTopicCandidatesForKstDay, glossaryTopicsForKstDay } from "./glossary.ts";
+import { officialGuideCandidatesForKstDay } from "./official-guides.ts";
+import { triviaSourceCandidatesForKstDay, triviaSourceForKstDay } from "./trivia-sources.ts";
 
 export type ScheduledTriviaCategory =
   | "history"
@@ -44,16 +45,22 @@ export function scheduledAiCurriculumForKstRun(now = new Date()) {
 
 export function scheduledAiCurriculumBatchForKstRun(now = new Date()) {
   const slot = kstSixHourSlot(now);
-  const glossaryTopics = glossaryTopicsForKstDay(now);
+  const unlockedGlossaryCategories = GLOSSARY_CATEGORIES.slice(0, Math.min(slot + 1, GLOSSARY_CATEGORIES.length));
+  const unlockedTriviaCategories = TRIVIA_CATEGORIES.slice(0, (slot + 1) * 2);
 
   return {
-    // Keep each Worker invocation comfortably below the free-plan external
-    // subrequest limit while still covering the full curriculum every day.
-    glossary: glossaryTopics[slot] ? [glossaryTopics[slot]] : [],
-    // Re-include earlier slots so a transient source or Gemini failure can recover
-    // later the same day. Successfully published editions are skipped before fetch.
-    trivia: TRIVIA_CATEGORIES.slice(0, (slot + 1) * 2).map((category) =>
-      triviaSourceForKstDay(category, now),
+    // Earlier categories return on later runs. Each has look-ahead candidates so
+    // an already-published term can advance without waiting for another day.
+    glossary: unlockedGlossaryCategories.flatMap((category) =>
+      glossaryTopicCandidatesForKstDay(category, now, 3),
+    ),
+    // Two candidates per category let source retrieval failures fall through to
+    // another verified topic. The ingestion loop stops after the daily minimum.
+    trivia: unlockedTriviaCategories.flatMap((category) =>
+      triviaSourceCandidatesForKstDay(category, now, 2),
+    ),
+    officialGuides: (["seoul_life", "rights", "digital_safety", "health"] as const).flatMap((category) =>
+      officialGuideCandidatesForKstDay(category, now, 2),
     ),
   };
 }
