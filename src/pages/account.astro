@@ -1,0 +1,110 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { ArrowRight, CalendarDays, ChartNoAxesColumnIncreasing, LogOut, RefreshCw, ShieldCheck } from "lucide-astro";
+import Base from "../layouts/Base.astro";
+import { getLifeQuizSession } from "../lib/auth";
+
+const session = await getLifeQuizSession(Astro.request, env.DB, env.BETTER_AUTH_SECRET);
+if (!session) return Astro.redirect(`/login?returnTo=${encodeURIComponent(Astro.url.pathname)}`);
+
+Astro.response.headers.set("cache-control", "no-store");
+const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium" }).format(session.user.createdAt);
+---
+
+<Base title="내 계정" description="라이프퀴즈 계정과 기기 간 학습 기록 동기화 상태">
+  <div class="account-page shell">
+    <header class="account-header">
+      <div>
+        <p class="eyebrow">ACCOUNT &amp; SYNC</p>
+        <h1 class="page-title">{session.user.name}님의 계정</h1>
+        <p>{session.user.email}</p>
+      </div>
+      <button class="button button-secondary" type="button" id="sign-out"><LogOut size={17} /> 로그아웃</button>
+    </header>
+
+    <section class="sync-state" aria-labelledby="sync-title">
+      <span class="sync-icon"><RefreshCw size={22} /></span>
+      <div><h2 id="sync-title">학습 기록 동기화 중</h2><p id="sync-status" aria-live="polite">현재 브라우저에 남은 기록을 계정과 확인하고 있습니다.</p></div>
+    </section>
+
+    <div class="account-grid">
+      <section class="account-details" aria-labelledby="details-title">
+        <h2 id="details-title">계정 정보</h2>
+        <dl>
+          <div><dt>이름</dt><dd>{session.user.name}</dd></div>
+          <div><dt>이메일</dt><dd>{session.user.email}</dd></div>
+          <div><dt>가입일</dt><dd>{joinedAt}</dd></div>
+        </dl>
+        <p><ShieldCheck size={15} /> 이메일은 로그인과 계정 구분에만 사용합니다.</p>
+      </section>
+
+      <nav class="account-actions" aria-label="학습 바로 가기">
+        <a href="/daily"><span><CalendarDays size={19} /><strong>오늘의 5분 학습</strong></span><ArrowRight size={18} /></a>
+        <a href="/me"><span><ChartNoAxesColumnIncreasing size={19} /><strong>내 학습 기록</strong></span><ArrowRight size={18} /></a>
+      </nav>
+    </div>
+
+    <p class="account-note">현재 베타 계정은 이메일 확인 및 비밀번호 재설정을 지원하지 않습니다. 계정 관련 요청은 <a href="https://github.com/JinHyunjun/life-quiz/issues" target="_blank" rel="noopener noreferrer">GitHub 이슈</a>로 남겨주세요.</p>
+  </div>
+</Base>
+
+<script>
+  import { authClient } from "../lib/auth-client";
+  import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { trackProductEvent } from "../lib/product-events-client";
+
+  const status = document.querySelector<HTMLElement>("#sync-status");
+  void fetch("/api/account/link", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ anonymousUserId: getAnonymousUserId() }),
+  }).then(async (response) => {
+    if (!response.ok) throw new Error();
+    const result = await response.json() as { linked?: boolean; movedRecords?: number };
+    if (status) status.textContent = result.linked
+      ? `이 브라우저의 기록 ${result.movedRecords ?? 0}건을 계정에 연결했습니다.`
+      : "최신 상태입니다. 새 학습 기록은 이 계정에 저장됩니다.";
+    if (result.linked) trackProductEvent("anonymous_data_linked");
+  }).catch(() => {
+    if (status) status.textContent = "동기화 상태를 확인하지 못했습니다. 페이지를 새로고침해주세요.";
+  });
+
+  document.querySelector<HTMLButtonElement>("#sign-out")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    await authClient.signOut();
+    window.location.assign("/");
+  });
+</script>
+
+<style>
+  .account-page { max-width: 940px; padding-top: 72px; }
+  .account-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+  .account-header p:last-child { margin: 8px 0 0; color: var(--muted); }
+  .sync-state { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 14px; padding: 18px 0; border-block: 1px solid var(--line); }
+  .sync-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: var(--radius-md); color: var(--green-deep); background: var(--green-soft); }
+  .sync-state h2 { margin: 0; font-size: 1rem; }
+  .sync-state p { margin: 3px 0 0; color: var(--muted); font-size: 0.8rem; }
+  .account-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 0.7fr); gap: 28px; margin-top: 34px; }
+  .account-details h2 { margin: 0 0 14px; font-size: 1.05rem; }
+  .account-details dl { margin: 0; border-top: 1px solid var(--line); }
+  .account-details dl > div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 18px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+  .account-details dt { color: var(--muted); font-size: 0.76rem; }
+  .account-details dd { margin: 0; overflow-wrap: anywhere; font-size: 0.82rem; font-weight: 700; }
+  .account-details > p { display: flex; align-items: center; gap: 6px; margin: 14px 0 0; color: var(--muted); font-size: 0.72rem; }
+  .account-actions { display: grid; align-content: start; gap: 8px; }
+  .account-actions a { min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--paper); text-decoration: none; }
+  .account-actions a:hover { border-color: var(--green); }
+  .account-actions span { display: flex; align-items: center; gap: 9px; }
+  .account-actions span svg { color: var(--green); }
+  .account-actions strong { font-size: 0.82rem; }
+  .account-note { margin: 38px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.72rem; }
+  .account-note a { color: var(--green-deep); font-weight: 750; }
+  @media (max-width: 720px) {
+    .account-page { padding-top: 38px; }
+    .account-header { align-items: start; }
+    .account-grid { grid-template-columns: 1fr; }
+  }
+</style>

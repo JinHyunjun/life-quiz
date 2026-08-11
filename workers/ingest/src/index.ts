@@ -957,6 +957,7 @@ export default {
         db.delete(schema.chatUsage).where(lt(schema.chatUsage.windowStartedAt, expiry)),
         db.delete(schema.productEvents).where(lt(schema.productEvents.createdAt, new Date(Date.now() - 90 * 24 * 60 * 60 * 1_000))),
         pruneGeminiRequestLog(env.DB),
+        pruneExpiredAuthData(env.DB),
       ]);
     } catch (error) {
       status = "error";
@@ -976,3 +977,11 @@ export default {
     console.log(JSON.stringify({ message: "scheduled ingestion completed", status, ...result }));
   },
 };
+
+async function pruneExpiredAuthData(database: D1Database, now = new Date()) {
+  await database.batch([
+    database.prepare("DELETE FROM auth_session WHERE expiresAt < ?1").bind(now.toISOString()),
+    database.prepare("DELETE FROM auth_verification WHERE expiresAt < ?1").bind(now.toISOString()),
+    database.prepare("DELETE FROM auth_rate_limit WHERE lastRequest < ?1").bind(now.getTime() - 24 * 60 * 60 * 1_000),
+  ]);
+}

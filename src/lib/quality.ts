@@ -1,6 +1,8 @@
 import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
+  authSessions,
+  authUsers,
   contentFeedback,
   contentItems,
   dailySessionItems,
@@ -55,6 +57,8 @@ export async function getQualityDashboard(db: AppDb, now = new Date(), dailyGemi
     preferenceUserRows,
     savedItemRows,
     completedSessionRows,
+    authUserRows,
+    activeAuthSessionRows,
     geminiPurposeRows,
     geminiDailyRows,
     collectorRuns,
@@ -150,6 +154,13 @@ export async function getQualityDashboard(db: AppDb, now = new Date(), dailyGemi
       .from(dailySessionItems)
       .groupBy(dailySessionItems.userId, dailySessionItems.kstDate)
       .having(sql`count(*) > 0 and sum(case when ${dailySessionItems.completedAt} is not null then 1 else 0 end) = count(*)`),
+    db
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(authUsers),
+    db
+      .select({ count: sql<number>`count(distinct ${authSessions.userId})`.mapWith(Number) })
+      .from(authSessions)
+      .where(gte(authSessions.expiresAt, now.toISOString())),
     db
       .select({
         purpose: geminiRequestLog.purpose,
@@ -338,6 +349,8 @@ export async function getQualityDashboard(db: AppDb, now = new Date(), dailyGemi
       preferenceUsers: preferenceUserRows[0]?.count ?? 0,
       savedItems: savedItemRows[0]?.count ?? 0,
       completedDailySessions: completedSessionRows.length,
+      registeredAccounts: authUserRows[0]?.count ?? 0,
+      activeAccountSessions: activeAuthSessionRows[0]?.count ?? 0,
     },
     activation: [activation7, activation28],
     supply: {
@@ -390,12 +403,18 @@ async function loadActivationPeriod(db: AppDb, days: number, now: Date) {
   const firstAnswers = eventCounts.get("first_answer") ?? 0;
   const completions = eventCounts.get("daily_complete") ?? 0;
   const preferenceSaves = eventCounts.get("preference_saved") ?? 0;
+  const accountCreations = eventCounts.get("account_created") ?? 0;
+  const accountSignIns = eventCounts.get("account_signed_in") ?? 0;
+  const anonymousLinks = eventCounts.get("anonymous_data_linked") ?? 0;
   const returningVisitors = [...visitDays.values()].filter((dayCount) => dayCount >= 2).length;
 
   return {
     days,
     visitors,
     preferenceSaves,
+    accountCreations,
+    accountSignIns,
+    anonymousLinks,
     dailyStarts,
     firstAnswers,
     completions,

@@ -1,14 +1,15 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createDb } from "../../../db/client";
-import { getDueReviewCards, LOCAL_DEV_USER_ID, ReviewRequestError } from "../../../lib/reviews";
+import { resolveLearningUserId } from "../../../lib/auth";
+import { getDueReviewCards, ReviewRequestError } from "../../../lib/reviews";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
   try {
     const db = createDb(env.DB);
-    const userId = url.searchParams.get("userId") ?? LOCAL_DEV_USER_ID;
+    const userId = await resolveLearningUserId(request, env.DB, env.BETTER_AUTH_SECRET, url.searchParams.get("userId"));
     const limit = Number(url.searchParams.get("limit") ?? 20);
     const cards = await getDueReviewCards(db, userId, limit);
 

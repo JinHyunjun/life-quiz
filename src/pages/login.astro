@@ -1,0 +1,171 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { Check, LogIn, ShieldCheck, UserPlus } from "lucide-astro";
+import Base from "../layouts/Base.astro";
+import { getLifeQuizSession } from "../lib/auth";
+
+const session = await getLifeQuizSession(Astro.request, env.DB, env.BETTER_AUTH_SECRET);
+if (session) return Astro.redirect("/account");
+
+const requestedReturnTo = Astro.url.searchParams.get("returnTo") ?? "/account";
+const returnTo = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
+  ? requestedReturnTo
+  : "/account";
+---
+
+<Base title="로그인" description="라이프퀴즈 학습 기록을 계정에 연결하고 여러 기기에서 이어서 학습하세요.">
+  <div class="auth-page shell" data-return-to={returnTo}>
+    <header class="auth-heading">
+      <p class="eyebrow">OPTIONAL ACCOUNT</p>
+      <h1 class="page-title">학습 흐름을 이어가세요</h1>
+      <p>로그인하지 않아도 모든 콘텐츠를 볼 수 있습니다. 계정을 만들면 현재 브라우저 기록을 합쳐 다른 기기에서도 이어서 학습합니다.</p>
+    </header>
+
+    <div class="auth-layout">
+      <section class="auth-panel" aria-labelledby="auth-form-title">
+        <div class="auth-mode" role="tablist" aria-label="계정 방식 선택">
+          <button type="button" role="tab" aria-selected="true" aria-controls="signin-form" data-auth-mode="signin"><LogIn size={17} /> 로그인</button>
+          <button type="button" role="tab" aria-selected="false" aria-controls="signup-form" data-auth-mode="signup"><UserPlus size={17} /> 계정 만들기</button>
+        </div>
+
+        <form id="signin-form" class="auth-form" data-auth-form="signin">
+          <div class="form-title"><h2 id="auth-form-title">다시 만나서 반가워요</h2><p>저장한 상식과 복습 일정이 계정 기준으로 열립니다.</p></div>
+          <label>이메일<input type="email" name="email" autocomplete="email" required /></label>
+          <label>비밀번호<input type="password" name="password" autocomplete="current-password" minlength="8" maxlength="128" required /></label>
+          <p class="form-status" data-form-status aria-live="polite"></p>
+          <button class="button button-primary auth-submit" type="submit"><LogIn size={17} /> 로그인</button>
+        </form>
+
+        <form id="signup-form" class="auth-form" data-auth-form="signup" hidden>
+          <div class="form-title"><h2>새 학습 계정 만들기</h2><p>이메일과 비밀번호는 인증과 기기 간 동기화에만 사용합니다.</p></div>
+          <label>이름<input type="text" name="name" autocomplete="name" minlength="1" maxlength="80" required /></label>
+          <label>이메일<input type="email" name="email" autocomplete="email" required /></label>
+          <label>비밀번호<input type="password" name="password" autocomplete="new-password" minlength="8" maxlength="128" required /><small>8자 이상 입력해주세요.</small></label>
+          <label class="consent-row"><input type="checkbox" name="consent" required /><span><a href="/privacy" target="_blank">개인정보 처리방침</a>과 <a href="/terms" target="_blank">이용약관</a>에 동의합니다.</span></label>
+          <p class="form-status" data-form-status aria-live="polite"></p>
+          <button class="button button-primary auth-submit" type="submit"><UserPlus size={17} /> 계정 만들기</button>
+        </form>
+      </section>
+
+      <aside class="sync-summary" aria-label="계정 동기화 범위">
+        <ShieldCheck size={24} />
+        <h2>계정에 연결되는 기록</h2>
+        <ul>
+          <li><Check size={16} /> 관심 분야와 저장한 상식</li>
+          <li><Check size={16} /> 5분 학습 완료 기록</li>
+          <li><Check size={16} /> FSRS 복습 일정과 학습 이력</li>
+        </ul>
+        <p>방문·클릭 분석은 이메일과 분리된 익명 브라우저 ID로 집계합니다.</p>
+      </aside>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { authClient } from "../lib/auth-client";
+  import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { trackProductEvent } from "../lib/product-events-client";
+
+  const page = document.querySelector<HTMLElement>(".auth-page");
+  const returnTo = page?.dataset.returnTo ?? "/account";
+  const modeButtons = document.querySelectorAll<HTMLButtonElement>("[data-auth-mode]");
+  const forms = document.querySelectorAll<HTMLFormElement>("[data-auth-form]");
+
+  modeButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.authMode;
+      modeButtons.forEach((candidate) => candidate.setAttribute("aria-selected", String(candidate === button)));
+      forms.forEach((form) => { form.hidden = form.dataset.authForm !== mode; });
+    });
+  });
+
+  forms.forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const status = form.querySelector<HTMLElement>("[data-form-status]");
+      const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+      const values = new FormData(form);
+      const email = String(values.get("email") ?? "").trim();
+      const password = String(values.get("password") ?? "");
+      if (status) status.textContent = "계정을 확인하고 있습니다.";
+      if (submit) submit.disabled = true;
+
+      try {
+        const mode = form.dataset.authForm;
+        const result = mode === "signup"
+          ? await authClient.signUp.email({
+              name: String(values.get("name") ?? "").trim(),
+              email,
+              password,
+            })
+          : await authClient.signIn.email({ email, password, rememberMe: true });
+
+        if (result.error) throw new Error(result.error.message ?? "계정 정보를 확인해주세요.");
+        trackProductEvent(mode === "signup" ? "account_created" : "account_signed_in");
+        await linkCurrentBrowser();
+        window.location.assign(returnTo);
+      } catch (error) {
+        if (status) status.textContent = readableAuthError(error);
+        if (submit) submit.disabled = false;
+      }
+    });
+  });
+
+  async function linkCurrentBrowser() {
+    const response = await fetch("/api/account/link", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ anonymousUserId: getAnonymousUserId() }),
+    });
+    if (!response.ok) return;
+    const result = await response.json() as { linked?: boolean };
+    if (result.linked) trackProductEvent("anonymous_data_linked");
+  }
+
+  function readableAuthError(error: unknown) {
+    const message = error instanceof Error ? error.message : "로그인 처리 중 문제가 생겼습니다.";
+    if (/invalid email or password|invalid password/i.test(message)) return "이메일 또는 비밀번호가 맞지 않습니다.";
+    if (/already exists|already registered/i.test(message)) return "이미 가입된 이메일입니다. 로그인 탭을 이용해주세요.";
+    if (/rate limit|too many/i.test(message)) return "요청이 많습니다. 잠시 뒤 다시 시도해주세요.";
+    return message;
+  }
+</script>
+
+<style>
+  .auth-page { max-width: 940px; padding-top: 72px; }
+  .auth-heading { max-width: 720px; margin-bottom: 30px; }
+  .auth-heading > p:last-child { margin: 12px 0 0; color: var(--muted); }
+  .auth-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(250px, 0.65fr); gap: 24px; align-items: start; }
+  .auth-panel { padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+  .auth-mode { height: 44px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+  .auth-mode button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 5px; color: var(--muted); background: transparent; cursor: pointer; font-size: 0.82rem; font-weight: 750; }
+  .auth-mode button[aria-selected="true"] { color: var(--green-deep); background: var(--green-soft); }
+  .auth-form { display: grid; gap: 15px; padding-top: 25px; }
+  .auth-form[hidden] { display: none; }
+  .form-title { margin-bottom: 3px; }
+  .form-title h2 { margin: 0; font-size: 1.15rem; }
+  .form-title p { margin: 5px 0 0; color: var(--muted); font-size: 0.8rem; }
+  .auth-form > label:not(.consent-row) { display: grid; gap: 6px; color: var(--muted-strong); font-size: 0.76rem; font-weight: 750; }
+  .auth-form input:not([type="checkbox"]) { width: 100%; min-height: 46px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); }
+  .auth-form label small { color: var(--muted); font-weight: 500; }
+  .consent-row { display: flex; align-items: flex-start; gap: 9px; color: var(--muted); font-size: 0.72rem; }
+  .consent-row input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--green); }
+  .consent-row a { color: var(--green-deep); font-weight: 750; }
+  .auth-submit { width: 100%; }
+  .auth-submit:disabled { opacity: 0.6; cursor: wait; }
+  .form-status { min-height: 22px; margin: -2px 0; color: var(--coral); font-size: 0.76rem; }
+  .sync-summary { padding: 22px 0; border-block: 1px solid var(--line); }
+  .sync-summary > svg { color: var(--green); }
+  .sync-summary h2 { margin: 10px 0 14px; font-size: 1rem; }
+  .sync-summary ul { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .sync-summary li { display: flex; align-items: center; gap: 8px; color: var(--muted-strong); font-size: 0.8rem; }
+  .sync-summary li svg { flex: 0 0 auto; color: var(--green); }
+  .sync-summary p { margin: 18px 0 0; color: var(--muted); font-size: 0.72rem; }
+  @media (max-width: 760px) {
+    .auth-page { padding-top: 38px; }
+    .auth-layout { grid-template-columns: 1fr; }
+    .sync-summary { order: -1; padding: 16px 0; }
+  }
+</style>

@@ -134,6 +134,13 @@
       "when": 1786427934172,
       "tag": "0018_add_product_events",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1786430725928,
+      "tag": "0019_thankful_luckman",
+      "breakpoints": true
     }
   ]
 }

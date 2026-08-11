@@ -5,17 +5,17 @@ import {
   FeedbackRequestError,
   getContentFeedbackState,
   normalizeFeedbackKind,
-  normalizeFeedbackUserId,
   submitContentFeedback,
 } from "../../../lib/feedback";
+import { resolveLearningUserId } from "../../../lib/auth";
 import { ReviewRequestError } from "../../../lib/reviews";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ params, url }) => {
+export const GET: APIRoute = async ({ params, request, url }) => {
   try {
     const contentItemId = parseId(params.contentItemId);
-    const userId = normalizeFeedbackUserId(url.searchParams.get("userId"));
+    const userId = await resolveLearningUserId(request, env.DB, env.BETTER_AUTH_SECRET, url.searchParams.get("userId"));
     const state = await getContentFeedbackState(createDb(env.DB), userId, contentItemId);
     return Response.json(state, { headers: { "cache-control": "no-store" } });
   } catch (error) {
@@ -31,9 +31,15 @@ export const POST: APIRoute = async ({ params, request }) => {
 
     const contentItemId = parseId(params.contentItemId);
     const body = await readJsonBody(request);
+    const userId = await resolveLearningUserId(
+      request,
+      env.DB,
+      env.BETTER_AUTH_SECRET,
+      typeof body.userId === "string" ? body.userId : null,
+    );
     const result = await submitContentFeedback(createDb(env.DB), {
       contentItemId,
-      userId: normalizeFeedbackUserId(body.userId),
+      userId,
       kind: normalizeFeedbackKind(body.kind),
     });
     return Response.json(result, { headers: { "cache-control": "no-store" } });

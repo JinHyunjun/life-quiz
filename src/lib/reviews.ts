@@ -60,7 +60,7 @@ export interface SubmitReviewInput {
 }
 
 export async function ensureReviewUser(db: AppDb, userId = LOCAL_DEV_USER_ID) {
-  userId = normalizeReviewUserId(userId);
+  userId = normalizeDomainUserId(userId);
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
 
   if (existing) {
@@ -156,7 +156,7 @@ export async function getDueReviewCards(
 }
 
 export async function submitQuizReview(db: AppDb, input: SubmitReviewInput) {
-  const userId = normalizeReviewUserId(input.userId ?? LOCAL_DEV_USER_ID);
+  const userId = normalizeDomainUserId(input.userId ?? LOCAL_DEV_USER_ID);
   const now = input.now ?? new Date();
 
   if (!input.answer && input.rating === undefined) {
@@ -298,6 +298,15 @@ export function normalizeReviewUserId(value: string) {
     return value.toLowerCase();
   }
   throw new ReviewRequestError("Invalid anonymous user id.");
+}
+
+export function normalizeDomainUserId(value: string) {
+  try {
+    return normalizeReviewUserId(value);
+  } catch (error) {
+    if (/^[a-zA-Z0-9_-]{8,128}$/.test(value)) return value;
+    throw error;
+  }
 }
 
 function toIso(date: Date | null | undefined) {

@@ -1,14 +1,15 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createDb } from "../../db/client";
+import { resolveLearningUserId } from "../../lib/auth";
 import { getOrCreateDailySession } from "../../lib/daily-learning";
-import { LOCAL_DEV_USER_ID, ReviewRequestError } from "../../lib/reviews";
+import { ReviewRequestError } from "../../lib/reviews";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
   try {
-    const userId = url.searchParams.get("userId") ?? LOCAL_DEV_USER_ID;
+    const userId = await resolveLearningUserId(request, env.DB, env.BETTER_AUTH_SECRET, url.searchParams.get("userId"));
     const session = await getOrCreateDailySession(createDb(env.DB), userId);
     return Response.json(session, { headers: { "cache-control": "no-store" } });
   } catch (error) {

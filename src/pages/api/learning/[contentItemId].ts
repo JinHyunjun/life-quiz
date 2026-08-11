@@ -1,15 +1,16 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createDb } from "../../../db/client";
+import { resolveLearningUserId } from "../../../lib/auth";
 import { enrollLearningItem, getLearningStatus, LearningRequestError } from "../../../lib/learning";
-import { LOCAL_DEV_USER_ID, ReviewRequestError } from "../../../lib/reviews";
+import { ReviewRequestError } from "../../../lib/reviews";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ params, url }) => {
+export const GET: APIRoute = async ({ params, request, url }) => {
   try {
     const contentItemId = parseContentItemId(params.contentItemId);
-    const userId = url.searchParams.get("userId") ?? LOCAL_DEV_USER_ID;
+    const userId = await resolveLearningUserId(request, env.DB, env.BETTER_AUTH_SECRET, url.searchParams.get("userId"));
     return Response.json(await getLearningStatus(createDb(env.DB), userId, contentItemId));
   } catch (error) {
     return jsonError(error);
@@ -18,9 +19,15 @@ export const GET: APIRoute = async ({ params, url }) => {
 
 export const POST: APIRoute = async ({ params, request }) => {
   try {
+    if (!isSameOrigin(request)) return Response.json({ error: "Forbidden" }, { status: 403 });
     const contentItemId = parseContentItemId(params.contentItemId);
     const body = await readJsonBody(request);
-    const userId = typeof body.userId === "string" ? body.userId : LOCAL_DEV_USER_ID;
+    const userId = await resolveLearningUserId(
+      request,
+      env.DB,
+      env.BETTER_AUTH_SECRET,
+      typeof body.userId === "string" ? body.userId : null,
+    );
     return Response.json(await enrollLearningItem(createDb(env.DB), userId, contentItemId));
   } catch (error) {
     return jsonError(error);
@@ -33,6 +40,11 @@ function parseContentItemId(value: string | undefined) {
     throw new LearningRequestError("contentItemId must be a positive integer.");
   }
   return contentItemId;
+}
+
+function isSameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return !origin || origin === new URL(request.url).origin;
 }
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown>> {

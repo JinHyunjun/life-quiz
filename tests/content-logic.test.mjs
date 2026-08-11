@@ -37,6 +37,7 @@ import {
 } from "../workers/ingest/src/schedule.ts";
 import { FALLBACK_RELEASE_FEED, parseNotionReleaseBlocks } from "../src/lib/releases.ts";
 import { normalizeProductEvent } from "../src/lib/product-events.ts";
+import { mergePreferenceCategories } from "../src/lib/account-linking-logic.ts";
 
 const verifiedAiRestorationSql = readFileSync(
   new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
@@ -500,6 +501,20 @@ test("product events accept only anonymous visitors and allowlisted metadata", (
     visitorId: "anon:123e4567-e89b-42d3-a456-426614174000",
     eventName: "unknown",
   }));
+  assert.equal(normalizeProductEvent({
+    visitorId: "anon:123e4567-e89b-42d3-a456-426614174000",
+    eventName: "account_created",
+  }).eventName, "account_created");
+});
+
+test("anonymous account linking keeps current-browser preferences first and removes duplicates", () => {
+  assert.deepEqual(
+    mergePreferenceCategories(
+      ["finance", "health", "housing"],
+      ["housing", "investment", "career", "rights"],
+    ),
+    ["finance", "health", "housing", "investment", "career"],
+  );
 });
 
 test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", () => {
@@ -570,7 +585,7 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
 });
 
 test("checked-in release snapshot keeps the latest deployed version first", () => {
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.20");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.21");
   assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-11");
   assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
 });

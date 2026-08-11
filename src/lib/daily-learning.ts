@@ -7,7 +7,7 @@ import { getPreferredCategories } from "./personalization";
 import {
   ensureReviewUser,
   getDueReviewCards,
-  normalizeReviewUserId,
+  normalizeDomainUserId,
   ReviewRequestError,
   submitQuizReview,
   type SubmitReviewInput,
@@ -48,7 +48,7 @@ export async function getOrCreateDailySession(
   userIdValue: string,
   now = new Date(),
 ): Promise<DailySession> {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   const date = kstDateKey(now);
   let cards = await loadDailySessionCards(db, userId, date);
 
@@ -130,7 +130,7 @@ export async function submitDailyReview(
   totalCount: number;
   isComplete: boolean;
 }> {
-  const userId = normalizeReviewUserId(input.userId ?? "");
+  const userId = normalizeDomainUserId(input.userId ?? "");
   const now = input.now ?? new Date();
   const date = kstDateKey(now);
   const [sessionItem] = await db

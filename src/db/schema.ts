@@ -2,7 +2,8 @@ import { index, uniqueIndex, sqliteTable, text, integer, real } from "drizzle-or
 import type { Category } from "../lib/categories";
 import type { ReleaseFeed } from "../lib/releases";
 
-// Placeholder shape; Phase 5 regenerates this via `better-auth` CLI to match its session/account tables.
+// Learning-domain identity. Anonymous browser IDs and authenticated Better Auth IDs both
+// point here so learning tables can keep one stable foreign-key boundary.
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -185,6 +186,90 @@ export const userPreferences = sqliteTable("user_preferences", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+export const authUsers = sqliteTable(
+  "auth_user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    emailVerified: integer("emailVerified", { mode: "boolean" }).notNull().default(false),
+    image: text("image"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull(),
+  },
+  (table) => [uniqueIndex("auth_user_email_unique").on(table.email)],
+);
+
+export const authSessions = sqliteTable(
+  "auth_session",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: text("expiresAt").notNull(),
+    token: text("token").notNull(),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull(),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    userId: text("userId")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("auth_session_token_unique").on(table.token),
+    index("auth_session_user_id_idx").on(table.userId),
+    index("auth_session_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const authAccounts = sqliteTable(
+  "auth_account",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    userId: text("userId")
+      .notNull()
+      .references(() => authUsers.id, { onDelete: "cascade" }),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: text("accessTokenExpiresAt"),
+    refreshTokenExpiresAt: text("refreshTokenExpiresAt"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull(),
+  },
+  (table) => [
+    uniqueIndex("auth_account_provider_account_unique").on(table.providerId, table.accountId),
+    index("auth_account_user_id_idx").on(table.userId),
+  ],
+);
+
+export const authVerifications = sqliteTable(
+  "auth_verification",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: text("expiresAt").notNull(),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull(),
+  },
+  (table) => [index("auth_verification_identifier_idx").on(table.identifier)],
+);
+
+export const authRateLimits = sqliteTable(
+  "auth_rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull(),
+    lastRequest: integer("lastRequest").notNull(),
+  },
+  (table) => [uniqueIndex("auth_rate_limit_key_unique").on(table.key)],
+);
+
 export const savedContentItems = sqliteTable(
   "saved_content_items",
   {
@@ -214,6 +299,9 @@ export const PRODUCT_EVENT_NAMES = [
   "content_saved",
   "review_enrolled",
   "chat_asked",
+  "account_created",
+  "account_signed_in",
+  "anonymous_data_linked",
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

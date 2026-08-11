@@ -23,10 +23,24 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-11T06:30:00.000Z",
+  fetchedAt: "2026-08-11T07:10:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.21",
+      title: "선택형 계정과 기기 간 학습 동기화",
+      date: "2026-08-11",
+      changes: [
+        { type: "bullet", text: "better-auth 이메일·비밀번호 로그인과 30일 세션을 Cloudflare D1에 연결하고 데스크톱 상단·사이드바·모바일 전체 메뉴에 계정 진입점 추가" },
+        { type: "bullet", text: "로그인하지 않아도 기존 기능을 그대로 쓰되 가입·로그인 직후 현재 브라우저의 관심 분야, 저장 상식, 5분 학습, FSRS 복습, 피드백을 계정에 원자적으로 병합" },
+        { type: "bullet", text: "개인화·저장·복습 API가 클라이언트 userId보다 서버 세션을 우선하도록 바꿔 계정 ID 위조를 막고 여러 기기에서 같은 학습 기록을 조회" },
+        { type: "bullet", text: "가입·로그인 화면, 계정·동기화 상태 화면, 개인정보 처리방침과 이용약관을 추가하고 이메일은 로그인 용도에만 사용하며 행동 이벤트와 분리" },
+        { type: "bullet", text: "인증 요청을 D1 기반 경로별 rate limit으로 보호하고 만료 세션·검증·제한 기록은 기존 수집 Cron 안에서 정리해 새 Cron을 추가하지 않음" },
+        { type: "bullet", text: "운영 대시보드에 등록 계정·유효 로그인과 최근 7일·28일 계정 생성·로그인·익명 기록 연결 지표 추가" },
+        { type: "bullet", text: "인증용 D1 마이그레이션, 최신 빌드 기반 Playwright 서버, 타입체크와 로직 38건·데스크톱/모바일 E2E 30건으로 계정 생성·기록 병합·로그아웃·재로그인 검증" },
+      ],
+    },
     {
       version: "v0.20",
       title: "첫 학습 활성화와 공급 SLO",

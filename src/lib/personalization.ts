@@ -20,7 +20,7 @@ import {
 import {
   ensureReviewUser,
   getDueReviewCards,
-  normalizeReviewUserId,
+  normalizeDomainUserId,
   ReviewRequestError,
 } from "./reviews";
 
@@ -66,7 +66,7 @@ export interface LearningProfile {
 }
 
 export async function getPreferredCategories(db: AppDb, userIdValue: string) {
-  const userId = normalizeReviewUserId(userIdValue);
+  const userId = normalizeDomainUserId(userIdValue);
   const [row] = await db
     .select({ categories: userPreferences.categories })
     .from(userPreferences)
@@ -82,7 +82,7 @@ export async function saveUserPreferences(
   categoriesValue: unknown,
   now = new Date(),
 ) {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   const categories = normalizePreferenceCategories(categoriesValue);
 
   await db
@@ -97,7 +97,7 @@ export async function saveUserPreferences(
 }
 
 export async function getSavedContentStatus(db: AppDb, userIdValue: string, contentItemId: number) {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   const [row] = await db
     .select({ id: savedContentItems.id })
     .from(savedContentItems)
@@ -116,7 +116,7 @@ export async function saveContentItem(
   contentItemId: number,
   now = new Date(),
 ) {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   const [content] = await db
     .select({ id: contentItems.id })
     .from(contentItems)
@@ -139,7 +139,7 @@ export async function saveContentItem(
 }
 
 export async function removeSavedContentItem(db: AppDb, userIdValue: string, contentItemId: number) {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   await db
     .delete(savedContentItems)
     .where(and(
@@ -155,7 +155,7 @@ export async function getLearningProfile(
   userIdValue: string,
   now = new Date(),
 ): Promise<LearningProfile> {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   const today = kstDateKey(now);
 
   const [

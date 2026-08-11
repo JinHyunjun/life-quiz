@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createDb } from "../../../db/client";
+import { resolveLearningUserId } from "../../../lib/auth";
 import { submitDailyReview } from "../../../lib/daily-learning";
 import { ReviewRequestError } from "../../../lib/reviews";
 
@@ -18,9 +19,15 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
 
     const body = await readJsonBody(request);
+    const userId = await resolveLearningUserId(
+      request,
+      env.DB,
+      env.BETTER_AUTH_SECRET,
+      typeof body.userId === "string" ? body.userId : null,
+    );
     const result = await submitDailyReview(createDb(env.DB), {
       quizItemId,
-      userId: typeof body.userId === "string" ? body.userId : undefined,
+      userId,
       answer: typeof body.answer === "string" ? body.answer : undefined,
       rating: body.rating,
     });

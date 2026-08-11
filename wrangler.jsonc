@@ -9,7 +9,7 @@
 		"GEMINI_DAILY_BUDGET": "400"
 	},
 	"secrets": {
-		"required": ["INGEST_ADMIN_TOKEN"]
+		"required": ["INGEST_ADMIN_TOKEN", "BETTER_AUTH_SECRET"]
 	},
 	"assets": {
 		"directory": "./dist",

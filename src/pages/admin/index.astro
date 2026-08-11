@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Activity, AlertTriangle, Bookmark, Bot, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, Gauge, ListChecks, LogOut, MessageSquareWarning, MousePointerClick, Play, Radio, RefreshCw, Repeat2, SlidersHorizontal, ThumbsUp, UsersRound } from "lucide-astro";
+import { Activity, AlertTriangle, Bookmark, Bot, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, Gauge, KeyRound, ListChecks, LogOut, MessageSquareWarning, MousePointerClick, Play, Radio, RefreshCw, Repeat2, SlidersHorizontal, ThumbsUp, UserCheck, UsersRound } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import { createDb } from "../../db/client";
 import { isAuthorizedAdminSession } from "../../lib/admin";
@@ -141,6 +141,9 @@ function statusLabel(status: QualityStatus) {
             </ol>
             <footer>
               <span><SlidersHorizontal size={14} /> 관심사 저장 <strong>{period.preferenceSaves}</strong></span>
+              <span><UserCheck size={14} /> 계정 생성 <strong>{period.accountCreations}</strong></span>
+              <span><KeyRound size={14} /> 로그인 <strong>{period.accountSignIns}</strong></span>
+              <span><Repeat2 size={14} /> 기록 연결 <strong>{period.anonymousLinks}</strong></span>
               <span><Repeat2 size={14} /> 다른 날 재방문 <strong>{period.returningVisitors}</strong></span>
             </footer>
           </article>
@@ -334,6 +337,14 @@ function statusLabel(status: QualityStatus) {
         </div>
       </div>
       <dl class="adoption-metrics">
+        <div>
+          <dt><UserCheck size={17} /> 등록 계정</dt>
+          <dd>{dashboard.engagement.registeredAccounts}<small>명</small></dd>
+        </div>
+        <div>
+          <dt><KeyRound size={17} /> 유효 로그인</dt>
+          <dd>{dashboard.engagement.activeAccountSessions}<small>명</small></dd>
+        </div>
         <div>
           <dt><UsersRound size={17} /> 관심 분야 설정</dt>
           <dd>{dashboard.engagement.preferenceUsers}<small>브라우저</small></dd>
@@ -659,7 +670,7 @@ function statusLabel(status: QualityStatus) {
 
   .adoption-metrics {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     margin: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -675,6 +686,11 @@ function statusLabel(status: QualityStatus) {
   .adoption-metrics dt { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.72rem; font-weight: 740; }
   .adoption-metrics dd { margin: 5px 0 0; font-size: 1.55rem; font-weight: 820; }
   .adoption-metrics dd small { margin-left: 4px; color: var(--muted); font-size: 0.68rem; font-weight: 650; }
+
+  @media (max-width: 1120px) and (min-width: 721px) {
+    .adoption-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .adoption-metrics > div { border-bottom: 1px solid var(--line); }
+  }
 
   .table-scroll { overflow-x: auto; }
   .run-actions { display: flex; align-items: center; justify-content: end; gap: 10px; }

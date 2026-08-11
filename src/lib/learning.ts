@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { contentItems, learningItems, quizItems } from "../db/schema";
-import { ensureReviewUser, normalizeReviewUserId } from "./reviews";
+import { ensureReviewUser, normalizeDomainUserId } from "./reviews";
 
 export class LearningRequestError extends Error {
   constructor(
@@ -13,7 +13,7 @@ export class LearningRequestError extends Error {
 }
 
 export async function getLearningStatus(db: AppDb, userIdValue: string, contentItemId: number) {
-  const userId = normalizeReviewUserId(userIdValue);
+  const userId = normalizeDomainUserId(userIdValue);
   const [row] = await db
     .select({ enrolledAt: learningItems.enrolledAt })
     .from(learningItems)
@@ -24,7 +24,7 @@ export async function getLearningStatus(db: AppDb, userIdValue: string, contentI
 }
 
 export async function enrollLearningItem(db: AppDb, userIdValue: string, contentItemId: number) {
-  const userId = normalizeReviewUserId(userIdValue);
+  const userId = normalizeDomainUserId(userIdValue);
   await ensureReviewUser(db, userId);
 
   const [available] = await db

@@ -1,12 +1,14 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createDb } from "../../../db/client";
-import { LOCAL_DEV_USER_ID, ReviewRequestError, submitQuizReview } from "../../../lib/reviews";
+import { resolveLearningUserId } from "../../../lib/auth";
+import { ReviewRequestError, submitQuizReview } from "../../../lib/reviews";
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ params, request, url }) => {
   try {
+    if (!isSameOrigin(request)) return Response.json({ error: "Forbidden" }, { status: 403 });
     const quizItemId = Number(params.quizItemId);
 
     if (!Number.isInteger(quizItemId) || quizItemId < 1) {
@@ -15,9 +17,10 @@ export const POST: APIRoute = async ({ params, request, url }) => {
 
     const body = await readJsonBody(request);
     const db = createDb(env.DB);
+    const userId = await resolveLearningUserId(request, env.DB, env.BETTER_AUTH_SECRET, readUserId(body, url));
     const result = await submitQuizReview(db, {
       quizItemId,
-      userId: readUserId(body, url),
+      userId,
       answer: typeof body.answer === "string" ? body.answer : undefined,
       rating: body.rating,
     });
@@ -43,7 +46,12 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 }
 
 function readUserId(body: Record<string, unknown>, url: URL) {
-  return typeof body.userId === "string" ? body.userId : (url.searchParams.get("userId") ?? LOCAL_DEV_USER_ID);
+  return typeof body.userId === "string" ? body.userId : url.searchParams.get("userId");
+}
+
+function isSameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return !origin || origin === new URL(request.url).origin;
 }
 
 function jsonError(error: unknown) {

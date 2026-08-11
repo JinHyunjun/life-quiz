@@ -5,7 +5,7 @@ import {
   contentItems,
   type ContentFeedbackKind,
 } from "../db/schema";
-import { ensureReviewUser, normalizeReviewUserId, ReviewRequestError } from "./reviews";
+import { ensureReviewUser, normalizeDomainUserId, normalizeReviewUserId, ReviewRequestError } from "./reviews";
 
 export const FEEDBACK_KINDS = [
   "helpful",
@@ -46,7 +46,7 @@ export async function getContentFeedbackState(
   userIdValue: string,
   contentItemId: number,
 ) {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(userIdValue))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(userIdValue))).id;
   const [submitted, helpfulRows] = await Promise.all([
     db
       .select({ kind: contentFeedback.kind })
@@ -80,7 +80,7 @@ export async function submitContentFeedback(
     now?: Date;
   },
 ) {
-  const userId = (await ensureReviewUser(db, normalizeReviewUserId(params.userId))).id;
+  const userId = (await ensureReviewUser(db, normalizeDomainUserId(params.userId))).id;
   const now = params.now ?? new Date();
   const [available] = await db
     .select({ id: contentItems.id })

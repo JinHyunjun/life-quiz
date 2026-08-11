@@ -6,13 +6,14 @@ import {
   PersonalizationRequestError,
   saveUserPreferences,
 } from "../../lib/personalization";
-import { LOCAL_DEV_USER_ID, ReviewRequestError } from "../../lib/reviews";
+import { resolveLearningUserId } from "../../lib/auth";
+import { ReviewRequestError } from "../../lib/reviews";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url }) => {
+export const GET: APIRoute = async ({ request, url }) => {
   try {
-    const userId = url.searchParams.get("userId") ?? LOCAL_DEV_USER_ID;
+    const userId = await resolveLearningUserId(request, env.DB, env.BETTER_AUTH_SECRET, url.searchParams.get("userId"));
     const profile = await getLearningProfile(createDb(env.DB), userId);
     return Response.json(profile, { headers: { "cache-control": "no-store" } });
   } catch (error) {
@@ -27,7 +28,12 @@ export const PATCH: APIRoute = async ({ request }) => {
     }
 
     const body = await readJsonBody(request);
-    const userId = typeof body.userId === "string" ? body.userId : LOCAL_DEV_USER_ID;
+    const userId = await resolveLearningUserId(
+      request,
+      env.DB,
+      env.BETTER_AUTH_SECRET,
+      typeof body.userId === "string" ? body.userId : null,
+    );
     const result = await saveUserPreferences(createDb(env.DB), userId, body.categories);
     return Response.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {

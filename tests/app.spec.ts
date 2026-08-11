@@ -197,6 +197,55 @@ test("learning profile saves interests and bookmarked knowledge", async ({ page 
   await expect(page.getByLabel("건강·마음", { exact: true })).toBeChecked();
 });
 
+test("optional account links anonymous learning data and restores it after sign-in", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  await page.goto("/me");
+  const anonymousUserId = `anon:${await page.evaluate(() => crypto.randomUUID())}`;
+  await page.evaluate((userId) => localStorage.setItem("life-quiz-anonymous-user", userId), anonymousUserId);
+  const preferenceResponse = await page.evaluate(async (userId) => {
+    const response = await fetch("/api/onboarding", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId, categories: ["finance", "health"] }),
+    });
+    return response.status;
+  }, anonymousUserId);
+  expect(preferenceResponse).toBe(200);
+
+  const unique = `${testInfo.project.name}-${Date.now()}`;
+  const email = `life-quiz-${unique}@example.com`;
+  const password = `LifeQuiz!${unique}`;
+  await page.goto("/login");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await page.getByRole("tab", { name: "계정 만들기" }).click();
+  const signup = page.locator("#signup-form");
+  await signup.getByLabel("이름").fill("동기화 테스트");
+  await signup.getByLabel("이메일").fill(email);
+  await signup.getByLabel("비밀번호").fill(password);
+  await signup.getByRole("checkbox").check();
+  await signup.getByRole("button", { name: "계정 만들기" }).click();
+
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(page.getByRole("heading", { level: 1, name: /동기화 테스트님의 계정/ })).toBeVisible();
+  await expect(page.locator("#sync-status")).toContainText(/최신 상태|계정에 연결/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+
+  await page.goto("/me");
+  await expect(page.getByLabel("금융", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("건강·마음", { exact: true })).toBeChecked();
+
+  await page.goto("/account");
+  await page.getByRole("button", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/login");
+  const signin = page.locator("#signin-form");
+  await signin.getByLabel("이메일").fill(email);
+  await signin.getByLabel("비밀번호").fill(password);
+  await signin.getByRole("button", { name: "로그인" }).click();
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(page.getByText(email).first()).toBeVisible();
+});
+
 test("starter courses organize foundational visual guides", async ({ page }) => {
   await page.goto("/start");
 
