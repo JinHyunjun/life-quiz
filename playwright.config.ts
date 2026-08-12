@@ -43,7 +43,7 @@ export default defineConfig({
       BETTER_AUTH_SECRET: "playwright-better-auth-secret-with-32-characters",
     },
     reuseExistingServer: true,
-    timeout: 60_000,
+    timeout: 120_000,
     stdout: "pipe",
     stderr: "pipe",
   },

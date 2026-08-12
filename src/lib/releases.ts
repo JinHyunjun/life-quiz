@@ -23,10 +23,24 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-11T07:10:00.000Z",
+  fetchedAt: "2026-08-12T07:30:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.22",
+      title: "로그인 우선 진입과 비공개 문의함",
+      date: "2026-08-12",
+      changes: [
+        { type: "bullet", text: "비로그인 첫 홈 접속은 로그인 화면으로 안내하고, 계정 없이 살펴보기를 선택하면 30일 동안 기존 익명 학습 흐름을 유지하도록 진입 경험 개선" },
+        { type: "bullet", text: "로그인·계정 접근·정보 삭제·서비스 오류·콘텐츠·기능 제안을 공개 GitHub 없이 접수하는 문의·피드백 페이지 추가" },
+        { type: "bullet", text: "문의 이름·이메일·본문은 D1에 비공개 저장하고 운영 토큰으로 보호된 관리자 문의함에서만 열람·처리·이메일 답변 가능" },
+        { type: "bullet", text: "IP와 브라우저 정보를 운영 시크릿으로 HMAC 처리한 요청 제한, 허니팟, 길이 검증을 적용하고 비밀번호 등 민감정보 입력 금지 안내 추가" },
+        { type: "bullet", text: "해결·종료된 문의는 기존 통합 Cron에서 180일 뒤 삭제해 새 Cron 없이 보관 정책 자동화" },
+        { type: "bullet", text: "Quick Read가 화면에 실제 표시되는 카드 범위를 1-2·2-3·3-4처럼 안내하고 마지막 위치에서 다음 버튼과 상태를 명확히 표시하도록 수정" },
+        { type: "bullet", text: "개인정보 처리방침·이용약관·계정·내비게이션의 공개 GitHub 문의 링크를 모두 비공개 문의 창구로 교체" },
+      ],
+    },
     {
       version: "v0.21",
       title: "선택형 계정과 기기 간 학습 동기화",

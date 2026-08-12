@@ -46,7 +46,7 @@ const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", date
       </nav>
     </div>
 
-    <p class="account-note">현재 베타 계정은 이메일 확인 및 비밀번호 재설정을 지원하지 않습니다. 계정 관련 요청은 <a href="https://github.com/JinHyunjun/life-quiz/issues" target="_blank" rel="noopener noreferrer">GitHub 이슈</a>로 남겨주세요.</p>
+    <p class="account-note">현재 베타 계정은 이메일 확인 및 비밀번호 재설정을 지원하지 않습니다. 계정 접근·정보 정정·삭제 요청은 개인정보가 공개되지 않는 <a href="/support">문의·피드백</a>에서 접수해주세요.</p>
   </div>
 </Base>
 
@@ -75,7 +75,8 @@ const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", date
     const button = event.currentTarget as HTMLButtonElement;
     button.disabled = true;
     await authClient.signOut();
-    window.location.assign("/");
+    await fetch("/api/access/guest", { method: "DELETE" });
+    window.location.assign("/login");
   });
 </script>
 

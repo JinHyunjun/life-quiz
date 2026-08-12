@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Activity, AlertTriangle, Bookmark, Bot, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, Gauge, KeyRound, ListChecks, LogOut, MessageSquareWarning, MousePointerClick, Play, Radio, RefreshCw, Repeat2, SlidersHorizontal, ThumbsUp, UserCheck, UsersRound } from "lucide-astro";
+import { Activity, AlertTriangle, Bookmark, Bot, CalendarCheck2, CalendarClock, Check, CheckCircle2, CircleX, Clock3, Database, EyeOff, FileCheck2, Gauge, KeyRound, ListChecks, LogOut, Mail, MessageSquareWarning, MousePointerClick, Play, Radio, RefreshCw, Repeat2, SlidersHorizontal, ThumbsUp, UserCheck, UsersRound } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import { createDb } from "../../db/client";
 import { isAuthorizedAdminSession } from "../../lib/admin";
@@ -10,13 +10,18 @@ import { CATEGORY_LABELS } from "../../lib/categories";
 import { formatKstDate } from "../../lib/dates";
 import { FEEDBACK_LABELS } from "../../lib/feedback";
 import { getQualityDashboard, type QualityStatus } from "../../lib/quality";
+import { listSupportInbox, SUPPORT_CATEGORY_LABELS } from "../../lib/support";
 
 if (!(await isAuthorizedAdminSession(Astro.request, env.INGEST_ADMIN_TOKEN))) {
   return Astro.redirect(`/admin/login?returnTo=${encodeURIComponent(Astro.url.pathname + Astro.url.search)}`);
 }
 
 Astro.response.headers.set("cache-control", "no-store");
-const dashboard = await getQualityDashboard(createDb(env.DB), new Date(), Number(env.GEMINI_DAILY_BUDGET));
+const db = createDb(env.DB);
+const [dashboard, supportInbox] = await Promise.all([
+  getQualityDashboard(db, new Date(), Number(env.GEMINI_DAILY_BUDGET)),
+  listSupportInbox(db),
+]);
 const maxDailyCount = Math.max(1, ...dashboard.daily.map(({ count }) => count));
 const maxGeminiDailyCount = Math.max(1, ...dashboard.operations.gemini.daily.map(({ count }) => count));
 const diagnosticSummary = dashboard.latestDiagnostics.reduce(
@@ -291,6 +296,46 @@ function statusLabel(status: QualityStatus) {
         </div>
       </section>
     </div>
+
+    <section class="admin-section support-inbox-section" aria-labelledby="support-inbox-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">PRIVATE SUPPORT</p>
+          <h2 id="support-inbox-title">문의함</h2>
+        </div>
+        <div class="feedback-metrics">
+          <span><Mail size={14} /> 새 문의 <strong id="open-support-count">{supportInbox.openCount}</strong></span>
+          <span><Clock3 size={14} /> 처리 중 {supportInbox.activeCount - supportInbox.openCount}</span>
+        </div>
+      </div>
+      {supportInbox.queue.length > 0 ? (
+        <ul class="support-inbox" id="support-inbox">
+          {supportInbox.queue.map((request) => (
+            <li data-support-row={request.id} data-status={request.status}>
+              <div class="support-ticket-topline">
+                <span class="support-ticket-code">LQ-{String(request.id).padStart(6, "0")}</span>
+                <span class="table-status" data-status={request.status === "open" ? "fail" : "warning"}>{request.status === "open" ? "새 문의" : "처리 중"}</span>
+              </div>
+              <div class="support-ticket-content">
+                <span>{SUPPORT_CATEGORY_LABELS[request.category]} · {dateTimeFormatter.format(request.createdAt)}</span>
+                <h3>{request.subject}</h3>
+                <p>{request.message}</p>
+                <small>{request.name} · <a href={`mailto:${request.email}`}>{request.email}</a>{request.userId ? " · 로그인 계정" : " · 비로그인"}</small>
+              </div>
+              <div class="support-ticket-actions">
+                <a class="icon-button" href={`mailto:${request.email}?subject=${encodeURIComponent(`[Life Quiz ${`LQ-${String(request.id).padStart(6, "0")}`}] ${request.subject}`)}`} aria-label="이메일로 답변" title="이메일로 답변"><Mail size={17} /></a>
+                {request.status === "open" && <button class="icon-button" type="button" data-support-id={request.id} data-support-action="in_progress" aria-label="문의 처리 시작" title="처리 시작"><Clock3 size={17} /></button>}
+                <button class="icon-button" type="button" data-support-id={request.id} data-support-action="resolved" aria-label="문의 해결 완료" title="해결 완료"><Check size={17} /></button>
+                <button class="icon-button" type="button" data-support-id={request.id} data-support-action="dismissed" aria-label="문의 종료" title="종료"><EyeOff size={17} /></button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div class="empty-diagnostics" id="support-empty"><CheckCircle2 size={24} /><span>확인할 비공개 문의가 없습니다.</span></div>
+      )}
+      <p class="admin-action-status" id="support-action-status" aria-live="polite"></p>
+    </section>
 
     <section class="admin-section feedback-queue-section" aria-labelledby="feedback-queue-title">
       <div class="section-heading compact-heading">
@@ -666,6 +711,21 @@ function statusLabel(status: QualityStatus) {
   .feedback-actions .icon-button { width: 36px; height: 36px; flex-basis: 36px; }
   .feedback-actions .icon-button:first-child { color: var(--green-deep); }
   .feedback-actions .icon-button:last-child { color: var(--muted); }
+
+  .support-inbox { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .support-inbox > li { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: start; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+  .support-inbox > li[data-status="open"] { border-left: 3px solid var(--coral); }
+  .support-ticket-topline { display: grid; justify-items: start; gap: 7px; }
+  .support-ticket-code { color: var(--muted-strong); font-size: 0.72rem; font-weight: 850; }
+  .support-ticket-content { min-width: 0; }
+  .support-ticket-content > span { color: var(--muted); font-size: 0.68rem; }
+  .support-ticket-content h3 { margin: 5px 0 6px; font-size: 0.9rem; }
+  .support-ticket-content p { margin: 0; color: var(--muted-strong); font-size: 0.76rem; line-height: 1.65; white-space: pre-wrap; }
+  .support-ticket-content small { display: block; margin-top: 9px; color: var(--muted); font-size: 0.68rem; }
+  .support-ticket-content a { color: var(--green-deep); font-weight: 750; }
+  .support-ticket-actions { display: flex; gap: 5px; }
+  .support-ticket-actions .icon-button { width: 34px; height: 34px; flex-basis: 34px; color: var(--muted-strong); }
+  .support-ticket-actions a { color: var(--green-deep); }
   .admin-action-status { min-height: 18px; margin: 8px 0 0; color: var(--muted); font-size: 0.72rem; }
 
   .adoption-metrics {
@@ -748,6 +808,9 @@ function statusLabel(status: QualityStatus) {
     .ingestion-action-status { text-align: left; }
     .feedback-queue li { grid-template-columns: 8px minmax(0, 1fr); }
     .feedback-actions { grid-column: 2; }
+    .support-inbox > li { grid-template-columns: 1fr; }
+    .support-ticket-topline { display: flex; align-items: center; justify-content: space-between; }
+    .support-ticket-actions { justify-content: flex-end; }
     .adoption-metrics { grid-template-columns: 1fr; }
     .adoption-metrics > div,
     .adoption-metrics > div:first-child,
@@ -757,7 +820,10 @@ function statusLabel(status: QualityStatus) {
 
 <script>
   const feedbackActionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-feedback-action]"));
+  const supportActionButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-support-action]"));
   const actionStatus = document.querySelector<HTMLElement>("#admin-action-status");
+  const supportActionStatus = document.querySelector<HTMLElement>("#support-action-status");
+  const openSupportCount = document.querySelector<HTMLElement>("#open-support-count");
   const openCount = document.querySelector<HTMLElement>("#open-feedback-count");
   const runIngestionButton = document.querySelector<HTMLButtonElement>("#run-ingestion");
   const ingestionActionStatus = document.querySelector<HTMLElement>("#ingestion-action-status");
@@ -802,6 +868,39 @@ function statusLabel(status: QualityStatus) {
       } catch (error) {
         row?.querySelectorAll<HTMLButtonElement>("button").forEach((rowButton) => { rowButton.disabled = false; });
         if (actionStatus) actionStatus.textContent = error instanceof Error ? error.message : "잠시 후 다시 시도해주세요.";
+      }
+    });
+  });
+
+  supportActionButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      const supportId = Number(button.dataset.supportId);
+      const status = button.dataset.supportAction;
+      if (!Number.isInteger(supportId) || !["in_progress", "resolved", "dismissed"].includes(status ?? "")) return;
+      const row = document.querySelector<HTMLElement>(`[data-support-row="${supportId}"]`);
+      row?.querySelectorAll<HTMLButtonElement>("button").forEach((rowButton) => { rowButton.disabled = true; });
+      if (supportActionStatus) supportActionStatus.textContent = "문의 상태를 변경하고 있습니다.";
+
+      try {
+        const response = await fetch(`/api/admin/support/${supportId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json", accept: "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        const result = await response.json() as { error?: string };
+        if (!response.ok) throw new Error(result.error ?? "상태를 변경하지 못했습니다.");
+        if (status === "in_progress") {
+          if (openSupportCount) openSupportCount.textContent = String(Math.max(0, Number(openSupportCount.textContent) - 1));
+          if (supportActionStatus) supportActionStatus.textContent = "처리 중인 문의로 표시했습니다.";
+          window.setTimeout(() => window.location.reload(), 500);
+        } else {
+          if (row?.dataset.status === "open" && openSupportCount) openSupportCount.textContent = String(Math.max(0, Number(openSupportCount.textContent) - 1));
+          row?.remove();
+          if (supportActionStatus) supportActionStatus.textContent = status === "resolved" ? "해결한 문의로 처리했습니다." : "문의 처리를 종료했습니다.";
+        }
+      } catch (error) {
+        row?.querySelectorAll<HTMLButtonElement>("button").forEach((rowButton) => { rowButton.disabled = false; });
+        if (supportActionStatus) supportActionStatus.textContent = error instanceof Error ? error.message : "잠시 뒤 다시 시도해주세요.";
       }
     });
   });

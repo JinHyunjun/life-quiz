@@ -10,6 +10,13 @@ import { getContentStats, getTodayCategoryCounts, listArchiveDays, listRecentAiD
 import { CATEGORY_DESCRIPTIONS, CATEGORY_GROUPS, CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
 import { formatKstDate, formatShortDate, todayKstRange } from "../lib/dates";
 import { excerpt } from "../lib/text";
+import { getLifeQuizSession } from "../lib/auth";
+import { hasGuestAccess } from "../lib/guest-access";
+
+const session = await getLifeQuizSession(Astro.request, env.DB, env.BETTER_AUTH_SECRET);
+if (!session && !hasGuestAccess(Astro.request)) {
+  return Astro.redirect("/login?returnTo=%2F");
+}
 
 const db = createDb(env.DB);
 const categoryParam = Astro.url.searchParams.get("category");
@@ -26,9 +33,7 @@ const [items, stats, archiveDays, visualGuides, aiDiscoveries, categoryCountRows
   listRecentDistrictBriefs(db, 3, today.start),
 ]);
 
-// Cached at the edge: content only changes on the 6-hourly ingestion cron, so
-// repeat visits within the window can be served without hitting D1 again.
-Astro.response.headers.set("cache-control", "public, max-age=90, stale-while-revalidate=600");
+Astro.response.headers.set("cache-control", "private, no-store");
 
 const todayCategoryCounts = new Map(categoryCountRows.map(({ category, count }) => [category, count]));
 const groupIcons = {

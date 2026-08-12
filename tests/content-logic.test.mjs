@@ -38,6 +38,8 @@ import {
 import { FALLBACK_RELEASE_FEED, parseNotionReleaseBlocks } from "../src/lib/releases.ts";
 import { normalizeProductEvent } from "../src/lib/product-events.ts";
 import { mergePreferenceCategories } from "../src/lib/account-linking-logic.ts";
+import { safeReturnPath } from "../src/lib/guest-access.ts";
+import { parseSupportForm } from "../src/lib/support-logic.ts";
 
 const verifiedAiRestorationSql = readFileSync(
   new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
@@ -517,6 +519,46 @@ test("anonymous account linking keeps current-browser preferences first and remo
   );
 });
 
+test("guest access only accepts local return paths", () => {
+  assert.equal(safeReturnPath("/archive?category=finance"), "/archive?category=finance");
+  assert.equal(safeReturnPath("//example.com"), "/");
+  assert.equal(safeReturnPath("https://example.com"), "/");
+});
+
+test("support form keeps validated contact fields", () => {
+  assert.deepEqual(parseSupportForm({
+    name: "테스트 사용자",
+    email: "USER@example.com",
+    category: "account_access",
+    subject: "로그인 문제를 확인해주세요",
+    message: "로그인 버튼을 누른 뒤 같은 화면이 반복되어 문의드립니다.",
+    website: "",
+    consent: true,
+  }), {
+    name: "테스트 사용자",
+    email: "user@example.com",
+    category: "account_access",
+    subject: "로그인 문제를 확인해주세요",
+    message: "로그인 버튼을 누른 뒤 같은 화면이 반복되어 문의드립니다.",
+  });
+});
+
+test("support form rejects spam and incomplete private inquiries", () => {
+  const base = {
+    name: "테스트 사용자",
+    email: "user@example.com",
+    category: "service_bug",
+    subject: "서비스 화면 오류 문의",
+    message: "화면에서 버튼을 눌러도 다음 단계로 이동하지 않습니다.",
+    website: "",
+    consent: true,
+  };
+  assert.throws(() => parseSupportForm({ ...base, website: "https://spam.example" }));
+  assert.throws(() => parseSupportForm({ ...base, email: "not-an-email" }));
+  assert.throws(() => parseSupportForm({ ...base, message: "짧은 문의" }));
+  assert.throws(() => parseSupportForm({ ...base, consent: false }));
+});
+
 test("editorial gate keeps beginner-relevant news and rejects lifestyle noise", () => {
   const finance = classifyNewsForBeginners(
     "예금 금리 하락기에 대출 이자 확인하는 법",
@@ -585,7 +627,7 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
 });
 
 test("checked-in release snapshot keeps the latest deployed version first", () => {
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.21");
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-11");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.22");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-12");
   assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
 });

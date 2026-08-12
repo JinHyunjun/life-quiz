@@ -10,8 +10,26 @@ async function dismissFirstVisitOnboarding(page: import("@playwright/test").Page
   }
 }
 
-test("global navigation adapts from sidebar to the compact mobile menu", async ({ page }) => {
+async function enterHomeAsGuest(page: import("@playwright/test").Page) {
   await page.goto("/");
+  if (new URL(page.url()).pathname === "/login") {
+    await page.getByRole("button", { name: "로그인 없이 둘러보기" }).click();
+  }
+  await expect(page).toHaveURL(/\/$/);
+}
+
+test("first home entry starts with account access and keeps a guest choice", async ({ page }) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login\?returnTo=%2F/);
+  await expect(page.getByRole("heading", { level: 1, name: "학습 흐름을 이어가세요" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "로그인이나 계정에 문제가 있나요?" })).toHaveAttribute("href", "/support");
+  await page.getByRole("button", { name: "로그인 없이 둘러보기" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
+});
+
+test("global navigation adapts from sidebar to the compact mobile menu", async ({ page }) => {
+  await enterHomeAsGuest(page);
   await dismissFirstVisitOnboarding(page);
 
   const viewportWidth = page.viewportSize()?.width ?? 1440;
@@ -36,7 +54,7 @@ test("global navigation adapts from sidebar to the compact mobile menu", async (
 });
 
 test("light and dark modes can be selected and persist after reload", async ({ page }) => {
-  await page.goto("/");
+  await enterHomeAsGuest(page);
   await dismissFirstVisitOnboarding(page);
 
   const lightMode = page.getByRole("button", { name: "라이트 모드" });
@@ -60,7 +78,7 @@ test("light and dark modes can be selected and persist after reload", async ({ p
 });
 
 test("home feed renders without horizontal overflow", async ({ page }) => {
-  await page.goto("/");
+  await enterHomeAsGuest(page);
   await dismissFirstVisitOnboarding(page);
 
   await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
@@ -94,8 +112,22 @@ test("article carousel and source area are usable", async ({ page }) => {
 
   const next = page.getByRole("button", { name: "다음 카드" });
   if (await next.isVisible()) {
-    await next.click();
-    await expect(page.locator("#current-slide")).toHaveText("2");
+    const current = page.locator("#current-slide");
+    const seen = new Set<string>();
+    for (let step = 0; step < 5; step += 1) {
+      const before = (await current.textContent())?.trim() ?? "";
+      seen.add(before);
+      if (!(await next.isEnabled())) break;
+      await next.click();
+      await expect(current).not.toHaveText(before);
+    }
+    const finalRange = (await current.textContent())?.trim() ?? "";
+    seen.add(finalRange);
+    expect(finalRange.endsWith("4")).toBe(true);
+    expect(seen.size).toBe(page.viewportSize()!.width > 760 ? 3 : 4);
+    await expect(next).toBeDisabled();
+    if (page.viewportSize()!.width > 760) await expect(page.locator("#carousel-end")).toBeVisible();
+    await expect(page.locator("#slide-dots .slide-dot")).toHaveCount(page.viewportSize()!.width > 760 ? 3 : 4);
   }
 });
 
@@ -138,7 +170,7 @@ test("review queue only includes content explicitly added by this browser", asyn
 });
 
 test("first visit interests create a personalized daily learning entry", async ({ page }) => {
-  await page.goto("/");
+  await enterHomeAsGuest(page);
 
   const dialog = page.getByRole("dialog", { name: "지금 가장 필요한 분야는?" });
   await expect(dialog).toBeVisible();
@@ -236,14 +268,28 @@ test("optional account links anonymous learning data and restores it after sign-
 
   await page.goto("/account");
   await page.getByRole("button", { name: "로그아웃" }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await page.goto("/login");
+  await expect(page).toHaveURL(/\/login$/);
   const signin = page.locator("#signin-form");
   await signin.getByLabel("이메일").fill(email);
   await signin.getByLabel("비밀번호").fill(password);
   await signin.getByRole("button", { name: "로그인" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByText(email).first()).toBeVisible();
+});
+
+test("private support form submits without exposing account details publicly", async ({ page }, testInfo) => {
+  await page.goto("/support");
+  await expect(page.getByRole("heading", { level: 1, name: "문의·피드백" })).toBeVisible();
+  await expect(page.getByText("관리자만 열람")).toBeVisible();
+  await page.getByLabel("이름").fill("문의 테스트");
+  await page.getByLabel("답변받을 이메일").fill(`support-${testInfo.project.name}-${Date.now()}@example.com`);
+  await page.getByLabel("문의 유형").selectOption("service_bug");
+  await page.getByLabel("제목").fill("Quick Read 이동 상태 문의");
+  await page.getByLabel("문의 내용").fill("마지막 카드에서 다음 버튼 상태가 명확한지 확인하기 위한 테스트 문의입니다.");
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "문의 보내기" }).click();
+  await expect(page.getByRole("heading", { name: "문의가 안전하게 접수됐어요" })).toBeVisible();
+  await expect(page.locator("#ticket-code")).toHaveText(/^LQ-\d{6}$/);
 });
 
 test("starter courses organize foundational visual guides", async ({ page }) => {
@@ -316,6 +362,7 @@ test("operations dashboard requires a session and renders AI and collector healt
   await expect(page.getByRole("heading", { level: 1, name: "품질 검증 대시보드" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "방문에서 학습 완료까지" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "AI 예산과 수집원 안정성" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "문의함" })).toBeVisible();
   await expect(page.getByText("Gemini 일일 요청 예산")).toBeVisible();
   await expect(page.getByRole("heading", { name: /최근 7일 수집원 건강 상태/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "지금 수집·검증" })).toBeVisible();

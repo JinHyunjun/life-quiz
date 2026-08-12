@@ -270,6 +270,40 @@ export const authRateLimits = sqliteTable(
   (table) => [uniqueIndex("auth_rate_limit_key_unique").on(table.key)],
 );
 
+export const SUPPORT_REQUEST_CATEGORIES = [
+  "account_access",
+  "account_data",
+  "service_bug",
+  "content",
+  "suggestion",
+  "other",
+] as const;
+
+export type SupportRequestCategory = (typeof SUPPORT_REQUEST_CATEGORIES)[number];
+
+export const supportRequests = sqliteTable(
+  "support_requests",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id").references(() => authUsers.id, { onDelete: "set null" }),
+    requesterHash: text("requester_hash").notNull(),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    category: text("category", { enum: SUPPORT_REQUEST_CATEGORIES }).notNull(),
+    subject: text("subject").notNull(),
+    message: text("message").notNull(),
+    status: text("status", { enum: ["open", "in_progress", "resolved", "dismissed"] }).notNull().default("open"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+    resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  },
+  (table) => [
+    index("support_requests_status_created_idx").on(table.status, table.createdAt),
+    index("support_requests_requester_created_idx").on(table.requesterHash, table.createdAt),
+    index("support_requests_email_created_idx").on(table.email, table.createdAt),
+  ],
+);
+
 export const savedContentItems = sqliteTable(
   "saved_content_items",
   {
@@ -302,6 +336,7 @@ export const PRODUCT_EVENT_NAMES = [
   "account_created",
   "account_signed_in",
   "anonymous_data_linked",
+  "support_submitted",
 ] as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];

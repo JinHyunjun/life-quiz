@@ -1,0 +1,173 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { CheckCircle2, Clock3, LifeBuoy, LockKeyhole, Send } from "lucide-astro";
+import Base from "../layouts/Base.astro";
+import { getLifeQuizSession } from "../lib/auth";
+import { SUPPORT_CATEGORY_LABELS } from "../lib/support";
+
+const session = await getLifeQuizSession(Astro.request, env.DB, env.BETTER_AUTH_SECRET);
+Astro.response.headers.set("cache-control", "private, no-store");
+---
+
+<Base title="문의·피드백" description="라이프퀴즈 서비스와 계정 문의를 비공개로 접수합니다.">
+  <div class="support-page shell">
+    <header class="support-header">
+      <div>
+        <p class="eyebrow">PRIVATE SUPPORT</p>
+        <h1 class="page-title">문의·피드백</h1>
+        <p>GitHub 같은 공개 게시판을 거치지 않고 운영자에게 바로 전달됩니다.</p>
+      </div>
+      <span class="privacy-badge"><LockKeyhole size={17} /> 관리자만 열람</span>
+    </header>
+
+    <div class="support-layout">
+      <form class="support-form" id="support-form">
+        <div class="field-grid">
+          <label>이름<input type="text" name="name" value={session?.user.name ?? ""} minlength="1" maxlength="80" autocomplete="name" required /></label>
+          <label>답변받을 이메일<input type="email" name="email" value={session?.user.email ?? ""} maxlength="254" autocomplete="email" required /></label>
+        </div>
+
+        <label>문의 유형
+          <select name="category" required>
+            <option value="">선택해주세요</option>
+            {Object.entries(SUPPORT_CATEGORY_LABELS).map(([value, label]) => <option value={value}>{label}</option>)}
+          </select>
+        </label>
+        <label>제목<input type="text" name="subject" minlength="5" maxlength="100" placeholder="어떤 도움이 필요한지 알려주세요" required /></label>
+        <label>문의 내용<textarea name="message" minlength="20" maxlength="2000" rows="8" placeholder="문제가 생긴 화면, 시점, 기대한 동작을 적어주시면 더 빠르게 확인할 수 있어요." required></textarea><small><span id="message-count">0</span> / 2,000자</small></label>
+        <label class="honeypot" aria-hidden="true">웹사이트<input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+        <label class="consent-row"><input type="checkbox" name="consent" required /><span>답변과 문의 처리를 위한 정보 이용에 동의합니다. 자세한 내용은 <a href="/privacy" target="_blank">개인정보 처리방침</a>에서 확인할 수 있습니다.</span></label>
+        <div class="safety-note"><LockKeyhole size={16} /><span>비밀번호, 인증 코드, 주민등록번호, 계좌 비밀번호는 절대 입력하지 마세요.</span></div>
+        <button class="button button-primary submit-support" type="submit"><Send size={17} /> 문의 보내기</button>
+        <p class="form-status" id="support-status" aria-live="polite"></p>
+      </form>
+
+      <aside class="support-guide" aria-label="문의 처리 안내">
+        <LifeBuoy size={25} />
+        <h2>이렇게 처리됩니다</h2>
+        <ol>
+          <li><span>1</span><div><strong>비공개 접수</strong><p>내용은 D1에 저장되고 운영 대시보드에서만 보입니다.</p></div></li>
+          <li><span>2</span><div><strong>운영자 확인</strong><p>접수 유형과 상황을 확인해 처리 상태를 관리합니다.</p></div></li>
+          <li><span>3</span><div><strong>이메일 답변</strong><p>필요한 경우 입력한 이메일로 직접 연락드립니다.</p></div></li>
+        </ol>
+        <p><Clock3 size={15} /> 베타 운영 중이라 답변까지 시간이 걸릴 수 있어요.</p>
+      </aside>
+    </div>
+
+    <section class="support-success" id="support-success" hidden aria-labelledby="support-success-title">
+      <CheckCircle2 size={34} />
+      <h2 id="support-success-title">문의가 안전하게 접수됐어요</h2>
+      <p>접수 번호 <strong id="ticket-code"></strong></p>
+      <span>운영자가 확인한 뒤 입력한 이메일로 연락드릴게요.</span>
+      <div><a class="button button-primary" href="/">홈으로</a><button class="button button-secondary" id="new-support" type="button">다른 문의 남기기</button></div>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { trackProductEvent } from "../lib/product-events-client";
+
+  const form = document.querySelector<HTMLFormElement>("#support-form");
+  const status = document.querySelector<HTMLElement>("#support-status");
+  const success = document.querySelector<HTMLElement>("#support-success");
+  const ticketCode = document.querySelector<HTMLElement>("#ticket-code");
+  const message = form?.elements.namedItem("message") as HTMLTextAreaElement | null;
+  const messageCount = document.querySelector<HTMLElement>("#message-count");
+
+  const updateCount = () => { if (messageCount) messageCount.textContent = String(message?.value.length ?? 0); };
+  message?.addEventListener("input", updateCount);
+  updateCount();
+
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+    const values = new FormData(form);
+    if (submit) submit.disabled = true;
+    if (status) status.textContent = "문의를 안전하게 접수하고 있습니다.";
+
+    try {
+      const response = await fetch("/api/support", {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          name: values.get("name"),
+          email: values.get("email"),
+          category: values.get("category"),
+          subject: values.get("subject"),
+          message: values.get("message"),
+          website: values.get("website"),
+          consent: values.get("consent") === "on",
+        }),
+      });
+      const result = await response.json() as { ticketCode?: string; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "문의를 접수하지 못했습니다.");
+      if (ticketCode) ticketCode.textContent = result.ticketCode ?? "";
+      trackProductEvent("support_submitted");
+      form.hidden = true;
+      if (success) success.hidden = false;
+      success?.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (error) {
+      if (status) status.textContent = error instanceof Error ? error.message : "잠시 뒤 다시 시도해주세요.";
+      if (submit) submit.disabled = false;
+    }
+  });
+
+  document.querySelector<HTMLButtonElement>("#new-support")?.addEventListener("click", () => {
+    form?.reset();
+    updateCount();
+    if (status) status.textContent = "";
+    if (success) success.hidden = true;
+    if (form) form.hidden = false;
+  });
+</script>
+
+<style>
+  .support-page { max-width: 980px; padding-top: 72px; }
+  .support-header { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+  .support-header > div > p:last-child { margin: 10px 0 0; color: var(--muted); }
+  .privacy-badge { min-height: 36px; display: inline-flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line)); border-radius: var(--radius-sm); color: var(--green-deep); background: var(--green-soft); font-size: 0.74rem; font-weight: 750; white-space: nowrap; }
+  .support-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, 0.55fr); gap: 30px; align-items: start; }
+  .support-form { display: grid; gap: 16px; padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+  .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .support-form label:not(.consent-row):not(.honeypot) { display: grid; gap: 7px; color: var(--muted-strong); font-size: 0.76rem; font-weight: 750; }
+  .support-form input:not([type="checkbox"]), .support-form select, .support-form textarea { width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); }
+  .support-form input:not([type="checkbox"]), .support-form select { min-height: 46px; padding: 0 12px; }
+  .support-form textarea { min-height: 170px; padding: 12px; resize: vertical; line-height: 1.65; }
+  .support-form label small { justify-self: end; color: var(--muted); font-size: 0.68rem; font-weight: 500; }
+  .honeypot { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  .consent-row { display: flex; align-items: flex-start; gap: 9px; color: var(--muted); font-size: 0.72rem; }
+  .consent-row input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--green); }
+  .consent-row a { color: var(--green-deep); font-weight: 750; }
+  .safety-note { display: flex; align-items: flex-start; gap: 7px; padding: 10px 12px; border-left: 3px solid var(--coral); color: var(--muted-strong); background: color-mix(in srgb, var(--coral) 7%, var(--surface)); font-size: 0.72rem; }
+  .safety-note svg { flex: 0 0 auto; color: var(--coral); }
+  .submit-support { width: 100%; }
+  .submit-support:disabled { opacity: 0.6; cursor: wait; }
+  .form-status { min-height: 20px; margin: -3px 0 0; color: var(--coral); font-size: 0.74rem; text-align: center; }
+  .support-guide { padding: 22px 0; border-block: 1px solid var(--line); }
+  .support-guide > svg { color: var(--green); }
+  .support-guide h2 { margin: 10px 0 18px; font-size: 1.05rem; }
+  .support-guide ol { display: grid; gap: 18px; margin: 0; padding: 0; list-style: none; }
+  .support-guide li { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 10px; }
+  .support-guide li > span { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 50%; color: var(--green-deep); background: var(--green-soft); font-size: 0.72rem; font-weight: 800; }
+  .support-guide strong { font-size: 0.82rem; }
+  .support-guide li p { margin: 3px 0 0; color: var(--muted); font-size: 0.73rem; line-height: 1.55; }
+  .support-guide > p { display: flex; align-items: center; gap: 6px; margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.7rem; }
+  .support-success { padding: 64px 24px; border-block: 1px solid var(--line); text-align: center; }
+  .support-success[hidden] { display: none; }
+  .support-success > svg { color: var(--green); }
+  .support-success h2 { margin: 14px 0 8px; font-size: 1.35rem; }
+  .support-success p { margin: 0; color: var(--muted-strong); }
+  .support-success p strong { color: var(--green-deep); }
+  .support-success > span { display: block; margin-top: 6px; color: var(--muted); font-size: 0.78rem; }
+  .support-success > div { display: flex; justify-content: center; gap: 9px; margin-top: 24px; }
+  @media (max-width: 760px) {
+    .support-page { padding-top: 38px; }
+    .support-header { align-items: start; flex-direction: column; gap: 14px; }
+    .support-layout, .field-grid { grid-template-columns: 1fr; }
+    .support-guide { order: -1; }
+    .support-form { padding: 18px; }
+    .support-success > div { align-items: stretch; flex-direction: column; }
+  }
+</style>

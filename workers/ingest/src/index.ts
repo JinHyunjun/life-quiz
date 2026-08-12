@@ -983,5 +983,7 @@ async function pruneExpiredAuthData(database: D1Database, now = new Date()) {
     database.prepare("DELETE FROM auth_session WHERE expiresAt < ?1").bind(now.toISOString()),
     database.prepare("DELETE FROM auth_verification WHERE expiresAt < ?1").bind(now.toISOString()),
     database.prepare("DELETE FROM auth_rate_limit WHERE lastRequest < ?1").bind(now.getTime() - 24 * 60 * 60 * 1_000),
+    database.prepare("DELETE FROM support_requests WHERE status IN ('resolved', 'dismissed') AND updated_at < ?1")
+      .bind(Math.floor(now.getTime() / 1_000) - 180 * 24 * 60 * 60),
   ]);
 }
