@@ -293,6 +293,11 @@ export const supportRequests = sqliteTable(
     subject: text("subject").notNull(),
     message: text("message").notNull(),
     status: text("status", { enum: ["open", "in_progress", "resolved", "dismissed"] }).notNull().default("open"),
+    notificationStatus: text("notification_status", { enum: ["pending", "sent", "failed"] })
+      .notNull()
+      .default("pending"),
+    notificationAttemptedAt: integer("notification_attempted_at", { mode: "timestamp" }),
+    notificationError: text("notification_error"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
     resolvedAt: integer("resolved_at", { mode: "timestamp" }),
@@ -324,6 +329,10 @@ export const savedContentItems = sqliteTable(
 
 export const PRODUCT_EVENT_NAMES = [
   "site_visit",
+  "login_view",
+  "guest_continue",
+  "signup_started",
+  "auth_failed",
   "home_view",
   "preference_saved",
   "daily_start",
@@ -422,6 +431,12 @@ export interface IngestionRunFailure {
   error: string;
 }
 
+export interface IngestionQualityGateItem {
+  contentItemId: number;
+  title: string;
+  reasons: string[];
+}
+
 export interface IngestionCollectorDiagnostic {
   source: string;
   status: "success" | "empty" | "error";
@@ -447,6 +462,9 @@ export const ingestionRuns = sqliteTable(
     deferredItems: text("deferred_items", { mode: "json" }).notNull().$type<string[]>(),
     failedItems: text("failed_items", { mode: "json" }).notNull().$type<IngestionRunFailure[]>(),
     collectorDiagnostics: text("collector_diagnostics", { mode: "json" }).$type<IngestionCollectorDiagnostic[]>(),
+    qualityCheckedCount: integer("quality_checked_count").notNull().default(0),
+    qualityHiddenCount: integer("quality_hidden_count").notNull().default(0),
+    qualityHiddenItems: text("quality_hidden_items", { mode: "json" }).notNull().$type<IngestionQualityGateItem[]>().default([]),
     error: text("error"),
     startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
     finishedAt: integer("finished_at", { mode: "timestamp" }).notNull(),

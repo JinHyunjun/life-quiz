@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import type { ContentCard, IngestionCollectorDiagnostic } from "../../../src/db/schema";
 import { todayKstRange } from "../../../src/lib/dates";
+import { publishedContentQualityFailures } from "../../../src/lib/published-quality";
 import {
   DAILY_PUBLISHING_TARGETS,
   hasDailyPublishingCapacity,
@@ -854,6 +855,8 @@ async function runIngestion(env: Env) {
     }
   }
 
+  const qualityGate = await enforcePublishedContentQuality(env.DB, db);
+
   return {
     pendingCount: pending.length,
     created,
@@ -864,7 +867,52 @@ async function runIngestion(env: Env) {
     minIntervalMs,
     maxItems,
     attemptedCount,
+    qualityGate,
   };
+}
+
+async function enforcePublishedContentQuality(database: D1Database, db: AppDb) {
+  const rows = await db
+    .select({
+      contentItemId: schema.contentItems.id,
+      title: schema.contentItems.title,
+      citationUrl: schema.contentItems.citationUrl,
+      cards: schema.contentItems.cards,
+      question: schema.quizItems.question,
+      choices: schema.quizItems.choices,
+      answer: schema.quizItems.answer,
+      explanation: schema.quizItems.explanation,
+    })
+    .from(schema.contentItems)
+    .leftJoin(schema.quizItems, eq(schema.quizItems.contentItemId, schema.contentItems.id))
+    .where(eq(schema.contentItems.moderationStatus, "published"));
+
+  const hiddenItems = rows.flatMap((row) => {
+    const reasons = publishedContentQualityFailures({
+      citationUrl: row.citationUrl,
+      cards: row.cards,
+      quiz: row.question && row.choices && row.answer && row.explanation
+        ? {
+            question: row.question,
+            choices: row.choices,
+            answer: row.answer,
+            explanation: row.explanation,
+          }
+        : null,
+    });
+    return reasons.length > 0
+      ? [{ contentItemId: row.contentItemId, title: row.title, reasons }]
+      : [];
+  });
+
+  if (hiddenItems.length > 0) {
+    const reasonById = new Map(hiddenItems.map((item) => [item.contentItemId, `자동 품질검증: ${item.reasons.join(", ")}`]));
+    await database.batch(hiddenItems.map((item) => database
+      .prepare("UPDATE content_items SET moderation_status = 'hidden', moderation_reason = ?1 WHERE id = ?2 AND moderation_status = 'published'")
+      .bind(reasonById.get(item.contentItemId), item.contentItemId)));
+  }
+
+  return { checkedCount: rows.length, hiddenItems };
 }
 
 async function loadTodayPublishingCounts(db: AppDb): Promise<DailyPublishingCounts> {
@@ -906,6 +954,7 @@ function failedIngestionResult(env: Env, error: unknown): IngestionResult {
     minIntervalMs: normalizeIngestionIntervalMs(Number(env.GEMINI_INGEST_MIN_INTERVAL_MS)),
     maxItems: normalizeIngestionBatchLimit(Number(env.GEMINI_INGEST_MAX_ITEMS)),
     attemptedCount: 0,
+    qualityGate: { checkedCount: 0, hiddenItems: [] },
   };
 }
 
@@ -935,6 +984,9 @@ async function saveIngestionRun(
     deferredItems: params.result.deferred,
     failedItems: params.result.failed,
     collectorDiagnostics: params.result.collectorDiagnostics,
+    qualityCheckedCount: params.result.qualityGate.checkedCount,
+    qualityHiddenCount: params.result.qualityGate.hiddenItems.length,
+    qualityHiddenItems: params.result.qualityGate.hiddenItems,
     error: params.error,
     startedAt: params.startedAt,
     finishedAt: params.finishedAt,

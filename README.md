@@ -11,7 +11,7 @@
 - 첫 방문에서 필요한 분야 2~3개를 고르고 개인화된 5분 학습으로 바로 이동하는 온보딩
 - 연속 학습일·최근 7일 활동·누적 복습·기억 성공률·분야별 기억 현황을 모아보는 `내 학습` (`/me`)
 - 글 상세에서 다시 보고 싶은 상식을 저장하고 `내 학습`에서 모아보거나 해제하는 브라우저별 보관 기능
-- 첫 접속에서 로그인 화면을 먼저 보여주고, better-auth 이메일 계정으로 여러 기기에서 이어 쓰거나 30일 게스트 모드로 둘러볼 수 있는 진입 흐름 (`/login`, `/account`)
+- 첫 접속에서 로그인 화면을 먼저 보여주고, better-auth 이메일 계정으로 여러 기기에서 이어 쓰거나 30일 게스트 모드로 둘러볼 수 있는 진입 흐름. 계정에서 비밀번호 변경과 전체 학습 데이터 영구 삭제 지원 (`/login`, `/account`)
 - 서울 25개 자치구 중 배치마다 4개 구를 순환하고 전월세·매매를 교대하는 비교 브리핑 1건과 생활정보 비교 브리핑으로 통합
 - 분야별 상식 피드와 실제 외부 원문으로 이동하는 SOURCE 영역
 - 금융·투자·주거 기초를 생성 순서대로 묶어 주는 사회초년생 시작 코스 (`/start`)
@@ -22,18 +22,18 @@
 - 선택한 글 또는 최근 콘텐츠 6개를 근거로 답하는 라이프 메이트
 - D1 기반 익명 챗 사용량 제한: IP와 User-Agent의 SHA-256 해시 기준 시간당 8회
 - Cloudflare에서 실제 응답이 검증된 금융위원회 공식 RSS의 분야 균형 선별, YouTube 8개 주제별 최근 180일 후보 5개 메타데이터, data.go.kr, 위키백과 원문 기반 AI 상식 수집 Cron
-- D1 `ingestion_runs`에 회차별 생성·중복·지연·실패와 RSS·YouTube·공공 API별 후보 수·오류를 남기는 수집 진단 로그
-- 운영자 대시보드에서 최근 7일·28일 방문→학습 시작→첫 답변→완료 퍼널과 계정 생성·로그인·기록 연결, 최근 14일 Gemini 요청량, 최근 7일 수집원 상태, 오늘 누락 분야 확인
+- D1 `ingestion_runs`에 회차별 생성·중복·지연·실패, RSS·YouTube·공공 API별 후보 수·오류, 공개 콘텐츠 품질 검사·자동 숨김 건수를 남기는 수집 진단 로그
+- 운영자 대시보드에서 최근 7일·28일 방문→학습 시작→첫 답변→완료 퍼널과 로그인 화면→게스트·가입·인증 실패, 최근 14일 Gemini 요청량, 최근 7일 수집원 상태, 오늘 누락 분야 확인
 - GitHub 계정 없이 서비스 안에서 계정·오류·콘텐츠·기타 문의를 비공개로 접수하고 운영자 문의함에서 답변·처리 상태를 관리하는 소통 창구 (`/support`)
 - KST 18:15 전에는 수집 진행 상태로 표시하고 이후 `10/12개 분야·12개 이상·단일 분야 35% 이하`, 48시간 `12/12개 분야`를 판정하는 공급 SLO
 - 12개 분야의 일일 최소 1개를 우선하고 주거·서울살이 각 4개 등 상한을 적용하는 분야별 발행량 제어
 - 무작위 secret과 비공개 Service Binding으로 보호되는 운영자용 즉시 수집 API
 - 홈에서 날짜와 무관하게 최근 출처 확인형 AI 상식을 다시 발견하는 `CURATED DISCOVERY` 영역
 - 사회초년생 관련성 검사와 소스별 고정 카테고리로 일반 뉴스·오분류 차단
-- 공개·숨김 검수 상태로 품질이 낮거나 출처가 없는 콘텐츠를 모든 노출면에서 일괄 제외
+- 자동·수동 수집 직후 외부 출처, 서로 다른 카드 4장, 완전한 퀴즈를 검사하고 기준 미달 콘텐츠를 즉시 숨기는 공개 품질 게이트
 - 검수 대기 AI 상식 중 외부 자료로 재검증한 항목은 본문·카드·퀴즈를 다시 쓰고 SOURCE를 연결해 선별 복구
 - Gemini 호출 보호: 8초 배치 간격, 60초 슬라이딩 윈도우 12회와 KST 하루 400회 통합 상한, 성공·실패를 합친 회차당 최대 12번 생성 시도, 일시적인 429·5xx 응답 1회 재시도
-- Notion에서 관리하고 5분 D1 캐시로 동기화하는 공개 릴리즈 노트 (`/changelog`)
+- Notion에서 관리하고 5분 D1 캐시로 동기화하는 공개 릴리즈 노트와 GitHub Actions 검증·선택형 자동 배포·운영 smoke (`/changelog`)
 
 각 AI 학습 섹션은 `summary`와 `details`로 구성됩니다. Quick Read는 `summary`만 사용하고 Deep Read는 같은 `summary`에 `details`를 이어 붙이므로, 카드에만 있고 본문에는 없는 정보가 저장되지 않습니다. 4번 카드는 확인 행동을 맡으며 상세 화면 아래에서 같은 내용을 다시 반복하지 않습니다.
 
@@ -43,7 +43,7 @@
 
 ```text
 Astro 7 + Cloudflare Workers Static Assets
-├─ /, /start, /archive, /articles/:id, /daily, /review, /me, /chat, /login, /account, /support, /changelog
+├─ /, /start, /archive, /articles/:id, /daily, /review, /me, /chat, /login, /account, /forgot-password, /reset-password, /support, /changelog
 ├─ Astro API: /api/auth/*, /api/access/guest, /api/account/link, /api/support, /api/admin/support/*, /api/daily*, /api/onboarding, /api/events, /api/feedback/*, /api/learning/*, /api/reviews/*, /api/profile, /api/saved/*, /api/chat
 ├─ D1: 인증 계정·세션, 콘텐츠, 일일 학습, 관심 분야, 90일 익명 행동 이벤트, 저장한 상식, 비공개 문의, 사용자 피드백, 퀴즈, 복습 로그, 챗 사용량
 └─ Service Binding: life-quiz-ingest
@@ -74,7 +74,8 @@ Gemini 키는 `life-quiz-ingest` Worker에만 저장합니다. 앱 Worker는 공
 | Hono | Workers용 가벼운 API 라우터 | 수집 Worker의 health, 채팅, 수동 수집 요청 처리 |
 | Cloudflare D1 | Cloudflare 안의 SQLite 데이터베이스 | 콘텐츠, 계정, 학습 진행, 비공개 문의, 사용자 QA 제보, 퀴즈, 복습 기록, 채팅 사용량 저장 |
 | Drizzle ORM | DB 테이블을 TypeScript 코드처럼 다루게 해 주는 도구 | 테이블 구조와 쿼리를 타입으로 검증 |
-| better-auth | 로그인과 세션을 만드는 인증 도구 | 이메일 계정, 30일 세션, D1 요청 제한과 익명 기록의 계정 연결 |
+| better-auth | 로그인과 세션을 만드는 인증 도구 | 이메일 계정, 30일 세션, 비밀번호 변경·재설정, 계정·학습 데이터 삭제, 익명 기록의 계정 연결 |
+| Cloudflare Email Service | Workers에서 인증·운영 메일을 보내는 서비스 | 발신 도메인을 연결하면 이메일 확인, 비밀번호 재설정, 새 문의 운영 알림 전송 |
 | ts-fsrs | 망각 곡선을 고려해 다음 복습일을 정하는 엔진 | 사용자가 맞힘/틀림을 누르면 다음 복습 시점 계산 |
 | Gemini 3.1 Flash Lite | 텍스트를 요약하고 구조화하는 AI 모델 | 배치 수집 때 카드뉴스·퀴즈 초안을 만들고, 저장 콘텐츠 근거로만 챗 응답 |
 | RSS, YouTube, data.go.kr, Wikipedia | 외부 원천 자료 | 원문 재배포 없이 제목·요약·공공데이터·문서 링크를 근거로 재구성 |
@@ -109,9 +110,13 @@ npx wrangler secret put DATA_GO_KR_KEY_APT_RENT --config workers/ingest/wrangler
 npx wrangler secret put YOUTUBE_API_KEY --config workers/ingest/wrangler.jsonc
 npx wrangler secret put NOTION_TOKEN --config workers/ingest/wrangler.jsonc
 npx wrangler secret put BETTER_AUTH_SECRET
+npx wrangler secret put AUTH_EMAIL_FROM
+npx wrangler secret put SUPPORT_NOTIFICATION_EMAIL
 ```
 
 `NOTION_TOKEN`이 있어도 Notion 페이지가 해당 integration에 공유되지 않으면 Notion API는 404를 반환합니다. 이 경우 `/changelog`는 저장소의 최신 스냅샷을 표시하므로 페이지는 유지되지만, Notion에서 새 항목을 자동 반영하려면 릴리즈 노트 페이지를 같은 integration에 다시 공유해야 합니다.
+
+인증·문의 메일은 Cloudflare DNS에 등록된 도메인을 Email Service에 온보딩하고 앱 Worker에 `EMAIL` send binding을 추가해야 활성화됩니다. 현재 `workers.dev` 주소만으로는 발신 도메인 요건을 충족하지 않으므로, 미설정 상태에서는 재설정 버튼을 비활성화하고 문의 알림을 `대기`로 기록합니다.
 
 ## 검증
 
@@ -120,11 +125,14 @@ npm run typecheck
 npm run build
 npm run test:logic
 npm run test:e2e
+npm run test:smoke
 npx wrangler deploy --dry-run
 npx wrangler deploy --dry-run --config workers/ingest/wrangler.jsonc
 ```
 
-Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 로그인 우선 진입·게스트 전환, 첫 방문 온보딩, 홈, 시작 코스, 상세 Quick Read의 마지막 위치, 5분 학습, 관심 분야, 저장한 상식, 내 학습 리포트, 콘텐츠 피드백, 비공개 문의 접수, 복습, 가입·기록 병합·재로그인, 챗과 운영 대시보드 흐름을 순차 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
+Playwright는 설치된 Chrome을 사용하며 데스크톱과 모바일에서 로그인 우선 진입·게스트 전환, 첫 방문 온보딩, 홈, 시작 코스, 상세 Quick Read의 마지막 위치, 5분 학습, 관심 분야, 저장한 상식, 내 학습 날짜, 콘텐츠 피드백, 비공개 문의 접수, 복습, 가입·기록 병합·비밀번호 변경·계정 삭제, 챗과 운영 대시보드 흐름을 순차 검사합니다. 외부 Gemini 호출은 반복 소모를 막기 위해 E2E에서 모킹하고, 실제 연결은 별도 스모크 요청으로 확인합니다.
+
+GitHub Actions의 자동 배포를 켜려면 저장소 Actions secrets에 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`를 등록합니다. 값이 없으면 PR·push의 타입체크·로직 테스트·빌드만 실행하고 배포 단계는 안전하게 건너뜁니다.
 
 ## 배포 순서
 
@@ -135,12 +143,12 @@ npm run build
 npm run deploy:app
 ```
 
-Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이고, 무료 계정의 Trigger 수를 아끼기 위해 설정에는 `0 3/6 * * *` 하나만 등록합니다. 각 배치는 서울 자치구 4곳의 전월세·매매 중 한 종류를 교대로 비교하고 생활정보 브리핑과 분야별 RSS 뉴스를 수집합니다. YouTube는 8개 주제 중 2개씩 검색합니다. 출처형 커리큘럼은 앞 회차의 분야와 후보를 다시 포함하되, 이미 발행한 후보는 다음 후보로 이동하고 해당 분야가 일일 최소 1개를 채우면 나머지는 호출 전에 멈춥니다. 처리 순서는 당일 최소 발행량이 부족한 분야부터 다시 정렬하고, 분야별 상한에 도달한 후보는 건너뜁니다. 중복 확인 뒤 성공 여부와 관계없이 최대 12개 항목만 생성을 시도합니다. 기존 Cron은 수집과 함께 90일이 지난 익명 행동 이벤트, 만료된 인증 세션·검증·rate-limit 기록, 해결 또는 종료 뒤 180일이 지난 문의를 정리합니다.
+Service Binding의 대상이 먼저 존재해야 하므로 수집 Worker를 앱보다 먼저 배포합니다. 배치 수집은 KST 00시, 06시, 12시, 18시에 실행됩니다. Cloudflare Cron은 UTC 기준이고, 무료 계정의 Trigger 수를 아끼기 위해 설정에는 `0 3/6 * * *` 하나만 등록합니다. 각 배치는 서울 자치구 4곳의 전월세·매매 중 한 종류를 교대로 비교하고 생활정보 브리핑과 분야별 RSS 뉴스를 수집합니다. YouTube는 8개 주제 중 2개씩 검색합니다. 출처형 커리큘럼은 앞 회차의 분야와 후보를 다시 포함하되, 이미 발행한 후보는 다음 후보로 이동하고 해당 분야가 일일 최소 1개를 채우면 나머지는 호출 전에 멈춥니다. 처리 순서는 당일 최소 발행량이 부족한 분야부터 다시 정렬하고, 분야별 상한에 도달한 후보는 건너뜁니다. 중복 확인 뒤 성공 여부와 관계없이 최대 12개 항목만 생성을 시도합니다. 생성 뒤 공개 콘텐츠 전체의 출처·카드·퀴즈 품질 게이트를 실행합니다. 기존 Cron은 수집과 함께 90일이 지난 익명 행동 이벤트, 만료된 인증 세션·검증·rate-limit 기록, 해결 또는 종료 뒤 180일이 지난 문의를 정리합니다.
 
 ## 남은 큰 작업
 
-- 이메일 확인·비밀번호 재설정·웹 계정 삭제 흐름
+- Cloudflare DNS 발신 도메인 온보딩과 `EMAIL` binding 연결로 준비된 인증·문의 메일 전송 활성화
 - 공공데이터 지역 개인화
 - 수집 소스별 중복률과 Cloudflare·YouTube 무료 티어 사용량 추세 모니터링
 - 챗 사용량을 로그인 사용자 정책과 연결
-- 배포 CI와 자동 smoke test
+- GitHub Actions Cloudflare 배포 secrets 등록 후 자동 배포 단계 활성화

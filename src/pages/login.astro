@@ -8,8 +8,10 @@ import { getLifeQuizSession } from "../lib/auth";
 import { safeReturnPath } from "../lib/guest-access";
 
 const session = await getLifeQuizSession(Astro.request, env.DB, env.BETTER_AUTH_SECRET);
-const returnTo = safeReturnPath(Astro.url.searchParams.get("returnTo"), "/");
+const returnTo = safeReturnPath(Astro.url.searchParams.get("returnTo"), "/account");
 if (session) return Astro.redirect(returnTo);
+const accountDeleted = Astro.url.searchParams.get("accountDeleted") === "1";
+const passwordReset = Astro.url.searchParams.get("passwordReset") === "1";
 ---
 
 <Base title="로그인" description="라이프퀴즈 학습 기록을 계정에 연결하고 여러 기기에서 이어서 학습하세요.">
@@ -18,6 +20,7 @@ if (session) return Astro.redirect(returnTo);
       <p class="eyebrow">OPTIONAL ACCOUNT</p>
       <h1 class="page-title">학습 흐름을 이어가세요</h1>
       <p>로그인하지 않아도 모든 콘텐츠를 볼 수 있습니다. 계정을 만들면 현재 브라우저 기록을 합쳐 다른 기기에서도 이어서 학습합니다.</p>
+      {(accountDeleted || passwordReset) && <p class="auth-notice">{accountDeleted ? "계정과 학습 기록을 삭제했습니다." : "새 비밀번호를 저장했습니다. 다시 로그인해주세요."}</p>}
     </header>
 
     <div class="auth-layout">
@@ -31,6 +34,7 @@ if (session) return Astro.redirect(returnTo);
           <div class="form-title"><h2 id="auth-form-title">다시 만나서 반가워요</h2><p>저장한 상식과 복습 일정이 계정 기준으로 열립니다.</p></div>
           <label>이메일<input type="email" name="email" autocomplete="email" required /></label>
           <label>비밀번호<input type="password" name="password" autocomplete="current-password" minlength="8" maxlength="128" required /></label>
+          <a class="forgot-link" href="/forgot-password">비밀번호를 잊었나요?</a>
           <p class="form-status" data-form-status aria-live="polite"></p>
           <button class="button button-primary auth-submit" type="submit"><LogIn size={17} /> 로그인</button>
         </form>
@@ -47,7 +51,7 @@ if (session) return Astro.redirect(returnTo);
 
         <div class="guest-access">
           <span>계정 없이 먼저 살펴볼 수도 있어요.</span>
-          <form method="post" action="/api/access/guest">
+          <form method="post" action="/api/access/guest" id="guest-access-form">
             <input type="hidden" name="returnTo" value={returnTo} />
             <button class="button button-secondary" type="submit"><BookOpen size={17} /> 로그인 없이 둘러보기</button>
           </form>
@@ -78,10 +82,12 @@ if (session) return Astro.redirect(returnTo);
   const returnTo = page?.dataset.returnTo ?? "/";
   const modeButtons = document.querySelectorAll<HTMLButtonElement>("[data-auth-mode]");
   const forms = document.querySelectorAll<HTMLFormElement>("[data-auth-form]");
+  trackProductEvent("login_view", {}, { oncePerSessionKey: "login-view" });
 
   modeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const mode = button.dataset.authMode;
+      if (mode === "signup") trackProductEvent("signup_started", {}, { oncePerSessionKey: "signup-started" });
       modeButtons.forEach((candidate) => candidate.setAttribute("aria-selected", String(candidate === button)));
       forms.forEach((form) => { form.hidden = form.dataset.authForm !== mode; });
     });
@@ -113,10 +119,15 @@ if (session) return Astro.redirect(returnTo);
         await linkCurrentBrowser();
         window.location.assign(returnTo);
       } catch (error) {
+        trackProductEvent("auth_failed");
         if (status) status.textContent = readableAuthError(error);
         if (submit) submit.disabled = false;
       }
     });
+  });
+
+  document.querySelector<HTMLFormElement>("#guest-access-form")?.addEventListener("submit", () => {
+    trackProductEvent("guest_continue", {}, { oncePerSessionKey: "guest-continue" });
   });
 
   async function linkCurrentBrowser() {
@@ -143,6 +154,7 @@ if (session) return Astro.redirect(returnTo);
   .auth-page { max-width: 940px; padding-top: 72px; }
   .auth-heading { max-width: 720px; margin-bottom: 30px; }
   .auth-heading > p:last-child { margin: 12px 0 0; color: var(--muted); }
+  .auth-notice { padding: 10px 12px; border-left: 3px solid var(--green); color: var(--green-deep) !important; background: var(--green-soft); font-size: 0.76rem; font-weight: 750; }
   .auth-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(250px, 0.65fr); gap: 24px; align-items: start; }
   .auth-panel { padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
   .auth-mode { height: 44px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
@@ -156,6 +168,7 @@ if (session) return Astro.redirect(returnTo);
   .auth-form > label:not(.consent-row) { display: grid; gap: 6px; color: var(--muted-strong); font-size: 0.76rem; font-weight: 750; }
   .auth-form input:not([type="checkbox"]) { width: 100%; min-height: 46px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); }
   .auth-form label small { color: var(--muted); font-weight: 500; }
+  .forgot-link { justify-self: end; margin-top: -9px; color: var(--green-deep); font-size: 0.7rem; font-weight: 750; text-decoration: none; }
   .consent-row { display: flex; align-items: flex-start; gap: 9px; color: var(--muted); font-size: 0.72rem; }
   .consent-row input { width: 17px; height: 17px; margin: 2px 0 0; accent-color: var(--green); }
   .consent-row a { color: var(--green-deep); font-weight: 750; }

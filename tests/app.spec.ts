@@ -217,6 +217,10 @@ test("learning profile saves interests and bookmarked knowledge", async ({ page 
   await expect(page.getByRole("heading", { level: 1, name: "내 학습" })).toBeVisible();
   await expect(page.locator("#profile-content")).toBeVisible();
   await expect(page.locator("#saved-list")).toContainText(articleTitle);
+  const activityDates = await page.locator("#activity-grid strong").allTextContents();
+  expect(activityDates).toHaveLength(7);
+  expect(activityDates.every((label) => /^\d{1,2}\.\d{1,2}\.$/.test(label))).toBe(true);
+  expect(await page.locator("#activity-grid strong").first().evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
 
   await page.locator('label:has(input[value="finance"])').click();
   await page.locator('label:has(input[value="health"])').click();
@@ -275,6 +279,36 @@ test("optional account links anonymous learning data and restores it after sign-
   await signin.getByRole("button", { name: "로그인" }).click();
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByText(email).first()).toBeVisible();
+
+  const changedPassword = `Changed!${unique}`;
+  const passwordForm = page.locator("#change-password-form");
+  await passwordForm.getByLabel("현재 비밀번호").fill(password);
+  await passwordForm.getByLabel("새 비밀번호").fill(changedPassword);
+  await passwordForm.getByRole("button", { name: "비밀번호 변경" }).click();
+  await expect(passwordForm.locator("[data-change-status]")).toContainText("비밀번호를 변경했습니다");
+
+  await page.getByRole("button", { name: "로그아웃" }).click();
+  await signin.getByLabel("이메일").fill(email);
+  await signin.getByLabel("비밀번호").fill(changedPassword);
+  await signin.getByRole("button", { name: "로그인" }).click();
+  await expect(page).toHaveURL(/\/account$/);
+
+  const deleteForm = page.locator("#delete-account-form");
+  await deleteForm.getByLabel("현재 비밀번호").fill(changedPassword);
+  await deleteForm.getByLabel(/확인을 위해/).fill("삭제");
+  await deleteForm.getByRole("button", { name: "계정 영구 삭제" }).click();
+  await expect(page).toHaveURL(/\/login\?accountDeleted=1$/);
+  await expect(page.getByText("계정과 학습 기록을 삭제했습니다.")).toBeVisible();
+});
+
+test("password recovery is explicit while the outbound email domain is not configured", async ({ page }) => {
+  await page.goto("/forgot-password");
+  await expect(page.getByRole("heading", { level: 1, name: "비밀번호를 다시 설정하세요" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "재설정 링크 받기" })).toBeDisabled();
+  await expect(page.getByText(/발신 도메인 연결을 준비 중/)).toBeVisible();
+
+  await page.goto("/reset-password");
+  await expect(page.getByText("재설정 링크가 없거나 만료되었습니다.")).toBeVisible();
 });
 
 test("private support form submits without exposing account details publicly", async ({ page }, testInfo) => {

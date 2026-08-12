@@ -40,9 +40,14 @@ import { normalizeProductEvent } from "../src/lib/product-events.ts";
 import { mergePreferenceCategories } from "../src/lib/account-linking-logic.ts";
 import { safeReturnPath } from "../src/lib/guest-access.ts";
 import { parseSupportForm } from "../src/lib/support-logic.ts";
+import { publishedContentQualityFailures } from "../src/lib/published-quality.ts";
 
 const verifiedAiRestorationSql = readFileSync(
   new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
+  "utf8",
+);
+const p0QualityMigrationSql = readFileSync(
+  new URL("../drizzle/0021_p0_quality_account.sql", import.meta.url),
   "utf8",
 );
 
@@ -123,6 +128,38 @@ test("daily AI curriculum is distributed across four six-hour slots", () => {
     ["history", "humor", "social_skills", "daily_tips"],
   );
   assert.ok(schedules.every((schedule) => schedule.trivia.sourceUrl.startsWith("https://ko.wikipedia.org/wiki/")));
+});
+
+test("published quality gate requires a source, four distinct cards, and a complete quiz", () => {
+  const cards = [
+    { heading: "정의", body: "전세는 큰 보증금을 맡기고 사는 임대차 방식입니다." },
+    { heading: "구조", body: "집주인은 계약이 끝나면 보증금을 세입자에게 돌려줘야 합니다." },
+    { heading: "비용", body: "대출 이자와 관리비를 합쳐 실제 월 주거비를 계산해야 합니다." },
+    { heading: "확인", body: "계약 전에 등기부와 반환보증 가입 가능 여부를 확인합니다." },
+  ];
+  const valid = {
+    citationUrl: "https://example.com/source",
+    cards,
+    quiz: {
+      question: "계약 전에 확인할 것은?",
+      choices: ["등기부", "날씨"],
+      answer: "등기부",
+      explanation: "권리관계를 확인해야 합니다.",
+    },
+  };
+
+  assert.deepEqual(publishedContentQualityFailures(valid), []);
+  assert.deepEqual(publishedContentQualityFailures({
+    citationUrl: null,
+    cards: [cards[0], cards[0], cards[2]],
+    quiz: { ...valid.quiz, answer: "없는 선택지" },
+  }), ["확인 가능한 외부 출처 없음", "서로 다른 카드 4장 미충족", "완전한 퀴즈 미충족"]);
+});
+
+test("P0 migration repairs both historical three-card articles", () => {
+  assert.match(p0QualityMigrationSql, /WHERE `id` = 29;/);
+  assert.match(p0QualityMigrationSql, /WHERE `id` = 30;/);
+  assert.equal((p0QualityMigrationSql.match(/\"heading\":/g) ?? []).length, 8);
 });
 
 test("glossary look-ahead advances past duplicates and creates a new edition after a full cycle", () => {
@@ -507,6 +544,12 @@ test("product events accept only anonymous visitors and allowlisted metadata", (
     visitorId: "anon:123e4567-e89b-42d3-a456-426614174000",
     eventName: "account_created",
   }).eventName, "account_created");
+  for (const eventName of ["login_view", "guest_continue", "signup_started", "auth_failed"]) {
+    assert.equal(normalizeProductEvent({
+      visitorId: "anon:123e4567-e89b-42d3-a456-426614174000",
+      eventName,
+    }).eventName, eventName);
+  }
 });
 
 test("anonymous account linking keeps current-browser preferences first and removes duplicates", () => {
@@ -627,7 +670,7 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
 });
 
 test("checked-in release snapshot keeps the latest deployed version first", () => {
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.22");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.23");
   assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-12");
   assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
 });

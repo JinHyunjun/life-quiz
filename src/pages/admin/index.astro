@@ -30,6 +30,7 @@ const diagnosticSummary = dashboard.latestDiagnostics.reduce(
 );
 const collectorHealthStatus = dashboard.checks.find(({ key }) => key === "collector-health")?.status ?? "fail";
 const sourceLabels = { gov: "공공데이터", news: "뉴스·RSS", youtube: "YouTube", ai_trivia: "AI 큐레이션" };
+const notificationLabels = { pending: "운영 메일 대기", sent: "운영 메일 전송", failed: "운영 메일 실패" };
 const collectorFamilyLabels = {
   rss: "뉴스·정책 RSS",
   youtube: "YouTube",
@@ -145,6 +146,10 @@ function statusLabel(status: QualityStatus) {
               </li>
             </ol>
             <footer>
+              <span><KeyRound size={14} /> 로그인 화면 <strong>{period.loginViews}</strong></span>
+              <span><Play size={14} /> 게스트 계속 <strong>{period.guestContinues}</strong></span>
+              <span><UserCheck size={14} /> 가입 시작 <strong>{period.signupStarts}</strong></span>
+              <span><AlertTriangle size={14} /> 인증 실패 <strong>{period.authFailures}</strong></span>
               <span><SlidersHorizontal size={14} /> 관심사 저장 <strong>{period.preferenceSaves}</strong></span>
               <span><UserCheck size={14} /> 계정 생성 <strong>{period.accountCreations}</strong></span>
               <span><KeyRound size={14} /> 로그인 <strong>{period.accountSignIns}</strong></span>
@@ -321,6 +326,7 @@ function statusLabel(status: QualityStatus) {
                 <h3>{request.subject}</h3>
                 <p>{request.message}</p>
                 <small>{request.name} · <a href={`mailto:${request.email}`}>{request.email}</a>{request.userId ? " · 로그인 계정" : " · 비로그인"}</small>
+                <span class="notification-state" data-status={request.notificationStatus}>{notificationLabels[request.notificationStatus]}</span>
               </div>
               <div class="support-ticket-actions">
                 <a class="icon-button" href={`mailto:${request.email}?subject=${encodeURIComponent(`[Life Quiz ${`LQ-${String(request.id).padStart(6, "0")}`}] ${request.subject}`)}`} aria-label="이메일로 답변" title="이메일로 답변"><Mail size={17} /></a>
@@ -422,7 +428,7 @@ function statusLabel(status: QualityStatus) {
       <div class="table-scroll">
         <table>
           <thead>
-            <tr><th>실행 시각</th><th>방식</th><th>상태</th><th>후보</th><th>생성</th><th>중복·제외</th><th>지연</th><th>실패</th></tr>
+            <tr><th>실행 시각</th><th>방식</th><th>상태</th><th>후보</th><th>생성</th><th>중복·제외</th><th>지연</th><th>실패</th><th>품질 검사</th><th>자동 숨김</th></tr>
           </thead>
           <tbody>
             {dashboard.runs.map((run) => (
@@ -435,6 +441,8 @@ function statusLabel(status: QualityStatus) {
                 <td>{run.skippedCount}</td>
                 <td>{run.deferredCount}</td>
                 <td class:list={{ danger: run.failedCount > 0 }}>{run.failedCount}</td>
+                <td>{run.qualityCheckedCount}</td>
+                <td class:list={{ danger: run.qualityHiddenCount > 0 }}>{run.qualityHiddenCount}</td>
               </tr>
             ))}
           </tbody>
@@ -722,6 +730,9 @@ function statusLabel(status: QualityStatus) {
   .support-ticket-content h3 { margin: 5px 0 6px; font-size: 0.9rem; }
   .support-ticket-content p { margin: 0; color: var(--muted-strong); font-size: 0.76rem; line-height: 1.65; white-space: pre-wrap; }
   .support-ticket-content small { display: block; margin-top: 9px; color: var(--muted); font-size: 0.68rem; }
+  .notification-state { display: inline-flex; margin-top: 7px; color: var(--muted); font-size: 0.66rem; font-weight: 750; }
+  .notification-state[data-status="sent"] { color: var(--green-deep); }
+  .notification-state[data-status="failed"] { color: var(--coral); }
   .support-ticket-content a { color: var(--green-deep); font-weight: 750; }
   .support-ticket-actions { display: flex; gap: 5px; }
   .support-ticket-actions .icon-button { width: 34px; height: 34px; flex-basis: 34px; color: var(--muted-strong); }

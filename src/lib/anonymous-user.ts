@@ -13,3 +13,9 @@ export function getAnonymousUserId() {
     return `anon:${crypto.randomUUID()}`;
   }
 }
+
+export function clearAnonymousUserId() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+}

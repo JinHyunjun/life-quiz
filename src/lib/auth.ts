@@ -1,9 +1,15 @@
 import { betterAuth } from "better-auth";
 import { LOCAL_DEV_USER_ID, normalizeReviewUserId } from "./reviews";
+import type { LifeQuizEmailSender } from "./email";
 
 const PRODUCTION_ORIGIN = "https://life-quiz.life-quiz.workers.dev";
 
-export function createLifeQuizAuth(database: D1Database, secret: string, request: Request) {
+export function createLifeQuizAuth(
+  database: D1Database,
+  secret: string,
+  request: Request,
+  emailSender: LifeQuizEmailSender | null = null,
+) {
   const origin = resolveAuthOrigin(request);
 
   return betterAuth({
@@ -18,8 +24,31 @@ export function createLifeQuizAuth(database: D1Database, secret: string, request
       minPasswordLength: 8,
       maxPasswordLength: 128,
       autoSignIn: true,
+      revokeSessionsOnPasswordReset: true,
+      ...(emailSender
+        ? {
+            sendResetPassword: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
+              await emailSender.sendPasswordReset({ to: user.email, name: user.name, url });
+            },
+          }
+        : {}),
     },
-    user: { modelName: "auth_user" },
+    emailVerification: emailSender
+      ? {
+          sendVerificationEmail: async ({ user, url }: { user: { email: string; name: string }; url: string }) => {
+            await emailSender.sendVerification({ to: user.email, name: user.name, url });
+          },
+          sendOnSignUp: true,
+          autoSignInAfterVerification: true,
+        }
+      : undefined,
+    user: {
+      modelName: "auth_user",
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user: { id: string }) => deleteLearningAccountData(database, user.id),
+      },
+    },
     session: {
       modelName: "auth_session",
       expiresIn: 60 * 60 * 24 * 30,
@@ -43,6 +72,18 @@ export function createLifeQuizAuth(database: D1Database, secret: string, request
     },
     telemetry: { enabled: false },
   });
+}
+
+export async function deleteLearningAccountData(database: D1Database, userId: string) {
+  await database.batch([
+    database.prepare("DELETE FROM content_feedback WHERE user_id = ?1").bind(userId),
+    database.prepare("DELETE FROM saved_content_items WHERE user_id = ?1").bind(userId),
+    database.prepare("DELETE FROM daily_session_items WHERE user_id = ?1").bind(userId),
+    database.prepare("DELETE FROM review_logs WHERE user_id = ?1").bind(userId),
+    database.prepare("DELETE FROM learning_items WHERE user_id = ?1").bind(userId),
+    database.prepare("DELETE FROM user_preferences WHERE user_id = ?1").bind(userId),
+    database.prepare("DELETE FROM users WHERE id = ?1").bind(userId),
+  ]);
 }
 
 export async function getLifeQuizSession(request: Request, database: D1Database, secret: string) {

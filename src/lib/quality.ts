@@ -406,6 +406,10 @@ async function loadActivationPeriod(db: AppDb, days: number, now: Date) {
   const accountCreations = eventCounts.get("account_created") ?? 0;
   const accountSignIns = eventCounts.get("account_signed_in") ?? 0;
   const anonymousLinks = eventCounts.get("anonymous_data_linked") ?? 0;
+  const loginViews = eventCounts.get("login_view") ?? 0;
+  const guestContinues = eventCounts.get("guest_continue") ?? 0;
+  const signupStarts = eventCounts.get("signup_started") ?? 0;
+  const authFailures = eventCounts.get("auth_failed") ?? 0;
   const returningVisitors = [...visitDays.values()].filter((dayCount) => dayCount >= 2).length;
 
   return {
@@ -415,6 +419,10 @@ async function loadActivationPeriod(db: AppDb, days: number, now: Date) {
     accountCreations,
     accountSignIns,
     anonymousLinks,
+    loginViews,
+    guestContinues,
+    signupStarts,
+    authFailures,
     dailyStarts,
     firstAnswers,
     completions,

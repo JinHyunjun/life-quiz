@@ -60,6 +60,9 @@ export async function listSupportInbox(db: AppDb, limit = 30) {
     subject: supportRequests.subject,
     message: supportRequests.message,
     status: supportRequests.status,
+    notificationStatus: supportRequests.notificationStatus,
+    notificationAttemptedAt: supportRequests.notificationAttemptedAt,
+    notificationError: supportRequests.notificationError,
     createdAt: supportRequests.createdAt,
   }).from(supportRequests).where(inArray(supportRequests.status, ["open", "in_progress"]))
     .orderBy(desc(supportRequests.createdAt)).limit(limit);
@@ -69,6 +72,20 @@ export async function listSupportInbox(db: AppDb, limit = 30) {
     activeCount: queue.length,
     queue,
   };
+}
+
+export async function markSupportNotification(
+  db: AppDb,
+  id: number,
+  status: "sent" | "failed",
+  error: string | null = null,
+  now = new Date(),
+) {
+  await db.update(supportRequests).set({
+    notificationStatus: status,
+    notificationAttemptedAt: now,
+    notificationError: error?.slice(0, 500) ?? null,
+  }).where(eq(supportRequests.id, id));
 }
 
 export async function updateSupportRequestStatus(

@@ -26,7 +26,7 @@
   └─ life-quiz Worker
       ├─ Astro SSR·정적 페이지: 로그인, 홈, 시작 코스, 보관함, 글 상세, 5분 학습, 내 학습, 복습, 채팅, 계정, 문의, 릴리즈 노트
       ├─ Static Assets: CSS, JS, WebP 이미지
-      ├─ better-auth + 게스트 쿠키: 로그인 우선 진입, 이메일 계정·30일 세션, 30일 게스트 접근
+      ├─ better-auth + 게스트 쿠키: 로그인 우선 진입, 이메일 계정·30일 세션, 비밀번호 변경·계정 삭제, 30일 게스트 접근
       ├─ D1: 인증, 콘텐츠, 학습 진행, 관심 분야, 행동 이벤트, 비공개 문의, 피드백, 퀴즈, 복습 로그, 채팅 사용량, 릴리즈 캐시
       └─ Service Binding
           └─ life-quiz-ingest Worker
@@ -72,6 +72,7 @@
 | Cloudflare KV | Astro 세션 바인딩 | 어댑터가 `SESSION`을 자동 생성하지만 로그인 세션은 비용과 구조를 단순화하기 위해 D1을 사용 |
 | Cloudflare Images | Astro 이미지 변환 바인딩 | 어댑터가 `IMAGES`를 자동 생성하지만 현재 화면은 변환 API를 호출하지 않음 |
 | Workers Logs / Traces | 운영 관측 | 로그 100%, trace 5% 샘플링 |
+| Cloudflare Email Service | 인증·운영 메일 | 발신 도메인과 `EMAIL` binding이 있을 때 이메일 확인·비밀번호 재설정·새 문의 알림. 현재 workers.dev 단독 주소는 발신 도메인 요건을 충족하지 않아 전송 비활성 |
 | Gemini Developer API | 요약, 분류, 카드, 퀴즈, 채팅 | `gemini-3.1-flash-lite`, 12 RPM·KST 하루 400회 내부 상한 |
 | Notion API | 공개 릴리즈 노트 원본 | 5분마다 확인하고 마지막 정상 응답은 D1에 보관. API가 404를 반환하면 페이지가 integration에 공유되어 있는지 확인 |
 | data.go.kr | 아파트 매매·전월세, 생활폐기물 | 서울 25개 자치구 중 회차마다 4개 구를 조사하고 전월세·매매 중 한 종류와 생활정보를 비교 브리핑 2건으로 통합 |
@@ -80,7 +81,7 @@
 | Wikimedia REST·Action·Core API | 일반 상식의 외부 근거 | 한국어 위키백과 요약과 문서 도입부를 우선 사용하고 Cloudflare 차단 시 `api.wikimedia.org` 원문 일부만 제한적으로 읽어 원문 URL과 CC BY-SA 표시 저장 |
 | 전국투자자교육협의회 | 투자 입문 참고 출처 | 투자 4컷 가이드에서 교육 페이지 연결 |
 | 서울시·고용노동부·KISA·질병관리청 | 공급 부족 분야의 공식 대체 출처 | 서울살이·권리·디지털 안전·건강 분야가 비면 공식 안내문을 Gemini URL Context로 읽어 재구성 |
-| GitHub | 소스 저장소 | 공개 저장소 `JinHyunjun/life-quiz` |
+| GitHub | 소스 저장소·CI | 공개 저장소 `JinHyunjun/life-quiz`; Actions에서 타입·로직·빌드를 검증하고 Cloudflare secrets가 있으면 D1·Workers 배포와 운영 smoke 실행 |
 
 Astro Cloudflare 어댑터가 `SESSION` KV와 `IMAGES` 바인딩을 빌드 결과에 자동으로 추가한다. 계정 인증은 better-auth와 D1을 사용하고 Astro KV 세션이나 이미지 변환 엔드포인트는 호출하지 않는다. 4컷 가이드는 Lucide 아이콘과 CSS로 표현한다.
 
@@ -99,11 +100,11 @@ Astro Cloudflare 어댑터가 `SESSION` KV와 `IMAGES` 바인딩을 빌드 결�
 | `user_preferences` | 익명 사용자별 최대 5개 관심 분야. 다음에 생성하는 5분 학습의 새 카드 우선순위에 사용 |
 | `saved_content_items` | 다시 보고 싶은 콘텐츠와 저장 시각. 사용자·콘텐츠 조합은 한 번만 저장 |
 | `content_feedback` | 도움됨과 이해·중복·최신성·출처·퀴즈 문제, 관리자 해결·보류 상태 |
-| `support_requests` | 계정·오류·콘텐츠·기타 비공개 문의, 답변용 이메일, 운영 처리 상태. 원 IP 대신 HMAC 지문으로 시간당 요청 제한 |
-| `product_events` | 90일 동안 보관하는 익명 방문·관심 설정·학습 시작·첫 응답·완료·출처 확인 이벤트. 운영 퍼널 집계에 사용 |
+| `support_requests` | 계정·오류·콘텐츠·기타 비공개 문의, 답변용 이메일, 운영 처리 상태와 운영 메일 전송 상태. 원 IP 대신 HMAC 지문으로 시간당 요청 제한 |
+| `product_events` | 90일 동안 보관하는 익명 방문·로그인 화면·게스트 계속·가입 시작·인증 실패·관심 설정·학습 시작·첫 응답·완료·출처 확인 이벤트. 이메일과 분리된 운영 퍼널 집계에 사용 |
 | `chat_usage` | 익명 식별자별 1시간 채팅 횟수 |
 | `gemini_request_log` | 배치·채팅이 공유하는 최근 14일 Gemini 호출 시각과 목적. RPM·KST 일일 예산 판정과 관리자 추세 차트에 사용 |
-| `ingestion_runs` | 수집 회차별 생성·중복·지연·실패 건수, 실패 항목, RSS·YouTube·공공 API별 후보 수와 오류. 오늘 생성량 급감 원인을 원격 D1에서 추적 |
+| `ingestion_runs` | 수집 회차별 생성·중복·지연·실패 건수, 실패 항목, RSS·YouTube·공공 API별 후보 수와 오류, 공개 품질 검사·자동 숨김 수. 오늘 생성량 급감과 품질 차단 원인을 원격 D1에서 추적 |
 | `release_cache` | Notion 릴리즈 노트의 마지막 정상 응답과 동기화 시각 |
 
 현재 카테고리는 `finance`, `investment`, `housing`, `seoul_life`, `career`, `rights`, `digital_safety`, `health`, `daily_tips`, `history`, `humor`, `social_skills`의 12개다. 화면에서는 돈과 집, 일과 권리, 안전한 생활, 교양과 쉼의 네 묶음으로 제공한다.
@@ -123,6 +124,7 @@ Astro Cloudflare 어댑터가 `SESSION` KV와 `IMAGES` 바인딩을 빌드 결�
 11. 역사·유머·사회성·생활상식은 분야별 32개, 직장·권리·디지털 안전·건강은 분야별 20개 커리큘럼의 한국어 위키백과 문서를 먼저 조회한다. 요약이 짧으면 문서 도입부로 보강하고, Cloudflare에서 직접 API가 차단되면 `api.wikimedia.org`의 공식 원문을 최대 256KB까지만 읽는다. 모든 직접 경로가 실패하면 `gemini-3.1-flash-lite` URL Context를 사용하고 `URL_RETRIEVAL_STATUS_SUCCESS` 메타데이터를 확인한 경우에만 저장한다.
 12. 커리큘럼이 한 바퀴 돌면 출처 URL은 유지하되 발행 중복 키에 학습판 번호를 붙인다. 핵심 원리, 초보자 오해, 행동 체크리스트, 다시 설명하기의 네 관점을 교대하고 최근 제목을 함께 전달해 같은 내용과 표현의 반복을 줄인다.
 13. 금융·주식·투자·부동산 기초 용어는 첫 세 회차에 하나씩 배정한다. 출처형 상식은 현재 회차의 새 분야뿐 아니라 앞 시간대 분야도 다시 후보에 올려 일시 실패를 같은 날 회복하며, 이미 성공한 학습판은 원격 조회와 Gemini 호출 전에 건너뛴다.
+14. 수집이 끝나면 공개 콘텐츠의 확인 가능한 외부 출처, 서로 다른 카드 4장, 정답이 선택지에 포함된 완전한 퀴즈를 다시 검사한다. 실패 항목은 즉시 숨기고 해당 회차의 검사·숨김 수와 사유를 `ingestion_runs`에 남긴다.
 14. 회차 결과는 `ingestion_runs`에 pending, created, skipped, deferred, failed와 수집원별 success·empty·error 및 후보 수를 남긴다. Cron 자체가 실패해도 error row를 남겨 다음 점검에서 원인을 볼 수 있게 한다.
 15. 검수에서 숨김 처리된 콘텐츠는 홈, 보관함, 상세, 채팅 근거, 5분 학습과 복습 큐에서 모두 제외한다.
 
@@ -224,7 +226,7 @@ Worker 일일 요청량은 Cloudflare Dashboard에서, Gemini 프로젝트 전�
 | 무제한 AI 채팅 | 사용자 증가 시 무료 Gemini RPD 소진 가능 | 시간당 사용자 제한과 서비스 전체 하루 400회 상한 유지 |
 | AI 이미지 4컷 대량 생성 | 이미지 모델·저장·변환 비용과 품질 검수 필요 | 현재 코드 기반 4컷 유지 |
 | 6번째 독립 Cron | 무료 계정의 Trigger 5개 초과 | 기존 통합 Cron 내부에서 작업을 묶기 |
-| 대규모 이메일 인증 | 발송 서비스 비용과 스팸·개인정보 운영 필요 | 초기에는 OAuth 또는 제한된 이메일 흐름 검토 |
+| 대규모 이메일 인증 | 발송량 증가 시 비용·스팸·반송·개인정보 운영 필요 | 우선 Cloudflare Email Service로 확인·재설정·문의 알림만 제한하고 전송량을 관측 |
 | 100,000회/일 초과 동적 요청 | Workers 무료 요청 한도 초과 | 인기 콘텐츠 정적 생성·캐시 후 유료 전환 판단 |
 
 ## 10. 무료 운영을 오래 유지하는 기준
@@ -269,9 +271,12 @@ Worker 일일 요청량은 Cloudflare Dashboard에서, Gemini 프로젝트 전�
 - 첫 방문자의 관심 분야 2~3개 설정과 바로 이어지는 첫 5분 학습
 - 방문·학습 시작·첫 응답·완료·재방문을 7일·28일로 비교하는 익명 활성화 퍼널과 90일 이벤트 보관
 - 선택형 이메일 로그인, 현재 브라우저의 학습 데이터를 계정에 병합하는 기기 간 동기화, 등록 계정·유효 로그인 운영 지표
+- 현재 비밀번호 변경과 계정·관심 분야·저장·5분 학습·FSRS 복습·피드백 전체 영구 삭제
+- Cloudflare Email 발신 도메인이 연결되면 켜지는 이메일 확인·비밀번호 재설정·새 문의 알림 어댑터와 미설정 상태의 명확한 대기 표시
 - 첫 접속 로그인 화면, 30일 게스트 접근, D1 비공개 문의 접수와 운영자 문의함, 해결·종료 문의 180일 보관 후 기존 Cron 정리
 - 개인정보 처리방침과 이용약관
 - 12개 분야 일일 최소·상한 발행 정책, 누락 분야명과 관리자 즉시 수집·검증 기능
+- 모든 수집 뒤 외부 출처·서로 다른 카드 4장·완전한 퀴즈를 재검사하고 자동 숨김 이력을 남기는 발행 품질 게이트
 - 18시 15분 이후 `12건·10/12분야·단일 분야 35% 이하`와 최근 48시간 `12/12분야`를 판정하는 공급 SLO
 - 날짜별 복수 학습 후보와 서울시·고용노동부·KISA·질병관리청 공식 대체 출처
 - D1 사용량 제한이 있는 근거형 Gemini 채팅
@@ -279,13 +284,14 @@ Worker 일일 요청량은 Cloudflare Dashboard에서, Gemini 프로젝트 전�
 - 배치·채팅 공용 KST 하루 400회 하드 캡과 14일 요청 로그
 - 관리자 대시보드의 14일 Gemini 사용량·용도별 집계와 7일 수집원 성공·빈 응답·오류 상태
 - Notion 원본과 5분 D1 캐시를 사용하는 공개 릴리즈 노트. Notion API 접근이 실패해도 체크인된 스냅샷으로 최신 공개 노트를 유지
+- GitHub Actions 타입·로직·빌드 CI, Cloudflare secrets 기반 자동 D1·Workers 배포와 배포 후 운영 smoke
 - Playwright E2E와 콘텐츠 로직 테스트
 
 ### 남은 작업
 
-- 이메일 확인·비밀번호 재설정·웹 계정 삭제
+- Cloudflare DNS 발신 도메인 온보딩과 앱 Worker `EMAIL` binding 연결
 - 출처별 품질 점수·중복률과 Cloudflare·YouTube 사용량 추세 모니터링
-- 배포 CI와 자동 smoke test
+- GitHub 저장소에 Cloudflare Actions secrets를 등록해 자동 배포 단계 활성화
 
 ## 12. 주식·투자 기능의 범위
 

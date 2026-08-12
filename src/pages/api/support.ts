@@ -2,8 +2,14 @@ import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createDb } from "../../db/client";
 import { getLifeQuizSession } from "../../lib/auth";
+import { createLifeQuizEmailSender } from "../../lib/email";
 import { parseSupportForm, SupportRequestError } from "../../lib/support-logic";
-import { createSupportRequesterHash, createSupportRequest } from "../../lib/support";
+import {
+  createSupportRequesterHash,
+  createSupportRequest,
+  markSupportNotification,
+  SUPPORT_CATEGORY_LABELS,
+} from "../../lib/support";
 
 export const prerender = false;
 
@@ -18,12 +24,33 @@ export const POST: APIRoute = async ({ request }) => {
       getLifeQuizSession(request, env.DB, env.BETTER_AUTH_SECRET),
       createSupportRequesterHash(request, env.BETTER_AUTH_SECRET),
     ]);
-    const result = await createSupportRequest(createDb(env.DB), {
+    const db = createDb(env.DB);
+    const result = await createSupportRequest(db, {
       ...input,
       userId: session?.user.id ?? null,
       requesterHash,
     });
-    return Response.json(result, { status: 201, headers: { "cache-control": "no-store" } });
+    const emailSender = createLifeQuizEmailSender(env);
+    let notificationStatus: "pending" | "sent" | "failed" = "pending";
+    if (emailSender) {
+      try {
+        notificationStatus = await emailSender.sendSupportAlert({
+          ticketCode: result.ticketCode,
+          name: input.name,
+          email: input.email,
+          categoryLabel: SUPPORT_CATEGORY_LABELS[input.category],
+          subject: input.subject,
+          message: input.message,
+        });
+        if (notificationStatus === "sent") await markSupportNotification(db, result.id, "sent");
+      } catch (notificationError) {
+        notificationStatus = "failed";
+        const message = notificationError instanceof Error ? notificationError.message : String(notificationError);
+        await markSupportNotification(db, result.id, "failed", message);
+        console.error(JSON.stringify({ message: "support notification failed", ticketCode: result.ticketCode }));
+      }
+    }
+    return Response.json({ ...result, notificationStatus }, { status: 201, headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof SupportRequestError) {
       return Response.json({ error: error.message }, { status: error.status, headers: { "cache-control": "no-store" } });

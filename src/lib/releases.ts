@@ -23,10 +23,25 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-12T07:30:00.000Z",
+  fetchedAt: "2026-08-12T05:30:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.23",
+      title: "발행 품질 게이트와 계정 자기관리",
+      date: "2026-08-12",
+      changes: [
+        { type: "bullet", text: "모든 자동·수동 수집이 끝날 때 공개 콘텐츠의 외부 출처, 서로 다른 카드 4장, 완전한 퀴즈를 다시 검사하고 기준 미달 항목을 즉시 자동 숨김" },
+        { type: "bullet", text: "과거에 카드 3장으로 남아 있던 주거 콘텐츠 2건을 카드 4장과 더 자세한 Deep Read로 복구하고 품질 검사·자동 숨김 건수를 수집 이력에 저장" },
+        { type: "bullet", text: "계정 화면에서 현재 비밀번호 변경과 계정·관심 분야·저장·5분 학습·FSRS 복습·피드백 전체 영구 삭제를 직접 처리하도록 계정 자기관리 완성" },
+        { type: "bullet", text: "Cloudflare Email 발신 도메인이 연결되면 이메일 확인·분실 비밀번호 재설정·새 문의 운영 알림이 즉시 켜지는 전송 어댑터를 추가하고, 미설정 상태에서는 성공으로 오인하지 않도록 안내" },
+        { type: "bullet", text: "로그인 화면 노출·게스트 계속·가입 시작·인증 실패를 이메일 없이 익명 집계해 로그인 우선 진입의 실제 전환을 운영 대시보드에서 비교" },
+        { type: "bullet", text: "내 학습의 두 자리 날짜를 공백 없는 고정 표기로 바꾸고 줄바꿈을 막아 요일과 날짜가 한 줄에서 안정적으로 보이도록 수정" },
+        { type: "bullet", text: "GitHub Actions에 타입·로직·빌드 검증과 선택형 Cloudflare 자동 배포를 추가하고, 배포 뒤 로그인 우선 진입·게스트 홈·문의·릴리즈 노트를 확인하는 운영 smoke 검사 도입" },
+        { type: "bullet", text: "타입체크·프로덕션 빌드·로직 43건과 데스크톱·모바일 E2E 36건으로 날짜 레이아웃, 비밀번호 변경·재로그인, 전체 계정 삭제까지 검증" },
+      ],
+    },
     {
       version: "v0.22",
       title: "로그인 우선 진입과 비공개 문의함",

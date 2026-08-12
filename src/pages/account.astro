@@ -2,19 +2,21 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { ArrowRight, CalendarDays, ChartNoAxesColumnIncreasing, LogOut, RefreshCw, ShieldCheck } from "lucide-astro";
+import { ArrowRight, CalendarDays, ChartNoAxesColumnIncreasing, KeyRound, LogOut, MailCheck, RefreshCw, ShieldCheck, Trash2 } from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import { getLifeQuizSession } from "../lib/auth";
+import { createLifeQuizEmailSender } from "../lib/email";
 
 const session = await getLifeQuizSession(Astro.request, env.DB, env.BETTER_AUTH_SECRET);
 if (!session) return Astro.redirect(`/login?returnTo=${encodeURIComponent(Astro.url.pathname)}`);
 
 Astro.response.headers.set("cache-control", "no-store");
 const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "medium" }).format(session.user.createdAt);
+const emailDeliveryEnabled = Boolean(createLifeQuizEmailSender(env));
 ---
 
 <Base title="내 계정" description="라이프퀴즈 계정과 기기 간 학습 기록 동기화 상태">
-  <div class="account-page shell">
+  <div class="account-page shell" data-account-email={session.user.email}>
     <header class="account-header">
       <div>
         <p class="eyebrow">ACCOUNT &amp; SYNC</p>
@@ -35,6 +37,7 @@ const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", date
         <dl>
           <div><dt>이름</dt><dd>{session.user.name}</dd></div>
           <div><dt>이메일</dt><dd>{session.user.email}</dd></div>
+          <div><dt>확인 상태</dt><dd>{session.user.emailVerified ? "확인 완료" : "확인 전"}</dd></div>
           <div><dt>가입일</dt><dd>{joinedAt}</dd></div>
         </dl>
         <p><ShieldCheck size={15} /> 이메일은 로그인과 계정 구분에만 사용합니다.</p>
@@ -46,15 +49,43 @@ const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", date
       </nav>
     </div>
 
-    <p class="account-note">현재 베타 계정은 이메일 확인 및 비밀번호 재설정을 지원하지 않습니다. 계정 접근·정보 정정·삭제 요청은 개인정보가 공개되지 않는 <a href="/support">문의·피드백</a>에서 접수해주세요.</p>
+    <section class="security-section" aria-labelledby="security-title">
+      <header><KeyRound size={20} /><div><h2 id="security-title">로그인 보안</h2><p>현재 비밀번호를 확인한 뒤 새 비밀번호로 바꿉니다.</p></div></header>
+      <form class="security-form" id="change-password-form">
+        <label>현재 비밀번호<input type="password" name="currentPassword" autocomplete="current-password" minlength="8" maxlength="128" required /></label>
+        <label>새 비밀번호<input type="password" name="newPassword" autocomplete="new-password" minlength="8" maxlength="128" required /></label>
+        <button class="button button-secondary" type="submit"><KeyRound size={16} /> 비밀번호 변경</button>
+        <p class="form-status" data-change-status aria-live="polite"></p>
+      </form>
+
+      {!session.user.emailVerified && (
+        <div class="verification-row">
+          <span><MailCheck size={18} /><span><strong>이메일 확인</strong><small>{emailDeliveryEnabled ? "확인 링크를 다시 받을 수 있습니다." : "발신 도메인 연결 뒤 확인 메일을 이용할 수 있습니다."}</small></span></span>
+          <button class="button button-secondary" type="button" id="send-verification" disabled={!emailDeliveryEnabled}><MailCheck size={16} /> 확인 메일 보내기</button>
+          <p class="form-status" data-verification-status aria-live="polite"></p>
+        </div>
+      )}
+      <p class="recovery-note">비밀번호를 잊었다면 <a href="/forgot-password">재설정 링크 요청</a>을 이용하세요. 메일 전송이 준비되지 않은 경우에는 <a href="/support">문의·피드백</a>으로 안전하게 접수할 수 있습니다.</p>
+    </section>
+
+    <section class="danger-section" aria-labelledby="delete-title">
+      <header><Trash2 size={20} /><div><h2 id="delete-title">계정과 학습 기록 삭제</h2><p>계정, 저장한 상식, 관심 분야, 학습·복습 기록을 즉시 영구 삭제합니다.</p></div></header>
+      <form class="delete-form" id="delete-account-form">
+        <label>현재 비밀번호<input type="password" name="password" autocomplete="current-password" minlength="8" maxlength="128" required /></label>
+        <label>확인을 위해 <strong>삭제</strong> 입력<input type="text" name="confirmation" autocomplete="off" required /></label>
+        <button class="button delete-button" type="submit"><Trash2 size={16} /> 계정 영구 삭제</button>
+        <p class="form-status" data-delete-status aria-live="polite"></p>
+      </form>
+    </section>
   </div>
 </Base>
 
 <script>
   import { authClient } from "../lib/auth-client";
-  import { getAnonymousUserId } from "../lib/anonymous-user";
+  import { clearAnonymousUserId, getAnonymousUserId } from "../lib/anonymous-user";
   import { trackProductEvent } from "../lib/product-events-client";
 
+  const accountEmail = document.querySelector<HTMLElement>(".account-page")?.dataset.accountEmail ?? "";
   const status = document.querySelector<HTMLElement>("#sync-status");
   void fetch("/api/account/link", {
     method: "POST",
@@ -77,6 +108,70 @@ const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", date
     await authClient.signOut();
     await fetch("/api/access/guest", { method: "DELETE" });
     window.location.assign("/login");
+  });
+
+  document.querySelector<HTMLButtonElement>("#send-verification")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget as HTMLButtonElement;
+    const verificationStatus = document.querySelector<HTMLElement>("[data-verification-status]");
+    button.disabled = true;
+    if (verificationStatus) verificationStatus.textContent = "확인 메일을 준비하고 있습니다.";
+    const result = await authClient.sendVerificationEmail({ email: accountEmail, callbackURL: "/account" });
+    if (result.error) {
+      if (verificationStatus) verificationStatus.textContent = "확인 메일을 보내지 못했습니다. 잠시 뒤 다시 시도해주세요.";
+      button.disabled = false;
+      return;
+    }
+    if (verificationStatus) verificationStatus.textContent = "확인 링크를 보냈습니다. 메일함을 확인해주세요.";
+  });
+
+  document.querySelector<HTMLFormElement>("#change-password-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+    const changeStatus = form.querySelector<HTMLElement>("[data-change-status]");
+    const values = new FormData(form);
+    if (submit) submit.disabled = true;
+    if (changeStatus) changeStatus.textContent = "비밀번호를 변경하고 있습니다.";
+    const result = await authClient.changePassword({
+      currentPassword: String(values.get("currentPassword") ?? ""),
+      newPassword: String(values.get("newPassword") ?? ""),
+      revokeOtherSessions: true,
+    });
+    if (result.error) {
+      if (changeStatus) changeStatus.textContent = /invalid password/i.test(result.error.message ?? "")
+        ? "현재 비밀번호가 맞지 않습니다."
+        : result.error.message ?? "비밀번호를 변경하지 못했습니다.";
+      if (submit) submit.disabled = false;
+      return;
+    }
+    form.reset();
+    if (changeStatus) changeStatus.textContent = "비밀번호를 변경했습니다. 다른 기기의 로그인은 종료됩니다.";
+    if (submit) submit.disabled = false;
+  });
+
+  document.querySelector<HTMLFormElement>("#delete-account-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
+    const deleteStatus = form.querySelector<HTMLElement>("[data-delete-status]");
+    const values = new FormData(form);
+    if (String(values.get("confirmation") ?? "").trim() !== "삭제") {
+      if (deleteStatus) deleteStatus.textContent = "확인란에 삭제를 정확히 입력해주세요.";
+      return;
+    }
+    if (submit) submit.disabled = true;
+    if (deleteStatus) deleteStatus.textContent = "계정과 학습 기록을 삭제하고 있습니다.";
+    const result = await authClient.deleteUser({ password: String(values.get("password") ?? "") });
+    if (result.error) {
+      if (deleteStatus) deleteStatus.textContent = /invalid password/i.test(result.error.message ?? "")
+        ? "현재 비밀번호가 맞지 않습니다."
+        : result.error.message ?? "계정을 삭제하지 못했습니다.";
+      if (submit) submit.disabled = false;
+      return;
+    }
+    clearAnonymousUserId();
+    await fetch("/api/access/guest", { method: "DELETE" });
+    window.location.assign("/login?accountDeleted=1");
   });
 </script>
 
@@ -101,11 +196,34 @@ const joinedAt = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", date
   .account-actions span { display: flex; align-items: center; gap: 9px; }
   .account-actions span svg { color: var(--green); }
   .account-actions strong { font-size: 0.82rem; }
-  .account-note { margin: 38px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.72rem; }
-  .account-note a { color: var(--green-deep); font-weight: 750; }
+  .security-section, .danger-section { margin-top: 42px; padding-top: 22px; border-top: 1px solid var(--line); }
+  .security-section > header, .danger-section > header { display: flex; align-items: flex-start; gap: 10px; }
+  .security-section > header svg { color: var(--green); }
+  .danger-section > header svg { color: var(--coral); }
+  .security-section h2, .danger-section h2 { margin: 0; font-size: 1rem; }
+  .security-section header p, .danger-section header p { margin: 4px 0 0; color: var(--muted); font-size: 0.74rem; }
+  .security-form, .delete-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; align-items: end; gap: 10px; margin-top: 18px; }
+  .security-form label, .delete-form label { display: grid; gap: 6px; color: var(--muted-strong); font-size: 0.72rem; font-weight: 750; }
+  .security-form input, .delete-form input { min-height: 42px; padding: 0 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); }
+  .form-status { grid-column: 1 / -1; min-height: 18px; margin: 0; color: var(--muted-strong); font-size: 0.7rem; }
+  .verification-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .verification-row > span { display: flex; align-items: center; gap: 9px; }
+  .verification-row > span > svg { color: var(--green); }
+  .verification-row strong, .verification-row small { display: block; }
+  .verification-row strong { font-size: 0.8rem; }
+  .verification-row small { margin-top: 3px; color: var(--muted); font-size: 0.68rem; }
+  .verification-row .form-status { grid-column: 1 / -1; }
+  .recovery-note { margin: 14px 0 0; color: var(--muted); font-size: 0.7rem; }
+  .recovery-note a { color: var(--green-deep); font-weight: 750; }
+  .delete-button { color: white; background: var(--coral); }
+  .delete-button:hover { filter: brightness(0.94); }
+  .delete-button:disabled, .security-form button:disabled, .verification-row button:disabled { opacity: 0.58; cursor: wait; }
   @media (max-width: 720px) {
     .account-page { padding-top: 38px; }
     .account-header { align-items: start; }
     .account-grid { grid-template-columns: 1fr; }
+    .security-form, .delete-form { grid-template-columns: 1fr; }
+    .security-form .button, .delete-form .button, .verification-row .button { width: 100%; }
+    .verification-row { grid-template-columns: 1fr; }
   }
 </style>

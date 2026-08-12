@@ -263,7 +263,7 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
     list-style: none;
   }
 
-  .activity-grid li {
+  :global(.activity-grid li) {
     min-width: 0;
     min-height: 106px;
     display: grid;
@@ -273,11 +273,11 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
     border-bottom: 3px solid var(--line);
   }
 
-  .activity-grid li[data-state="complete"] { border-color: var(--green); }
-  .activity-grid li[data-state="partial"] { border-color: var(--yellow); }
-  .activity-grid small { color: var(--muted); font-size: 0.64rem; }
+  :global(.activity-grid li[data-state="complete"]) { border-color: var(--green); }
+  :global(.activity-grid li[data-state="partial"]) { border-color: var(--yellow); }
+  :global(.activity-grid small) { color: var(--muted); font-size: 0.64rem; white-space: nowrap; }
 
-  .activity-mark {
+  :global(.activity-mark) {
     width: 34px;
     height: 34px;
     display: grid;
@@ -289,9 +289,9 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
     font-weight: 800;
   }
 
-  [data-state="complete"] .activity-mark { color: white; background: var(--green); }
-  [data-state="partial"] .activity-mark { color: #76570d; background: var(--yellow-soft); }
-  .activity-grid strong { font-size: 0.7rem; }
+  :global([data-state="complete"] .activity-mark) { color: white; background: var(--green); }
+  :global([data-state="partial"] .activity-mark) { color: #76570d; background: var(--yellow-soft); }
+  :global(.activity-grid strong) { font-size: 0.7rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .preference-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; }
   .preference-groups fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
@@ -378,8 +378,8 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
     .metric-band strong { font-size: 1.1rem; }
     .metric-band strong b { font-size: 1.55rem; }
     .activity-grid { gap: 4px; }
-    .activity-grid li { min-height: 92px; }
-    .activity-mark { width: 30px; height: 30px; }
+    :global(.activity-grid li) { min-height: 92px; }
+    :global(.activity-mark) { width: 30px; height: 30px; }
     .preference-groups { grid-template-columns: 1fr; }
     .preference-actions { align-items: stretch; flex-direction: column; }
     .preference-actions .button { width: 100%; }
@@ -483,9 +483,9 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
     grid.replaceChildren();
 
     const dayFormatter = new Intl.DateTimeFormat("ko-KR", { weekday: "short", timeZone: "UTC" });
-    const dateFormatter = new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric", timeZone: "UTC" });
     for (const item of items) {
       const date = new Date(`${item.date}T00:00:00Z`);
+      const [, month, monthDay] = item.date.split("-").map(Number);
       const state = item.isComplete ? "complete" : item.completedCount > 0 ? "partial" : "empty";
       const row = document.createElement("li");
       row.dataset.state = state;
@@ -497,7 +497,7 @@ import { CATEGORY_GROUPS, CATEGORY_LABELS } from "../lib/categories";
       mark.className = "activity-mark";
       mark.textContent = item.isComplete ? "완료" : item.completedCount > 0 ? `${item.completedCount}/5` : "·";
       const dateLabel = document.createElement("strong");
-      dateLabel.textContent = dateFormatter.format(date);
+      dateLabel.textContent = `${month}.${monthDay}.`;
       row.append(day, mark, dateLabel);
       grid.append(row);
     }

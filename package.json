@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "test:logic": "node --experimental-strip-types --test tests/content-logic.test.mjs",
     "test:e2e": "playwright test",
+    "test:smoke": "node scripts/smoke-production.mjs",
     "db:migrate:local": "wrangler d1 migrations apply life-quiz-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply life-quiz-db --remote",
     "deploy:ingest": "wrangler deploy --config workers/ingest/wrangler.jsonc",
