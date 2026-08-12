@@ -10,7 +10,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "generate-types": "wrangler types",
+    "generate-types": "wrangler types && wrangler types workers/ingest/worker-configuration.d.ts --config workers/ingest/wrangler.jsonc --env-interface IngestEnv",
     "typecheck": "tsc --noEmit",
     "test:logic": "node --experimental-strip-types --test tests/content-logic.test.mjs",
     "test:e2e": "playwright test",
