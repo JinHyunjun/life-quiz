@@ -11,6 +11,7 @@ import {
   MessageCircle,
   LifeBuoy,
   Moon,
+  Network,
   RotateCcw,
   Sparkles,
   Sun,
@@ -33,6 +34,7 @@ const pathname = Astro.url.pathname;
 const navItems = [
   { href: "/", label: "홈", mobileLabel: "홈", group: "탐색", icon: House, active: pathname === "/" || pathname.startsWith("/articles/"), mobile: true },
   { href: "/start", label: "시작 코스", mobileLabel: "시작", group: "탐색", icon: Map, active: pathname === "/start", mobile: false },
+  { href: "/topics", label: "지식 지도", mobileLabel: "지도", group: "탐색", icon: Network, active: pathname.startsWith("/topics"), mobile: false },
   { href: "/archive", label: "지난 상식", mobileLabel: "보관함", group: "탐색", icon: Archive, active: pathname.startsWith("/archive"), mobile: true },
   { href: "/daily", label: "5분 학습", mobileLabel: "5분 학습", group: "학습", icon: Sparkles, active: pathname === "/daily", mobile: true },
   { href: "/review", label: "전체 복습", mobileLabel: "복습", group: "학습", icon: RotateCcw, active: pathname === "/review", mobile: false },

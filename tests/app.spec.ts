@@ -150,6 +150,31 @@ test("archive separates older content by date and filters", async ({ page }) => 
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
+test("knowledge map scales recurring keywords and opens their content list", async ({ page }) => {
+  await page.goto("/topics");
+
+  await expect(page.getByRole("heading", { level: 1, name: "누적 지식 한눈에 보기" })).toBeVisible();
+  const keywordLinks = page.locator(".keyword-link");
+  expect(await keywordLinks.count()).toBeGreaterThan(12);
+
+  const fontSizes = await keywordLinks.evaluateAll((links) =>
+    links.map((link) => Number.parseFloat(getComputedStyle(link).fontSize)),
+  );
+  expect(Math.max(...fontSizes) - Math.min(...fontSizes)).toBeGreaterThan(4);
+
+  const firstKeyword = (await keywordLinks.first().locator("span").textContent())?.trim() ?? "";
+  await page.getByRole("searchbox", { name: "지도에서 단어 찾기" }).fill(firstKeyword.slice(0, 2));
+  await expect(keywordLinks.first()).toBeVisible();
+  await keywordLinks.first().click();
+
+  await expect(page).toHaveURL(/\/topics\/.+/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(firstKeyword);
+  await expect(page.locator(".result-card").first()).toBeVisible();
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
 test("review queue only includes content explicitly added by this browser", async ({ page }) => {
   await page.goto("/review");
 

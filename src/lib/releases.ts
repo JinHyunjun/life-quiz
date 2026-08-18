@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-12T05:30:00.000Z",
+  fetchedAt: "2026-08-18T06:00:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.24",
+      title: "누적 콘텐츠 지식 지도",
+      date: "2026-08-18",
+      changes: [
+        { type: "bullet", text: "누적 공개 콘텐츠의 제목과 카드 제목에서 핵심 키워드를 추출하고 같은 콘텐츠 안의 반복 단어는 한 번만 세어 실제 연결 콘텐츠 수를 계산" },
+        { type: "bullet", text: "등장 콘텐츠가 많은 단어일수록 크게 보이는 반응형 워드클라우드와 단어 검색·12개 분야 필터를 지식 지도에 추가" },
+        { type: "bullet", text: "특정 부동산 템플릿과 서울 자치구 이름이 지도를 독점하지 않도록 불용어와 분야별 최소 노출을 적용하고 분야별 누적 분포 막대 제공" },
+        { type: "bullet", text: "키워드를 누르면 오늘 자료까지 포함해 제목·본문·카드·출처에서 일치하는 콘텐츠를 분야와 페이지별로 모아보는 전용 목록 연결" },
+        { type: "bullet", text: "데스크톱 사이드바와 모바일 전체 메뉴에 지식 지도 진입점을 추가하고 라이트·다크 모드와 작은 화면에서도 단어와 목록이 겹치지 않도록 최적화" },
+        { type: "bullet", text: "키워드 중복 집계·경로 입력 검증 로직과 워드클라우드 크기·검색·목록 이동·가로 넘침을 로직 45건, 데스크톱·모바일 E2E 38건으로 회귀 검증" },
+      ],
+    },
     {
       version: "v0.23",
       title: "발행 품질 게이트와 계정 자기관리",

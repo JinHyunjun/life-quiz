@@ -1,0 +1,301 @@
+---
+export const prerender = false;
+
+import { env } from "cloudflare:workers";
+import { ArrowRight, BookOpen, Layers3, Network, Search } from "lucide-astro";
+import Base from "../../layouts/Base.astro";
+import { createDb } from "../../db/client";
+import { CATEGORY_LABELS, categoryLabel, type Category } from "../../lib/categories";
+import { buildContentKeywordCloud } from "../../lib/content-keywords";
+import { listPublishedKeywordSourceItems } from "../../lib/content";
+
+const categoryParam = Astro.url.searchParams.get("category");
+const activeCategory = (categoryParam && categoryParam in CATEGORY_LABELS ? categoryParam : undefined) as Category | undefined;
+const db = createDb(env.DB);
+const allItems = await listPublishedKeywordSourceItems(db);
+const visibleItems = activeCategory ? allItems.filter((item) => item.category === activeCategory) : allItems;
+const keywords = buildContentKeywordCloud(visibleItems, {
+  limit: activeCategory ? 54 : 78,
+  minCount: 1,
+});
+const largestKeyword = [...keywords].sort((a, b) => b.count - a.count)[0];
+const categoryCounts = Object.keys(CATEGORY_LABELS).map((category) => ({
+  category: category as Category,
+  count: allItems.filter((item) => item.category === category).length,
+}));
+const largestCategoryCount = Math.max(1, ...categoryCounts.map((item) => item.count));
+
+Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-revalidate=1800");
+---
+
+<Base title="지식 지도" description="라이프퀴즈에 쌓인 콘텐츠의 핵심 키워드와 분야별 분포를 한눈에 살펴봅니다.">
+  <div class="topics-page shell">
+    <header class="topics-header">
+      <div>
+        <p class="eyebrow">KNOWLEDGE MAP</p>
+        <h1 class="page-title">누적 지식 한눈에 보기</h1>
+        <p>{visibleItems.length.toLocaleString("ko-KR")}개의 상식에서 반복해서 등장한 핵심 주제</p>
+      </div>
+      <a class="button button-secondary" href="/archive"><BookOpen size={17} /> 전체 콘텐츠 보기</a>
+    </header>
+
+    <section class="topic-summary" aria-label="지식 지도 현황">
+      <div><BookOpen size={20} /><span>분석한 콘텐츠</span><strong>{visibleItems.length.toLocaleString("ko-KR")}</strong></div>
+      <div><Network size={20} /><span>표시된 키워드</span><strong>{keywords.length}</strong></div>
+      <div>
+        <Layers3 size={20} />
+        <span>가장 큰 주제</span>
+        <strong>{largestKeyword?.keyword ?? "-"}<small>{largestKeyword ? `${largestKeyword.count}개` : ""}</small></strong>
+      </div>
+    </section>
+
+    <section class="map-controls" aria-label="지식 지도 필터">
+      <form class="category-filter" method="get" action="/topics">
+        <label for="topic-category">분야</label>
+        <select id="topic-category" name="category">
+          <option value="">전체 분야</option>
+          {Object.entries(CATEGORY_LABELS).map(([category, label]) => (
+            <option value={category} selected={activeCategory === category}>{label}</option>
+          ))}
+        </select>
+        <button class="button button-secondary" type="submit">적용</button>
+        {activeCategory && <a class="reset-filter" href="/topics">전체 지도</a>}
+      </form>
+
+      <div class="keyword-search" role="search">
+        <Search size={17} aria-hidden="true" />
+        <label class="visually-hidden" for="keyword-search">지도에서 단어 찾기</label>
+        <input id="keyword-search" type="search" maxlength="24" placeholder="단어 찾기" autocomplete="off" />
+        <output id="keyword-result-count" for="keyword-search" aria-live="polite">{keywords.length}</output>
+      </div>
+    </section>
+
+    <section class="cloud-section" aria-labelledby="cloud-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">TOPICS</p>
+          <h2 id="cloud-title">{activeCategory ? `${categoryLabel(activeCategory)} 지식 분포` : "전체 지식 분포"}</h2>
+        </div>
+      </div>
+
+      {keywords.length > 0 ? (
+        <div class="word-cloud" id="word-cloud">
+          {keywords.map((item) => (
+            <a
+              class="keyword-link"
+              href={`/topics/${encodeURIComponent(item.keyword)}`}
+              data-category={item.category}
+              data-keyword={item.keyword.toLocaleLowerCase("ko")}
+              style={`--keyword-size: ${item.fontSizeRem}rem`}
+              aria-label={`${item.keyword}, 관련 콘텐츠 ${item.count}개`}
+              title={`${categoryLabel(item.category)} · ${item.count}개 콘텐츠`}
+            >
+              <span>{item.keyword}</span><small>{item.count}</small>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div class="cloud-empty"><Network size={30} /><p>표시할 키워드가 아직 없습니다.</p></div>
+      )}
+      <p class="search-empty" id="keyword-search-empty" hidden>일치하는 단어가 없습니다.</p>
+    </section>
+
+    <section class="distribution-section" aria-labelledby="distribution-title">
+      <div class="section-heading compact-heading">
+        <div>
+          <p class="eyebrow">CATEGORIES</p>
+          <h2 id="distribution-title">분야별 콘텐츠 분포</h2>
+        </div>
+        <span>총 {allItems.length.toLocaleString("ko-KR")}개</span>
+      </div>
+      <ol class="category-distribution">
+        {categoryCounts.map((item) => (
+          <li data-category={item.category}>
+            <a href={`/topics?category=${item.category}`} aria-label={`${categoryLabel(item.category)} ${item.count}개 보기`}>
+              <span class="category-swatch"></span>
+              <strong>{categoryLabel(item.category)}</strong>
+              <span class="distribution-track" aria-hidden="true"><i style={`--distribution-width: ${(item.count / largestCategoryCount) * 100}%`}></i></span>
+              <b>{item.count}</b>
+              <ArrowRight size={15} />
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .topics-page { padding-top: 44px; }
+
+  .topics-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 28px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .topics-header p:not(.eyebrow) { max-width: 650px; margin: 10px 0 0; color: var(--muted); }
+
+  .topic-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-bottom: 1px solid var(--line);
+  }
+
+  .topic-summary > div {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 22px;
+    border-right: 1px solid var(--line);
+  }
+
+  .topic-summary > div:first-child { padding-left: 0; }
+  .topic-summary > div:last-child { padding-right: 0; border-right: 0; }
+  .topic-summary svg { color: var(--green); }
+  .topic-summary span { color: var(--muted); font-size: 0.76rem; font-weight: 700; }
+  .topic-summary strong { min-width: 0; overflow: hidden; color: var(--ink); font-size: 1.12rem; text-overflow: ellipsis; white-space: nowrap; }
+  .topic-summary strong small { margin-left: 7px; color: var(--muted); font-size: 0.66rem; }
+
+  .map-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 24px 0 18px;
+  }
+
+  .category-filter { display: flex; align-items: center; gap: 9px; }
+  .category-filter label { color: var(--muted); font-size: 0.74rem; font-weight: 800; }
+  .category-filter select {
+    min-width: 155px;
+    height: 40px;
+    padding: 0 34px 0 12px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    color: var(--ink);
+    background: var(--surface);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+  .category-filter .button { min-height: 40px; padding-inline: 14px; }
+  .reset-filter { color: var(--green-deep); font-size: 0.72rem; font-weight: 800; }
+
+  .keyword-search {
+    width: min(280px, 100%);
+    height: 42px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line-strong);
+    color: var(--muted);
+  }
+  .keyword-search:focus-within { border-color: var(--green); color: var(--green); }
+  .keyword-search input { min-width: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; font-size: 0.82rem; }
+  .keyword-search input::placeholder { color: var(--muted); }
+  .keyword-search output { min-width: 22px; font-size: 0.7rem; font-weight: 800; text-align: right; }
+
+  .cloud-section {
+    padding: 30px 0 38px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface-strong) 62%, transparent);
+  }
+  .cloud-section > .section-heading, .cloud-section > .word-cloud, .cloud-section > .cloud-empty, .cloud-section > .search-empty { padding-inline: 30px; }
+  .compact-heading { margin-bottom: 18px; }
+
+  .word-cloud {
+    min-height: 500px;
+    display: flex;
+    align-content: center;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 22px;
+    flex-wrap: wrap;
+    padding-block: 24px 12px;
+  }
+
+  .keyword-link {
+    min-width: 0;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 3px 1px;
+    color: var(--category-color, var(--green-deep));
+    font-size: var(--keyword-size);
+    font-weight: 850;
+    line-height: 1.08;
+    letter-spacing: 0;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 150ms ease, transform 150ms ease;
+  }
+  .keyword-link small { color: var(--muted); font-size: 0.58rem; font-variant-numeric: tabular-nums; font-weight: 800; }
+  .keyword-link:hover, .keyword-link:focus-visible { color: var(--ink); text-decoration: underline; text-decoration-color: var(--category-color, var(--green)); text-decoration-thickness: 2px; text-underline-offset: 5px; transform: translateY(-2px); }
+  .keyword-link[hidden] { display: none; }
+  .cloud-empty { min-height: 300px; display: grid; place-content: center; justify-items: center; color: var(--muted); }
+  .cloud-empty p, .search-empty { margin: 10px 0 0; color: var(--muted); text-align: center; }
+
+  .distribution-section { padding: 42px 0 70px; }
+  .distribution-section .section-heading > span { color: var(--muted); font-size: 0.74rem; font-weight: 800; }
+  .category-distribution { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 38px; margin: 0; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+  .category-distribution li { min-width: 0; border-bottom: 1px solid var(--line); }
+  .category-distribution a { min-height: 52px; display: grid; grid-template-columns: 9px 92px minmax(60px, 1fr) 34px 16px; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; }
+  .category-distribution a:hover strong { color: var(--category-color, var(--green)); }
+  .category-distribution .category-swatch { width: 7px; height: 7px; border-radius: 50%; background: var(--category-color); }
+  .category-distribution strong { overflow: hidden; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .category-distribution b { color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; text-align: right; }
+  .category-distribution svg { color: var(--muted); }
+  .distribution-track { height: 4px; overflow: hidden; background: var(--surface-strong); }
+  .distribution-track i { width: var(--distribution-width); height: 100%; display: block; background: var(--category-color); }
+
+  @media (max-width: 760px) {
+    .topics-page { padding-top: 30px; }
+    .topics-header { align-items: stretch; flex-direction: column; gap: 20px; }
+    .topics-header .button { width: 100%; }
+    .topic-summary { grid-template-columns: 1fr; }
+    .topic-summary > div, .topic-summary > div:first-child, .topic-summary > div:last-child { padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--line); }
+    .topic-summary > div:last-child { border-bottom: 0; }
+    .map-controls { align-items: stretch; flex-direction: column; }
+    .category-filter { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+    .category-filter .reset-filter { grid-column: 2 / -1; }
+    .category-filter select { min-width: 0; width: 100%; }
+    .keyword-search { width: 100%; }
+    .cloud-section { margin-inline: calc(var(--shell-pad) * -1); }
+    .cloud-section > .section-heading, .cloud-section > .word-cloud, .cloud-section > .cloud-empty, .cloud-section > .search-empty { padding-inline: var(--shell-pad); }
+    .word-cloud { min-height: 420px; gap: 9px 16px; padding-block: 16px 8px; }
+    .category-distribution { grid-template-columns: 1fr; }
+    .category-distribution a { grid-template-columns: 9px 84px minmax(40px, 1fr) 30px 16px; gap: 8px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .keyword-link { transition: none; }
+  }
+</style>
+
+<script>
+  const searchInput = document.querySelector<HTMLInputElement>("#keyword-search");
+  const keywordLinks = [...document.querySelectorAll<HTMLAnchorElement>(".keyword-link")];
+  const resultCount = document.querySelector<HTMLOutputElement>("#keyword-result-count");
+  const emptyMessage = document.querySelector<HTMLElement>("#keyword-search-empty");
+
+  searchInput?.addEventListener("input", () => {
+    const query = searchInput.value.normalize("NFKC").trim().toLocaleLowerCase("ko");
+    let visibleCount = 0;
+    for (const link of keywordLinks) {
+      const visible = !query || link.dataset.keyword?.includes(query);
+      link.hidden = !visible;
+      if (visible) visibleCount += 1;
+    }
+    if (resultCount) resultCount.value = String(visibleCount);
+    if (emptyMessage) emptyMessage.hidden = visibleCount > 0;
+  });
+</script>

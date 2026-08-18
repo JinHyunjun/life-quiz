@@ -3,6 +3,7 @@ import type { AppDb } from "../db/client";
 import { contentItems, quizItems, sources, type ContentCard } from "../db/schema";
 import { sanitizeContentCards } from "./card-quality";
 import type { Category } from "./categories";
+import { normalizeKeywordQuery, type KeywordSourceItem } from "./content-keywords";
 import { kstDayRange, todayKstRange } from "./dates";
 
 export const ARCHIVE_PAGE_SIZE = 12;
@@ -17,6 +18,13 @@ export interface ArchiveFilters {
   page?: number;
   pageSize?: number;
   now?: Date;
+}
+
+export interface KeywordContentFilters {
+  keyword: string;
+  category?: Category;
+  page?: number;
+  pageSize?: number;
 }
 
 const summaryFields = {
@@ -221,6 +229,75 @@ export async function getArchiveFacets(db: AppDb, now = new Date()) {
   ]);
 
   return { categoryCounts, sourceCounts };
+}
+
+export async function listPublishedKeywordSourceItems(db: AppDb, category?: Category): Promise<KeywordSourceItem[]> {
+  const conditions: SQL[] = [publishedContent];
+  if (category) conditions.push(eq(contentItems.category, category));
+
+  return db
+    .select({
+      title: contentItems.title,
+      cards: contentItems.cards,
+      category: contentItems.category,
+    })
+    .from(contentItems)
+    .where(and(...conditions))
+    .orderBy(desc(contentItems.createdAt));
+}
+
+export async function listContentItemsByKeyword(db: AppDb, filters: KeywordContentFilters) {
+  const keyword = normalizeKeywordQuery(filters.keyword);
+  const pageSize = normalizePageSize(filters.pageSize ?? 18);
+  if (!keyword) {
+    return { keyword: "", items: [], total: 0, page: 1, totalPages: 1, pageSize, categoryCounts: [] };
+  }
+
+  const pattern = `%${escapeLikePattern(keyword)}%`;
+  const matchesKeyword = or(
+    sql`${contentItems.title} LIKE ${pattern} ESCAPE '\\'`,
+    sql`${contentItems.bodyMd} LIKE ${pattern} ESCAPE '\\'`,
+    sql`CAST(${contentItems.cards} AS TEXT) LIKE ${pattern} ESCAPE '\\'`,
+    sql`${contentItems.citationLabel} LIKE ${pattern} ESCAPE '\\'`,
+  )!;
+  const conditions: SQL[] = [publishedContent, matchesKeyword];
+  if (filters.category) conditions.push(eq(contentItems.category, filters.category));
+  const where = and(...conditions);
+  const requestedPage = normalizePage(filters.page);
+
+  const [countRows, categoryCounts] = await Promise.all([
+    db
+      .select({ count: countValue })
+      .from(contentItems)
+      .where(where),
+    db
+      .select({ category: contentItems.category, count: countValue })
+      .from(contentItems)
+      .where(and(publishedContent, matchesKeyword))
+      .groupBy(contentItems.category)
+      .orderBy(desc(countValue)),
+  ]);
+  const total = countRows[0]?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const items = await db
+    .select({ ...summaryFields, originType: sources.originType })
+    .from(contentItems)
+    .leftJoin(sources, eq(contentItems.sourceId, sources.id))
+    .where(where)
+    .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  return {
+    keyword,
+    items: items.map(withQualityCards),
+    total,
+    page,
+    totalPages,
+    pageSize,
+    categoryCounts,
+  };
 }
 
 export async function getContentItemWithQuiz(db: AppDb, id: number) {

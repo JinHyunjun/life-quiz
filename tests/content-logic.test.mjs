@@ -41,6 +41,11 @@ import { mergePreferenceCategories } from "../src/lib/account-linking-logic.ts";
 import { safeReturnPath } from "../src/lib/guest-access.ts";
 import { parseSupportForm } from "../src/lib/support-logic.ts";
 import { publishedContentQualityFailures } from "../src/lib/published-quality.ts";
+import {
+  buildContentKeywordCloud,
+  extractContentKeywords,
+  normalizeKeywordQuery,
+} from "../src/lib/content-keywords.ts";
 
 const verifiedAiRestorationSql = readFileSync(
   new URL("../drizzle/0012_restore_verified_ai_content.sql", import.meta.url),
@@ -50,6 +55,43 @@ const p0QualityMigrationSql = readFileSync(
   new URL("../drizzle/0021_p0_quality_account.sql", import.meta.url),
   "utf8",
 );
+
+test("content keyword cloud counts matching documents once and keeps useful topics", () => {
+  const items = [
+    {
+      title: "도봉·노원구 전월세 실거래가로 알아보는 대출 금리",
+      cards: [
+        { heading: "대출 금리", body: "금리를 확인합니다." },
+        { heading: "고정금리와 변동금리", body: "두 금리를 비교합니다." },
+      ],
+      category: "housing",
+    },
+    {
+      title: "사회초년생 대출 상환 계획 세우기",
+      cards: [{ heading: "대출 원금", body: "원금을 나누어 갚습니다." }],
+      category: "finance",
+    },
+    {
+      title: "ETF 분산투자와 수익률 이해하기",
+      cards: null,
+      category: "investment",
+    },
+  ];
+
+  const cloud = buildContentKeywordCloud(items, { minCount: 1, limit: 30 });
+  assert.equal(cloud.find((item) => item.keyword === "대출")?.count, 2);
+  assert.equal(cloud.find((item) => item.keyword === "ETF")?.count, 1);
+  assert.ok(cloud.find((item) => item.keyword === "대출").fontSizeRem > cloud.find((item) => item.keyword === "ETF").fontSizeRem);
+  assert.equal(cloud.some((item) => item.keyword === "도봉" || item.keyword === "노원구"), false);
+  assert.equal(extractContentKeywords(items[0]).has("대출"), true);
+});
+
+test("keyword routes accept short topic phrases but reject path-like input", () => {
+  assert.equal(normalizeKeywordQuery("  내   집 마련  "), "내 집 마련");
+  assert.equal(normalizeKeywordQuery("ETF"), "ETF");
+  assert.equal(normalizeKeywordQuery("../../admin"), undefined);
+  assert.equal(normalizeKeywordQuery("네 단어로 된 검색어"), undefined);
+});
 
 test("all 25 Seoul districts are selected across 25 consecutive runs", () => {
   const firstRun = new Date("2026-06-26T15:00:00Z");
@@ -670,7 +712,7 @@ test("Notion release headings, dates, sections, and bullets are parsed", () => {
 });
 
 test("checked-in release snapshot keeps the latest deployed version first", () => {
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.23");
-  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-12");
-  assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 6);
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.version, "v0.24");
+  assert.equal(FALLBACK_RELEASE_FEED.releases[0]?.date, "2026-08-18");
+  assert.ok(FALLBACK_RELEASE_FEED.releases[0]?.changes.length >= 5);
 });
