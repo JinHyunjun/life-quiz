@@ -3,7 +3,7 @@ import type { AppDb } from "../db/client";
 import { contentItems, quizItems, sources, type ContentCard } from "../db/schema";
 import { sanitizeContentCards } from "./card-quality";
 import type { Category } from "./categories";
-import { normalizeKeywordQuery, type KeywordSourceItem } from "./content-keywords";
+import { extractContentKeywords, normalizeKeywordQuery, type KeywordSourceItem } from "./content-keywords";
 import { kstDayRange, todayKstRange } from "./dates";
 
 export const ARCHIVE_PAGE_SIZE = 12;
@@ -254,44 +254,39 @@ export async function listContentItemsByKeyword(db: AppDb, filters: KeywordConte
   }
 
   const pattern = `%${escapeLikePattern(keyword)}%`;
-  const matchesKeyword = or(
+  const containsKeywordCandidate = or(
     sql`${contentItems.title} LIKE ${pattern} ESCAPE '\\'`,
-    sql`${contentItems.bodyMd} LIKE ${pattern} ESCAPE '\\'`,
     sql`CAST(${contentItems.cards} AS TEXT) LIKE ${pattern} ESCAPE '\\'`,
-    sql`${contentItems.citationLabel} LIKE ${pattern} ESCAPE '\\'`,
   )!;
-  const conditions: SQL[] = [publishedContent, matchesKeyword];
-  if (filters.category) conditions.push(eq(contentItems.category, filters.category));
-  const where = and(...conditions);
   const requestedPage = normalizePage(filters.page);
-
-  const [countRows, categoryCounts] = await Promise.all([
-    db
-      .select({ count: countValue })
-      .from(contentItems)
-      .where(where),
-    db
-      .select({ category: contentItems.category, count: countValue })
-      .from(contentItems)
-      .where(and(publishedContent, matchesKeyword))
-      .groupBy(contentItems.category)
-      .orderBy(desc(countValue)),
-  ]);
-  const total = countRows[0]?.count ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(requestedPage, totalPages);
-  const items = await db
+  const comparableKeyword = /[A-Za-z]/.test(keyword) ? keyword.toUpperCase() : keyword;
+  const candidates = await db
     .select({ ...summaryFields, originType: sources.originType })
     .from(contentItems)
     .leftJoin(sources, eq(contentItems.sourceId, sources.id))
-    .where(where)
-    .orderBy(desc(contentItems.createdAt), desc(contentItems.id))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
+    .where(and(publishedContent, containsKeywordCandidate))
+    .orderBy(desc(contentItems.createdAt), desc(contentItems.id));
+  const exactMatches = candidates
+    .filter((item) => extractContentKeywords(item).has(comparableKeyword))
+    .map(withQualityCards);
+  const categoryCountMap = new Map<Category, number>();
+  for (const item of exactMatches) {
+    categoryCountMap.set(item.category, (categoryCountMap.get(item.category) ?? 0) + 1);
+  }
+  const categoryCounts = [...categoryCountMap.entries()]
+    .map(([category, count]) => ({ category, count }))
+    .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+  const filteredItems = filters.category
+    ? exactMatches.filter((item) => item.category === filters.category)
+    : exactMatches;
+  const total = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const items = filteredItems.slice((page - 1) * pageSize, page * pageSize);
 
   return {
     keyword,
-    items: items.map(withQualityCards),
+    items,
     total,
     page,
     totalPages,

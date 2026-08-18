@@ -163,12 +163,15 @@ test("knowledge map scales recurring keywords and opens their content list", asy
   expect(Math.max(...fontSizes) - Math.min(...fontSizes)).toBeGreaterThan(4);
 
   const firstKeyword = (await keywordLinks.first().locator("span").textContent())?.trim() ?? "";
+  const firstMapCount = Number.parseInt((await keywordLinks.first().locator("small").textContent())?.trim() ?? "", 10);
+  expect(firstMapCount).toBeGreaterThan(0);
   await page.getByRole("searchbox", { name: "지도에서 단어 찾기" }).fill(firstKeyword.slice(0, 2));
   await expect(keywordLinks.first()).toBeVisible();
   await keywordLinks.first().click();
 
   await expect(page).toHaveURL(/\/topics\/.+/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(firstKeyword);
+  await expect(page.locator(".result-total strong")).toHaveText(String(firstMapCount));
   await expect(page.locator(".result-card").first()).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
