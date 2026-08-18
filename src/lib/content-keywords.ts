@@ -25,7 +25,6 @@ interface KeywordCloudOptions {
 }
 
 const CURATED_KEYWORDS = [
-  ["사회초년생", ["사회초년생"]],
   ["청년정책", ["청년정책", "청년 정책"]],
   ["청년수당", ["청년수당", "청년 수당"]],
   ["내 집 마련", ["내 집 마련", "내집 마련"]],
@@ -55,11 +54,14 @@ const CURATED_KEYWORDS = [
 ] as const;
 
 const STOP_WORDS = new Set([
-  "가이드", "가장", "각자", "결과", "관련", "구분", "기록", "기본", "기준", "놓치기", "다시", "다양한",
-  "대응", "대한", "따져보는", "만드는", "먼저", "무엇", "방법", "바꾸는", "새로운", "생각하기", "성공적인",
-  "스마트한", "시작", "실체", "실천", "알아보는", "완성", "완전", "왜", "위한", "원리", "이끄는", "이란",
-  "이유", "이해", "이해하기", "익히기", "있는", "정복", "정리", "정확히", "조건", "좋은", "줄이기", "진실",
-  "진짜", "체크", "체크리스트", "콘텐츠", "통해", "필요한", "하는", "확산", "확인", "확인하는", "활용", "힘",
+  "가이드", "가장", "가치", "각자", "건강한", "결과", "관련", "구분", "구조", "기록", "기본", "기억할", "기준",
+  "놓치기", "다시", "다양한", "대응", "대한", "따져보는", "만드는", "먼저", "무엇", "무엇인", "방법", "방식",
+  "바꾸는", "배경", "보는", "사례", "사회초년생", "상황", "새로운", "생각하기", "성공적인", "스마트한", "시작",
+  "실제", "실체", "실천", "안전한", "알아보는", "완성", "완전", "왜", "요소", "위한", "유형", "의미", "이끄는",
+  "이란", "이유", "이해", "이해하기", "익히기", "있는", "적용", "정복", "정리", "정의", "정확히", "조건", "좋은",
+  "주요", "주의사항", "주의점", "줄이기", "중요성", "지침", "진실", "진짜", "차이", "체크", "체크리스트", "콘텐츠",
+  "통해", "필수", "필요한", "하는", "핵심", "현대적", "확산", "확인", "확인법", "확인하기", "확인하는", "확인해야",
+  "활용", "활용법", "효과", "힘", "THE", "AND", "FOR", "WITH", "FROM", "THIS", "THAT", "VS",
   "강남", "강동", "강북", "강서", "관악", "광진", "구로", "금천", "노원", "도봉", "동대문", "동작", "마포",
   "서대문", "서초", "성동", "성북", "송파", "양천", "영등포", "용산", "은평", "종로", "중구", "중랑",
   "강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구",
@@ -69,7 +71,7 @@ const STOP_WORDS = new Set([
 
 const PARTICLE_SUFFIXES = [
   "으로부터", "에서부터", "이라고", "이라는", "으로", "에게", "까지", "부터", "처럼", "보다", "에는", "과는", "와는",
-  "에서", "으로", "의", "과", "와", "을", "를", "은", "는", "이", "가", "에", "도", "만",
+  "에서", "으로", "의", "과", "와", "을", "를", "은", "는", "이", "가", "에", "도", "만", "로",
 ];
 
 export function buildContentKeywordCloud(
@@ -119,15 +121,20 @@ export function extractContentKeywords(item: KeywordSourceItem): Set<string> {
   const titleAndHeadings = [item.title, ...(item.cards ?? []).map((card) => card.heading)].join(" ");
   const comparable = titleAndHeadings.normalize("NFKC").toLocaleLowerCase("ko");
   const keywords = new Set<string>();
+  const coveredPhraseTokens = new Set<string>();
 
   for (const [keyword, variants] of CURATED_KEYWORDS) {
-    if (variants.some((variant) => comparable.includes(variant))) keywords.add(keyword);
+    if (!variants.some((variant) => comparable.includes(variant))) continue;
+    keywords.add(keyword);
+    if (keyword.includes(" ")) {
+      for (const token of keyword.split(" ")) coveredPhraseTokens.add(token);
+    }
   }
 
   const tokens = comparable.match(/[가-힣]{2,14}|[a-z][a-z0-9+.-]{1,14}/g) ?? [];
   for (const rawToken of tokens) {
     const keyword = normalizeKeywordToken(rawToken);
-    if (!keyword || STOP_WORDS.has(keyword)) continue;
+    if (!keyword || STOP_WORDS.has(keyword) || coveredPhraseTokens.has(keyword)) continue;
     keywords.add(keyword);
   }
 
@@ -167,12 +174,22 @@ function selectDiverseKeywords<T extends { keyword: string; count: number; categ
 
   const categories = [...new Set(items.map((item) => item.category))];
   const minimumPerCategory = Math.max(2, Math.floor(limit / Math.max(categories.length * 2, 1)));
+  const maximumPerCategory = Math.max(minimumPerCategory, Math.ceil(limit / 5));
   const selected = new Map<string, T>();
+  const selectedCategoryCounts = new Map<Category, number>();
 
   for (const category of categories) {
     for (const item of items.filter((candidate) => candidate.category === category).slice(0, minimumPerCategory)) {
       selected.set(item.keyword, item);
+      selectedCategoryCounts.set(category, (selectedCategoryCounts.get(category) ?? 0) + 1);
     }
+  }
+  for (const item of items) {
+    if (selected.size >= limit) break;
+    if (selected.has(item.keyword)) continue;
+    if ((selectedCategoryCounts.get(item.category) ?? 0) >= maximumPerCategory) continue;
+    selected.set(item.keyword, item);
+    selectedCategoryCounts.set(item.category, (selectedCategoryCounts.get(item.category) ?? 0) + 1);
   }
   for (const item of items) {
     if (selected.size >= limit) break;
