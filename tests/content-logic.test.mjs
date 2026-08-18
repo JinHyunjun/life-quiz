@@ -87,6 +87,9 @@ test("content keyword cloud counts matching documents once and keeps useful topi
   const cleaned = extractContentKeywords({ title: "직장에서의 분쟁이 발생하는 원리 확인하기", cards: null, category: "rights" });
   assert.equal(cleaned.has("직장"), true);
   assert.equal([...cleaned].some((keyword) => ["직장에서", "발생하", "원리", "확인하기"].includes(keyword)), false);
+  const nounEnding = extractContentKeywords({ title: "개구리는 겨울을 어떻게 보낼까", cards: null, category: "humor" });
+  assert.equal(nounEnding.has("개구리"), true);
+  assert.equal(nounEnding.has("개구"), false);
 });
 
 test("keyword routes accept short topic phrases but reject path-like input", () => {
