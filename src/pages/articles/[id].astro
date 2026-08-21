@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { AlertCircle, ArrowLeft, Bookmark, ChevronLeft, ChevronRight, CircleHelp, Copy, ExternalLink, FileQuestion, Flag, MessageCircle, PanelsTopLeft, RefreshCcw, RotateCcw, ShieldAlert, ThumbsUp } from "lucide-astro";
+import { AlertCircle, ArrowLeft, Bookmark, BookOpen, ChevronLeft, ChevronRight, CircleHelp, Copy, ExternalLink, FileQuestion, Flag, MessageCircle, PanelsTopLeft, RefreshCcw, RotateCcw, ShieldAlert, ThumbsUp } from "lucide-astro";
 import Base from "../../layouts/Base.astro";
 import VisualCue from "../../components/VisualCue.astro";
 import { createDb } from "../../db/client";
@@ -48,8 +48,15 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
       )}
     </header>
 
+    <nav class="article-jumpbar" aria-label="글 읽기 순서">
+      <span>바로 이동</span>
+      <a href="#quick-read"><PanelsTopLeft size={16} /> 1분 요약</a>
+      <a href="#deep-read"><BookOpen size={16} /> 자세히</a>
+      <a href="#source-note"><ExternalLink size={16} /> 출처</a>
+    </nav>
+
     {isVisualGuide && item.cards && item.cards.length > 0 && (
-      <section class="visual-guide-section" aria-labelledby="visual-guide-title">
+      <section class="visual-guide-section" id="quick-read" aria-labelledby="visual-guide-title">
         <div class="card-news-toolbar">
           <div>
             <p class="eyebrow">VISUAL GLOSSARY</p>
@@ -76,7 +83,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     )}
 
     {!isVisualGuide && item.cards && item.cards.length > 0 && (
-      <section class="card-news-section" aria-labelledby="card-news-title">
+      <section class="card-news-section" id="quick-read" aria-labelledby="card-news-title">
         <div class="card-news-toolbar">
           <div>
             <p class="eyebrow">QUICK READ</p>
@@ -111,7 +118,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
 
     <div class="article-grid">
       <div class="article-main">
-        <section class="article-body" aria-labelledby="article-body-title">
+        <section class="article-body" id="deep-read" aria-labelledby="article-body-title">
           <p class="eyebrow">DEEP READ</p>
           <h2 id="article-body-title">카드에서 본 내용을 더 깊게</h2>
           <div class="deep-read-list">
@@ -127,7 +134,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
           </div>
         </section>
 
-        <section class="source-note" aria-labelledby="source-title">
+        <section class="source-note" id="source-note" aria-labelledby="source-title">
           <div>
             <p class="eyebrow">SOURCE</p>
             <h2 id="source-title">어디에서 온 정보인가요?</h2>
@@ -218,21 +225,21 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   }
 
   .article-header {
-    max-width: 860px;
-    margin: 58px auto 48px;
-    text-align: center;
+    max-width: 920px;
+    margin: 34px 0 26px;
+    text-align: left;
   }
 
   .article-header h1 {
-    margin: 14px 0 18px;
-    font-size: clamp(2rem, 5vw, 3.8rem);
-    line-height: 1.16;
+    margin: 12px 0 14px;
+    font-size: clamp(1.9rem, 4vw, 3rem);
+    line-height: 1.2;
     word-break: keep-all;
   }
 
   .article-meta {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 7px;
     color: var(--muted);
     font-size: 0.82rem;
@@ -242,9 +249,9 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     max-width: 620px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 7px;
-    margin: 18px auto 0;
+    margin: 16px 0 0;
     padding: 10px 12px;
     border: 1px solid color-mix(in srgb, var(--berry) 28%, var(--line));
     border-radius: var(--radius-md);
@@ -254,12 +261,51 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     font-weight: 700;
   }
 
+  .article-jumpbar {
+    position: sticky;
+    top: 64px;
+    z-index: 22;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 30px;
+    padding: 5px;
+    border-block: 1px solid var(--line);
+    background: color-mix(in srgb, var(--canvas) 94%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  .article-jumpbar > span {
+    margin: 0 10px 0 4px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 800;
+  }
+
+  .article-jumpbar a {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 11px;
+    border-radius: var(--radius-sm);
+    color: var(--muted-strong);
+    text-decoration: none;
+    font-size: 0.75rem;
+    font-weight: 750;
+  }
+
+  .article-jumpbar a:hover { color: var(--article-color); background: var(--article-soft); }
+
   .card-news-section {
-    margin-bottom: 64px;
+    margin-bottom: 46px;
+    scroll-margin-top: 126px;
   }
 
   .visual-guide-section {
-    margin-bottom: 64px;
+    margin-bottom: 46px;
+    scroll-margin-top: 126px;
   }
 
   .visual-guide-section .card-news-toolbar h2 {
@@ -490,11 +536,9 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
   }
 
   .article-body {
-    padding: 34px 38px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--paper);
-    box-shadow: var(--shadow-sm);
+    padding: 30px 4px;
+    border-block: 1px solid var(--line);
+    scroll-margin-top: 126px;
   }
 
   .article-body > h2 {
@@ -544,6 +588,7 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--surface-strong);
+    scroll-margin-top: 126px;
   }
 
   .source-note h2 {
@@ -792,18 +837,31 @@ Astro.response.headers.set("cache-control", "public, max-age=300, stale-while-re
     }
 
     .article-header {
-      margin: 40px auto 34px;
+      margin: 30px auto 22px;
       text-align: left;
     }
 
     .article-header h1 {
-      font-size: 2rem;
+      font-size: 1.8rem;
     }
 
     .article-meta {
       justify-content: flex-start;
       flex-wrap: wrap;
     }
+
+    .article-jumpbar {
+      top: 58px;
+      margin-right: -14px;
+      margin-left: -14px;
+      padding-inline: 14px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .article-jumpbar::-webkit-scrollbar { display: none; }
+    .article-jumpbar > span { display: none; }
+    .article-jumpbar a { flex: 0 0 auto; }
 
     .card-news-section {
       margin-bottom: 42px;

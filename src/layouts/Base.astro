@@ -13,6 +13,7 @@ import {
   Moon,
   Network,
   RotateCcw,
+  Search,
   Sparkles,
   Sun,
   UserRound,
@@ -39,16 +40,18 @@ const navItems = [
   { href: "/daily", label: "5분 학습", mobileLabel: "5분 학습", group: "학습", icon: Sparkles, active: pathname === "/daily", mobile: true },
   { href: "/review", label: "전체 복습", mobileLabel: "복습", group: "학습", icon: RotateCcw, active: pathname === "/review", mobile: false },
   { href: "/chat", label: "라이프 메이트", mobileLabel: "AI 질문", group: "학습", icon: MessageCircle, active: pathname === "/chat", mobile: true },
-  { href: "/me", label: "내 학습", mobileLabel: "내 학습", group: "기록", icon: ChartNoAxesColumnIncreasing, active: pathname === "/me", mobile: true },
-  { href: "/account", label: "계정·동기화", mobileLabel: "계정", group: "기록", icon: UserRound, active: pathname === "/account" || pathname === "/login", mobile: false },
-  { href: "/support", label: "문의·피드백", mobileLabel: "문의", group: "기록", icon: LifeBuoy, active: pathname === "/support", mobile: false },
-  { href: "/changelog", label: "릴리즈 노트", mobileLabel: "업데이트", group: "기록", icon: History, active: pathname === "/changelog", mobile: false },
+  { href: "/me", label: "내 학습", mobileLabel: "내 학습", group: "나의 공간", icon: ChartNoAxesColumnIncreasing, active: pathname === "/me", mobile: true },
+  { href: "/account", label: "계정·동기화", mobileLabel: "계정", group: "나의 공간", icon: UserRound, active: pathname === "/account" || pathname === "/login", mobile: false },
+  { href: "/support", label: "문의·피드백", mobileLabel: "문의", group: "도움말", icon: LifeBuoy, active: pathname === "/support", mobile: false },
+  { href: "/changelog", label: "릴리즈 노트", mobileLabel: "업데이트", group: "도움말", icon: History, active: pathname === "/changelog", mobile: false },
 ];
-const navGroups = ["탐색", "학습", "기록"].map((label) => ({
+const navGroups = ["탐색", "학습", "나의 공간"].map((label) => ({
   label,
   items: navItems.filter((item) => item.group === label),
 }));
+const utilityItems = navItems.filter((item) => item.group === "도움말");
 const mobileNavItems = navItems.filter((item) => item.mobile);
+const currentPageLabel = navItems.find((item) => item.active)?.label ?? "라이프퀴즈";
 ---
 
 <!doctype html>
@@ -107,14 +110,28 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
           ))}
         </nav>
 
-        <a class="sidebar-admin" href="/admin" title="운영 품질 대시보드">
-          <Gauge size={18} />
-          <span>운영 품질</span>
-        </a>
+        <div class="sidebar-utilities" aria-label="도움말과 관리">
+          {utilityItems.map(({ href, label, icon: Icon, active }) => (
+            <a href={href} class:list={["sidebar-utility-link", { active }]} title={label} aria-current={active ? "page" : undefined}>
+              <Icon size={17} /><span>{label}</span>
+            </a>
+          ))}
+          <a class="sidebar-utility-link" href="/admin" title="운영 품질 대시보드">
+            <Gauge size={17} /><span>운영 품질</span>
+          </a>
+        </div>
       </aside>
 
       <div class="app-frame">
-        <div class="app-tools">
+        <header class="desktop-topbar">
+          <span class="page-context">{currentPageLabel}</span>
+          <form class="global-search" action="/archive" method="get" role="search">
+            <Search size={17} aria-hidden="true" />
+            <label class="visually-hidden" for="global-search-query">전체 상식 검색</label>
+            <input id="global-search-query" name="q" type="search" maxlength="60" placeholder="궁금한 상식을 검색하세요" />
+            <button type="submit" aria-label="전체 상식 검색"><Search size={16} /></button>
+          </form>
+          <div class="topbar-actions">
           <a class="account-tool" href="/account" title="계정 및 학습 기록 동기화">
             <UserRound size={17} />
             <span>계정</span>
@@ -127,16 +144,24 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
               <Moon size={17} />
             </button>
           </div>
-        </div>
+          </div>
+        </header>
 
         <header class="mobile-header">
           <a class="mobile-brand" href="/" aria-label="라이프퀴즈 홈">
             <span class="brand-mark" aria-hidden="true"><BookOpenCheck size={19} strokeWidth={2.2} /></span>
             <strong>라이프퀴즈</strong>
           </a>
-          <button class="mobile-menu-button icon-button" type="button" aria-label="전체 메뉴 열기" aria-haspopup="dialog" aria-controls="mobile-menu">
-            <Menu size={21} />
-          </button>
+          <div class="mobile-header-actions">
+            <a class="mobile-search-button icon-button" href="/archive#archive-query" aria-label="상식 검색" title="상식 검색"><Search size={19} /></a>
+            <div class="theme-switcher" role="group" aria-label="화면 모드 선택">
+              <button type="button" data-theme-value="light" aria-label="라이트 모드" aria-pressed="true" title="라이트 모드"><Sun size={16} /></button>
+              <button type="button" data-theme-value="dark" aria-label="다크 모드" aria-pressed="false" title="다크 모드"><Moon size={16} /></button>
+            </div>
+            <button class="mobile-menu-button icon-button" type="button" aria-label="전체 메뉴 열기" aria-haspopup="dialog" aria-controls="mobile-menu">
+              <Menu size={21} />
+            </button>
+          </div>
         </header>
 
         <main id="main-content">
@@ -352,31 +377,97 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
   .nav-link:hover { color: var(--ink); background: var(--surface-strong); }
   .nav-link.active { color: var(--green-deep); background: var(--green-soft); }
 
-  .sidebar-admin {
-    min-height: 40px;
+  .sidebar-utilities {
+    display: grid;
+    gap: 2px;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+
+  .sidebar-utility-link {
+    min-height: 34px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-top: auto;
+    gap: 9px;
     padding: 0 10px;
-    border-top: 1px solid var(--line);
+    border-radius: var(--radius-sm);
     color: var(--muted);
     text-decoration: none;
-    font-size: 0.78rem;
+    font-size: 0.73rem;
     font-weight: 700;
   }
+
+  .sidebar-utility-link:hover,
+  .sidebar-utility-link.active { color: var(--ink); background: var(--surface-strong); }
 
   .app-frame { min-width: 0; display: flex; flex-direction: column; }
   .app-frame main { min-width: 0; flex: 1; }
   .mobile-header { display: none; }
 
-  .app-tools {
-    position: fixed;
-    top: 14px;
-    right: 18px;
-    z-index: 55;
+  .desktop-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 45;
+    min-height: 64px;
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) minmax(260px, 440px) minmax(120px, 1fr);
+    align-items: center;
+    gap: 18px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
+    backdrop-filter: blur(16px);
+  }
+
+  .page-context {
+    color: var(--muted-strong);
+    font-size: 0.8rem;
+    font-weight: 800;
+  }
+
+  .global-search {
+    min-width: 0;
+    height: 42px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 34px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px 0 13px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    color: var(--muted);
+    background: var(--surface);
+  }
+
+  .global-search:focus-within {
+    border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+    background: var(--paper);
+  }
+
+  .global-search input {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .global-search input::placeholder { color: var(--muted); }
+  .global-search button {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--green-deep);
+    background: transparent;
+    cursor: pointer;
+  }
+  .global-search button:hover { background: var(--green-soft); }
+
+  .topbar-actions {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 7px;
   }
 
@@ -390,8 +481,6 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     border-radius: var(--radius-md);
     color: var(--muted-strong);
     background: color-mix(in srgb, var(--paper) 94%, transparent);
-    box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(14px);
     text-decoration: none;
     font-size: 0.76rem;
     font-weight: 750;
@@ -409,8 +498,6 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--paper) 94%, transparent);
-    box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(14px);
   }
 
   .theme-switcher button {
@@ -466,18 +553,20 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     .sidebar-quick-start span,
     .nav-group h2,
     .nav-link span,
-    .sidebar-admin span { display: none; }
+    .sidebar-utility-link span { display: none; }
     .sidebar-quick-start { width: 46px; min-height: 46px; justify-content: center; margin-block: 22px 18px; padding: 0; }
     .sidebar-nav,
     .nav-group-links { width: 100%; }
     .nav-group { display: contents; }
     .nav-link { justify-content: center; padding: 0; }
-    .sidebar-admin { width: 44px; justify-content: center; padding: 0; }
+    .sidebar-utilities { width: 100%; }
+    .sidebar-utility-link { justify-content: center; padding: 0; }
   }
 
   @media (max-width: 900px) {
     .app-shell { display: block; }
     .site-sidebar { display: none; }
+    .desktop-topbar { display: none; }
     .mobile-header {
       position: sticky;
       top: 0;
@@ -493,10 +582,10 @@ const mobileNavItems = navItems.filter((item) => item.mobile);
     }
     .mobile-brand { font-size: 0.94rem; }
     .mobile-brand .brand-mark { width: 34px; height: 34px; flex-basis: 34px; }
-    .mobile-menu-button { width: 40px; height: 40px; flex-basis: 40px; }
-    .app-tools { top: 9px; right: 64px; }
-    .account-tool { display: none; }
-    .theme-switcher { width: 76px; height: 40px; }
+    .mobile-header-actions { display: flex; align-items: center; gap: 6px; }
+    .mobile-search-button,
+    .mobile-menu-button { width: 38px; height: 38px; flex-basis: 38px; color: var(--muted-strong); }
+    .theme-switcher { width: 72px; height: 38px; }
 
     .mobile-menu-dialog {
       width: min(430px, calc(100% - 24px));

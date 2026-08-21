@@ -23,10 +23,23 @@ export interface ReleaseFeed {
 export const NOTION_RELEASE_PAGE_ID = "38ccb889-5490-8102-93b1-c63f45626a20";
 
 export const FALLBACK_RELEASE_FEED: ReleaseFeed = {
-  fetchedAt: "2026-08-18T06:00:00.000Z",
+  fetchedAt: "2026-08-21T04:30:00.000Z",
   source: "snapshot",
   stale: true,
   releases: [
+    {
+      version: "v0.25",
+      title: "정보 위계와 탐색 경험 개편",
+      date: "2026-08-21",
+      changes: [
+        { type: "bullet", text: "전역 사이드바를 탐색·학습·나의 공간 중심으로 재분류하고 데스크톱 상단에 어느 화면에서나 지난 상식을 찾는 통합 검색 추가" },
+        { type: "bullet", text: "홈의 큰 히어로와 네 묶음 분야 카드를 축소하고 12개 분야 가로 탐색, 오늘의 핵심, 제목 중심의 조밀한 새 상식 목록 순서로 정보 위계 재구성" },
+        { type: "bullet", text: "4컷 용어·서울 브리핑·AI 큐레이션을 하나의 추천 큐로 합치고 5분 학습·복습·AI 질문을 지금 할 일 영역에서 바로 시작하도록 단순화" },
+        { type: "bullet", text: "보관함의 날짜·분야·출처를 단일 검색 도구 막대로 통합하고 과거 전체 날짜를 선택 메뉴로 유지하며 카드·목록 보기를 선택하고 기억하도록 개선" },
+        { type: "bullet", text: "글 제목의 크기와 여백을 줄이고 1분 요약·자세히·출처로 바로 이동하는 고정 읽기 목차를 추가해 필요한 깊이의 정보로 즉시 이동" },
+        { type: "bullet", text: "라이트·다크 모드와 데스크톱·모바일에서 검색, 분야 탐색, 콘텐츠 진입, 보관함 보기 설정, 글 읽기 경로를 타입 검사와 로직·E2E 테스트로 회귀 검증" },
+      ],
+    },
     {
       version: "v0.24",
       title: "누적 콘텐츠 지식 지도",

@@ -2,12 +2,31 @@
 export const prerender = false;
 
 import { env } from "cloudflare:workers";
-import { Archive, ArrowRight, BookOpen, BriefcaseBusiness, CalendarDays, Landmark, MapPinned, MessageCircle, PanelsTopLeft, RotateCcw, ShieldCheck, Sparkles } from "lucide-astro";
+import {
+  Archive,
+  ArrowRight,
+  BookOpen,
+  CalendarDays,
+  MapPinned,
+  MessageCircle,
+  Network,
+  PanelsTopLeft,
+  RotateCcw,
+  Sparkles,
+} from "lucide-astro";
 import Base from "../layouts/Base.astro";
 import FirstVisitOnboarding from "../components/FirstVisitOnboarding.astro";
 import { createDb } from "../db/client";
-import { getContentStats, getTodayCategoryCounts, listArchiveDays, listRecentAiDiscoveries, listRecentDistrictBriefs, listRecentVisualGuides, listTodayContentItems } from "../lib/content";
-import { CATEGORY_DESCRIPTIONS, CATEGORY_GROUPS, CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
+import {
+  getContentStats,
+  getTodayCategoryCounts,
+  listArchiveDays,
+  listRecentAiDiscoveries,
+  listRecentDistrictBriefs,
+  listRecentVisualGuides,
+  listTodayContentItems,
+} from "../lib/content";
+import { CATEGORY_LABELS, categoryLabel, type Category } from "../lib/categories";
 import { formatKstDate, formatShortDate, todayKstRange } from "../lib/dates";
 import { excerpt } from "../lib/text";
 import { getLifeQuizSession } from "../lib/auth";
@@ -36,876 +55,309 @@ const [items, stats, archiveDays, visualGuides, aiDiscoveries, categoryCountRows
 Astro.response.headers.set("cache-control", "private, no-store");
 
 const todayCategoryCounts = new Map(categoryCountRows.map(({ category, count }) => [category, count]));
-const groupIcons = {
-  "money-home": Landmark,
-  "work-rights": BriefcaseBusiness,
-  "safe-life": ShieldCheck,
-  "culture-break": Sparkles,
-};
+const categories = Object.entries(CATEGORY_LABELS) as [Category, string][];
 const featured = items[0];
 const feedItems = items.slice(1);
-const hasSidebarContent = visualGuides.length > 0 || (!activeCategory && districtBriefs.length > 0) || aiDiscoveries.length > 0;
+const exploreItems = [
+  ...visualGuides.slice(0, 2).map((item) => ({ ...item, kind: "4컷 용어", icon: PanelsTopLeft })),
+  ...districtBriefs.slice(0, 2).map((item) => ({ ...item, kind: "서울 브리핑", icon: MapPinned })),
+  ...aiDiscoveries.slice(0, 2).map((item) => ({ ...item, kind: "큐레이션", icon: Sparkles })),
+].filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 6);
 ---
 
 <Base title="읽고, 묻고, 오래 기억하는 생활 상식">
   <FirstVisitOnboarding />
+
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-image" aria-hidden="true"></div>
     <div class="hero-content shell">
-      <p class="hero-kicker"><Sparkles size={16} /> 오늘의 생활력 한 칸</p>
-      <h1 id="hero-title">사회초년생을 위한<br />생활 상식</h1>
-      <p>오늘 필요한 상식을 5분 안에 읽고 오래 기억하세요.</p>
+      <div class="hero-status"><Sparkles size={15} /> 오늘 {stats.today}개 업데이트</div>
+      <h1 id="hero-title">사회초년생을 위한<br />오늘의 생활 상식</h1>
+      <p>필요한 것부터 짧게 읽고, 퀴즈로 오래 기억하세요.</p>
       <div class="hero-actions">
-        <a class="button button-primary" href="/daily">
-          <RotateCcw size={17} /> 5분 학습 시작
-        </a>
-        <a class="button button-secondary" href="/chat">
-          <MessageCircle size={17} /> 라이프 메이트에게 묻기
-        </a>
+        <a class="button button-primary" href="/daily"><RotateCcw size={17} /> 5분 학습 시작</a>
+        <a class="hero-link" href="/chat"><MessageCircle size={17} /> AI에게 질문</a>
+        <a class="hero-link" href="/archive"><Archive size={17} /> 지난 상식</a>
       </div>
     </div>
   </section>
 
-  <div class="shell home-layout">
-    <div class="home-main">
-      <section class="category-section" aria-labelledby="category-title">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">KNOWLEDGE MAP</p>
-            <h2 id="category-title">오늘의 지식 지도</h2>
-          </div>
-          <span class="content-count">오늘 {stats.today}개 · 누적 {stats.total}개</span>
+  <div class="home-page shell">
+    <section class="category-section" aria-labelledby="category-title">
+      <div class="compact-heading">
+        <div>
+          <span class="section-kicker">분야별 탐색</span>
+          <h2 id="category-title">오늘 무엇이 궁금한가요?</h2>
         </div>
+        <a href="/topics">지식 지도 <Network size={15} /></a>
+      </div>
 
-        <nav class="topic-map" aria-label="콘텐츠 분야">
-          <a class:list={["all-topics", { active: !activeCategory }]} href="/" aria-current={!activeCategory ? "page" : undefined}>
-            <span>모든 주제</span><strong>{stats.today}</strong>
+      <nav class="topic-strip" aria-label="콘텐츠 분야">
+        <a class:list={["topic-link all", { active: !activeCategory }]} href="/" aria-current={!activeCategory ? "page" : undefined}>
+          <span>전체</span><strong>{stats.today}</strong>
+        </a>
+        {categories.map(([category, label]) => (
+          <a
+            class:list={["topic-link", { active: activeCategory === category }]}
+            href={`/?category=${category}`}
+            aria-current={activeCategory === category ? "page" : undefined}
+            data-category={category}
+          >
+            <span><i class="category-swatch"></i>{label}</span>
+            <strong>{todayCategoryCounts.get(category) ?? 0}</strong>
           </a>
-          {CATEGORY_GROUPS.map((group) => {
-            const GroupIcon = groupIcons[group.id];
-            return (
-              <section class="topic-group" aria-labelledby={`group-${group.id}`}>
-                <header>
-                  <span class="topic-group-icon" aria-hidden="true"><GroupIcon size={19} /></span>
-                  <strong id={`group-${group.id}`}>{group.label}</strong>
-                </header>
-                <div class="topic-links">
-                  {group.categories.map((category) => (
-                    <a
-                      class:list={["topic-link", { active: activeCategory === category }]}
-                      href={`/?category=${category}`}
-                      aria-current={activeCategory === category ? "page" : undefined}
-                      aria-label={`${CATEGORY_LABELS[category]}: ${CATEGORY_DESCRIPTIONS[category]}, 오늘 ${todayCategoryCounts.get(category) ?? 0}개`}
-                      title={CATEGORY_DESCRIPTIONS[category]}
-                    >
-                      <span class="category-swatch" data-category={category}></span>
-                      <strong>{CATEGORY_LABELS[category]}</strong>
-                      <b>{todayCategoryCounts.get(category) ?? 0}</b>
-                    </a>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </nav>
-      </section>
+        ))}
+      </nav>
+    </section>
 
-      {featured ? (
-        <>
-          <section class="featured-section" aria-labelledby="featured-title">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">NEW KNOWLEDGE</p>
-                <h2 id="featured-title">오늘 가장 최근에 도착한 상식</h2>
-              </div>
-            </div>
-
-            <a class="featured-story" href={`/articles/${featured.id}`}>
-              <div class="featured-number" aria-hidden="true">01</div>
-              <div class="featured-copy">
-                <div class="featured-tags">
-                  <span class="category-label" data-category={featured.category}>{categoryLabel(featured.category)}</span>
-                  {featured.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
-                </div>
-                <h3>{featured.title}</h3>
-                <p>{featured.cards?.[0]?.body ?? excerpt(featured.bodyMd, 150)}</p>
-                <span class="story-meta">{featured.citationLabel} · {formatShortDate(featured.createdAt)}</span>
-              </div>
-              <span class="story-arrow" aria-hidden="true"><ArrowRight size={23} /></span>
-            </a>
-          </section>
-
-          {feedItems.length > 0 && (
-            <section class="feed-section" aria-labelledby="feed-title">
-              <div class="section-heading">
+    <div class="home-dashboard">
+      <main class="today-feed">
+        {featured ? (
+          <>
+            <section class="featured-section" aria-labelledby="featured-title">
+              <div class="compact-heading">
                 <div>
-                  <p class="eyebrow">KNOWLEDGE FEED</p>
-                  <h2 id="feed-title">오늘 차곡차곡 쌓인 상식</h2>
+                  <span class="section-kicker">오늘의 핵심</span>
+                  <h2 id="featured-title">가장 먼저 볼 상식</h2>
                 </div>
+                <span>{formatShortDate(featured.createdAt)}</span>
               </div>
 
-              <ul class="content-grid">
-                {feedItems.map((item, index) => (
-                  <li>
-                    <a class="content-card" href={`/articles/${item.id}`}>
-                      <div class="card-topline">
-                        <div class="card-tags">
-                          <span class="category-label" data-category={item.category}>{categoryLabel(item.category)}</span>
-                          {item.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
-                        </div>
-                        <span class="card-number">{String(index + 2).padStart(2, "0")}</span>
-                      </div>
-                      <h3>{item.title}</h3>
-                      <p>{item.cards?.[0]?.body ?? excerpt(item.bodyMd)}</p>
-                      <div class="card-footer">
-                        <span>{item.citationLabel}</span>
-                        <span>{formatShortDate(item.createdAt)}</span>
-                      </div>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <a class="featured-story" href={`/articles/${featured.id}`} data-category={featured.category}>
+                <div class="featured-accent"><BookOpen size={22} /></div>
+                <div class="featured-copy">
+                  <div class="content-tags">
+                    <span class="category-label">{categoryLabel(featured.category)}</span>
+                    {featured.contentFormat === "visual_guide" && <span class="visual-format-badge"><PanelsTopLeft size={13} /> 4컷 용어</span>}
+                  </div>
+                  <h3>{featured.title}</h3>
+                  <p>{featured.cards?.[0]?.body ?? excerpt(featured.bodyMd, 130)}</p>
+                  <small>{featured.citationLabel}</small>
+                </div>
+                <ArrowRight class="featured-arrow" size={22} aria-hidden="true" />
+              </a>
             </section>
-          )}
-        </>
-      ) : (
-        <section class="empty-state" aria-labelledby="empty-title">
-          <BookOpen size={34} strokeWidth={1.7} />
-          <h2 id="empty-title">오늘 이 분야에 도착한 상식은 아직 없어요</h2>
-          <p>지난 상식 보관함에서 이전 자료를 찾아볼 수 있어요.</p>
-          <a class="button button-primary" href="/archive"><Archive size={17} /> 지난 상식 보기</a>
-        </section>
-      )}
-    </div>
 
-    <aside class="home-sidebar" aria-label="더 둘러보기">
-      {hasSidebarContent && (
-        <div class="sidebar-card">
-          <div class="sidebar-card-heading">
-            <p class="eyebrow">EXPLORE MORE</p>
-            <h2>오늘 함께 볼 만한 것들</h2>
-          </div>
+            {feedItems.length > 0 && (
+              <section class="feed-section" aria-labelledby="feed-title">
+                <div class="compact-heading">
+                  <div>
+                    <span class="section-kicker">새로 도착함</span>
+                    <h2 id="feed-title">오늘 쌓인 상식</h2>
+                  </div>
+                  <span>{feedItems.length}개</span>
+                </div>
 
-          {visualGuides.length > 0 && (
-            <div class="sidebar-group">
-              <div class="sidebar-group-heading">
-                <span><PanelsTopLeft size={15} /> 시작 코스 용어</span>
-                <a href="/start">전체 보기 <ArrowRight size={13} /></a>
-              </div>
-              <ul class="rail-list">
-                {visualGuides.map((guide) => (
-                  <li>
-                    <a href={`/articles/${guide.id}`} data-category={guide.category}>
-                      <span class="rail-icon"><PanelsTopLeft size={16} /></span>
-                      <span class="rail-copy">
-                        <small>{categoryLabel(guide.category)} · 4컷 설명</small>
-                        <strong>{guide.title}</strong>
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {!activeCategory && districtBriefs.length > 0 && (
-            <div class="sidebar-group">
-              <div class="sidebar-group-heading">
-                <span><MapPinned size={15} /> 서울 자치구 브리핑</span>
-                <a href="/archive?category=seoul_life">더 보기 <ArrowRight size={13} /></a>
-              </div>
-              <ul class="rail-list">
-                {districtBriefs.map((item) => (
-                  <li>
-                    <a href={`/articles/${item.id}`} data-category={item.category}>
-                      <span class="rail-icon"><MapPinned size={16} /></span>
-                      <span class="rail-copy">
-                        <small>서울 자치구</small>
-                        <strong>{item.title}</strong>
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {aiDiscoveries.length > 0 && (
-            <div class="sidebar-group">
-              <div class="sidebar-group-heading">
-                <span><Sparkles size={15} /> 큐레이션 상식</span>
-                <a href="/archive?source=ai_trivia">더 보기 <ArrowRight size={13} /></a>
-              </div>
-              <ul class="rail-list">
-                {aiDiscoveries.map((item) => (
-                  <li>
-                    <a href={`/articles/${item.id}`} data-category={item.category}>
-                      <span class="rail-icon"><Sparkles size={16} /></span>
-                      <span class="rail-copy">
-                        <small>{categoryLabel(item.category)}</small>
-                        <strong>{item.title}</strong>
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      <a class="sidebar-card archive-card" href="/archive">
-        <div class="archive-card-heading">
-          <Archive size={20} />
-          <div><span>00시 이전 상식은 보관함에서</span><strong>{stats.archive}개 계속 탐색하기</strong></div>
-        </div>
-        {archiveDays.length > 0 && (
-          <div class="archive-days">
-            {archiveDays.map((day) => (
-              <span><CalendarDays size={13} /> {formatKstDate(day.day, false)} · {day.count}</span>
-            ))}
-          </div>
+                <ul class="content-list">
+                  {feedItems.map((item) => (
+                    <li>
+                      <a class="content-row" href={`/articles/${item.id}`} data-category={item.category}>
+                        <span class="row-marker" aria-hidden="true"></span>
+                        <span class="row-copy">
+                          <span class="row-meta">
+                            <strong>{categoryLabel(item.category)}</strong>
+                            {item.contentFormat === "visual_guide" && <b>4컷</b>}
+                            <time>{formatShortDate(item.createdAt)}</time>
+                          </span>
+                          <span class="row-title">{item.title}</span>
+                          <span class="row-summary">{item.cards?.[0]?.body ?? excerpt(item.bodyMd, 90)}</span>
+                        </span>
+                        <ArrowRight size={17} aria-hidden="true" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
+        ) : (
+          <section class="empty-state" aria-labelledby="empty-title">
+            <BookOpen size={32} strokeWidth={1.7} />
+            <h2 id="empty-title">오늘 이 분야의 새 상식은 아직 없어요</h2>
+            <a class="button button-primary" href="/archive">지난 상식에서 찾기</a>
+          </section>
         )}
-        <span class="archive-card-cta">전체 보관함 보기 <ArrowRight size={15} /></span>
-      </a>
-    </aside>
+      </main>
+
+      <aside class="home-rail" aria-label="빠른 학습과 추천">
+        <section class="quick-panel" aria-labelledby="quick-title">
+          <div class="compact-heading">
+            <div>
+              <span class="section-kicker">바로 시작</span>
+              <h2 id="quick-title">지금 할 일</h2>
+            </div>
+          </div>
+          <div class="quick-links">
+            <a class="quick-link primary" href="/daily">
+              <RotateCcw size={19} /><span><strong>5분 학습</strong><small>오늘의 카드 5장</small></span><ArrowRight size={16} />
+            </a>
+            <a class="quick-link" href="/review">
+              <BookOpen size={19} /><span><strong>복습하기</strong><small>기억할 때 다시 보기</small></span><ArrowRight size={16} />
+            </a>
+            <a class="quick-link" href="/chat">
+              <MessageCircle size={19} /><span><strong>AI에게 묻기</strong><small>출처가 있는 답변</small></span><ArrowRight size={16} />
+            </a>
+          </div>
+        </section>
+
+        {exploreItems.length > 0 && (
+          <section class="explore-panel" aria-labelledby="explore-title">
+            <div class="compact-heading">
+              <div>
+                <span class="section-kicker">추천 큐</span>
+                <h2 id="explore-title">이어서 둘러보기</h2>
+              </div>
+              <a href="/archive">더 보기 <ArrowRight size={14} /></a>
+            </div>
+            <ul class="explore-list">
+              {exploreItems.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <li>
+                    <a href={`/articles/${item.id}`} data-category={item.category}>
+                      <span class="explore-icon"><ItemIcon size={16} /></span>
+                      <span><small>{item.kind} · {categoryLabel(item.category)}</small><strong>{item.title}</strong></span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <a class="archive-panel" href="/archive">
+          <span class="archive-icon"><Archive size={19} /></span>
+          <span><small>지난 상식 보관함</small><strong>{stats.archive}개에서 찾아보기</strong></span>
+          <ArrowRight size={17} />
+          {archiveDays.length > 0 && (
+            <span class="archive-days">
+              {archiveDays.map((day) => <i><CalendarDays size={12} /> {formatKstDate(day.day, false)} {day.count}</i>)}
+            </span>
+          )}
+        </a>
+      </aside>
+    </div>
   </div>
 </Base>
 
 <style>
-  .hero {
-    position: relative;
-    min-height: 248px;
-    overflow: hidden;
-    isolation: isolate;
-    background: var(--surface-strong);
-    border-bottom: 1px solid var(--line);
-  }
-
-  .hero-image {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background-image: url("/images/life-quiz-desk.webp");
-    background-position: center;
-    background-size: cover;
-  }
-
-  .hero-content {
-    min-height: 248px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
-  }
-
-  .hero-kicker {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0 0 8px;
-    color: var(--green-deep);
-    font-size: 0.82rem;
-    font-weight: 800;
-  }
-
-  .hero h1 {
-    margin: 0;
-    font-size: clamp(2rem, 3.6vw, 3.15rem);
-    line-height: 1.1;
-  }
-
-  .hero-content > p:not(.hero-kicker) {
-    max-width: 470px;
-    margin: 10px 0 0;
-    color: var(--muted-strong);
-    font-size: 1rem;
-  }
-
-  .hero-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: 18px;
-  }
-
-  .home-layout {
-    padding-top: 30px;
-    padding-bottom: 12px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    align-items: start;
-    gap: 24px;
-  }
-
-  .home-main {
-    min-width: 0;
-  }
-
-  .home-sidebar {
-    position: sticky;
-    top: 20px;
-    display: grid;
-    gap: 16px;
-  }
-
-  .category-section,
-  .featured-section,
-  .feed-section {
-    margin-bottom: 32px;
-  }
-
-  .content-count {
-    color: var(--muted);
-    font-size: 0.82rem;
-    font-weight: 700;
-  }
-
-  .topic-map {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-  }
-
-  .all-topics {
-    grid-column: 1 / -1;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 18px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    color: var(--ink);
-    background: var(--paper);
-    text-decoration: none;
-    font-size: 0.88rem;
-    font-weight: 800;
-  }
-
-  .all-topics strong {
-    min-width: 28px;
-    color: var(--green);
-    text-align: right;
-  }
-
-  .all-topics.active {
-    color: var(--contrast-ink);
-    background: var(--contrast-surface);
-  }
-
-  .all-topics.active strong { color: #c5ddd2; }
-
-  .topic-group {
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: var(--paper);
-  }
-
-  .topic-group > header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 9px;
-  }
-
-  .topic-group-icon {
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    flex: 0 0 30px;
-    border-radius: var(--radius-sm);
-    color: var(--green-deep);
-    background: var(--green-soft);
-  }
-
-  .topic-group > header strong { min-width: 0; font-size: 0.8rem; }
-
-  .topic-links {
-    display: grid;
-    gap: 3px;
-  }
-
-  .topic-link {
-    min-width: 0;
-    min-height: 34px;
-    display: grid;
-    grid-template-columns: 7px minmax(0, 1fr) 20px;
-    align-items: center;
-    gap: 7px;
-    padding: 5px 7px;
-    border-radius: var(--radius-sm);
-    color: var(--ink);
-    background: var(--surface);
-    text-decoration: none;
-  }
-
-  .topic-link:hover,
-  .topic-link.active {
-    background: var(--surface-strong);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 25%, var(--line));
-  }
-
-  .topic-link strong {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .topic-link strong { font-size: 0.74rem; }
-  .topic-link b { color: var(--muted); font-size: 0.68rem; text-align: right; }
-
-  .featured-story {
-    min-height: 178px;
-    display: grid;
-    grid-template-columns: 70px minmax(0, 1fr) 42px;
-    align-items: stretch;
-    overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--green) 25%, var(--line));
-    border-radius: var(--radius-md);
-    background: var(--green-soft);
-    color: var(--ink);
-    text-decoration: none;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .featured-number {
-    display: grid;
-    place-items: center;
-    background: var(--green);
-    color: white;
-    font-size: 1.45rem;
-    font-weight: 850;
-  }
-
-  .featured-copy {
-    align-self: center;
-    padding: 24px 26px;
-  }
-
-  .featured-tags,
-  .card-tags {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .featured-copy h3 {
-    max-width: 640px;
-    margin: 10px 0 10px;
-    font-size: clamp(1.3rem, 2.2vw, 1.8rem);
-    line-height: 1.3;
-  }
-
-  .featured-copy p {
-    max-width: 620px;
-    margin: 0 0 16px;
-    display: -webkit-box;
-    overflow: hidden;
-    color: var(--muted-strong);
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .story-meta,
-  .card-footer {
-    color: var(--muted);
-    font-size: 0.77rem;
-    font-weight: 650;
-  }
-
-  .story-arrow {
-    display: grid;
-    place-items: center;
-    color: var(--green-deep);
-  }
-
-  .featured-story:hover .story-arrow {
-    transform: translateX(3px);
-  }
-
-  .content-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .content-grid li {
-    min-width: 0;
-  }
-
-  .content-card {
-    min-height: 176px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 16px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--paper);
-    color: var(--ink);
-    text-decoration: none;
-    box-shadow: var(--shadow-sm);
-    transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
-  }
-
-  .content-card:hover {
-    transform: translateY(-3px);
-    border-color: color-mix(in srgb, var(--green) 35%, var(--line));
-    box-shadow: 0 10px 28px rgba(22, 34, 28, 0.09);
-  }
-
-  .card-topline,
-  .card-footer {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .card-number {
-    color: var(--line);
-    font-size: 0.82rem;
-    font-weight: 850;
-  }
-
-  .content-card h3 {
-    display: -webkit-box;
-    margin: 12px 0 7px;
-    overflow: hidden;
-    font-size: 1.02rem;
-    line-height: 1.42;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .content-card > p {
-    display: -webkit-box;
-    margin: 0 0 18px;
-    overflow: hidden;
-    color: var(--muted-strong);
-    font-size: 0.85rem;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .card-footer {
-    margin-top: auto;
-    padding-top: 13px;
-    border-top: 1px solid var(--line);
-  }
-
-  .card-footer span:first-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .empty-state {
-    display: grid;
-    justify-items: center;
-    padding: 70px 20px;
-    border: 1px dashed color-mix(in srgb, var(--green) 35%, var(--line));
-    border-radius: var(--radius-md);
-    background: var(--paper);
-    text-align: center;
-  }
-
-  .empty-state h2 {
-    margin: 16px 0 6px;
-    font-size: 1.2rem;
-  }
-
-  .empty-state p {
-    margin: 0 0 22px;
-    color: var(--muted);
-  }
-
-  .sidebar-card {
-    padding: 16px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--paper);
-  }
-
-  .sidebar-card-heading {
-    margin-bottom: 12px;
-  }
-
-  .sidebar-card-heading h2 {
-    margin: 0;
-    font-size: 1.02rem;
-  }
-
-  .sidebar-group + .sidebar-group {
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--line);
-  }
-
-  .sidebar-group-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-
-  .sidebar-group-heading > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted-strong);
-    font-size: 0.76rem;
-    font-weight: 800;
-  }
-
-  .sidebar-group-heading a {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    color: var(--green-deep);
-    font-size: 0.7rem;
-    font-weight: 750;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .rail-list {
-    display: grid;
-    gap: 4px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .rail-list a {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: 30px minmax(0, 1fr);
-    align-items: center;
-    gap: 10px;
-    padding: 8px;
-    border-radius: var(--radius-sm);
-    color: var(--ink);
-    text-decoration: none;
-  }
-
-  .rail-list a:hover {
-    background: var(--surface-strong);
-  }
-
-  .rail-icon {
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    border-radius: var(--radius-sm);
-    color: var(--category-color, var(--green-deep));
-    background: var(--category-soft, var(--green-soft));
-  }
-
-  .rail-list .category-label {
-    align-self: start;
-    margin-top: 2px;
-  }
-
-  .rail-copy {
-    min-width: 0;
-    display: grid;
-    gap: 1px;
-  }
-
-  .rail-copy strong {
-    display: -webkit-box;
-    overflow: hidden;
-    font-size: 0.83rem;
-    line-height: 1.35;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .rail-copy small {
-    overflow: hidden;
-    color: var(--muted);
-    font-size: 0.72rem;
-    line-height: 1.3;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .archive-card {
-    display: grid;
-    gap: 12px;
-    color: var(--contrast-ink);
-    background: var(--contrast-surface);
-    text-decoration: none;
-  }
-
-  .archive-card-heading {
-    display: grid;
-    grid-template-columns: 24px minmax(0, 1fr);
-    align-items: center;
-    gap: 10px;
-  }
-
-  .archive-card-heading > svg {
-    color: var(--contrast-accent);
-  }
-
-  .archive-card-heading div {
-    display: grid;
-    gap: 2px;
-  }
-
-  .archive-card-heading span {
-    color: var(--contrast-muted);
-    font-size: 0.72rem;
-  }
-
-  .archive-card-heading strong {
-    font-size: 0.94rem;
-    line-height: 1.35;
-  }
-
-  .archive-days {
-    display: grid;
-    gap: 4px;
-  }
-
-  .archive-days span {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--contrast-muted);
-    font-size: 0.72rem;
-  }
-
-  .archive-card-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding-top: 10px;
-    border-top: 1px solid var(--contrast-line);
-    color: var(--contrast-ink);
-    font-size: 0.78rem;
-    font-weight: 750;
-  }
+  .hero { position: relative; min-height: 214px; overflow: hidden; isolation: isolate; border-bottom: 1px solid var(--line); background: var(--surface-strong); }
+  .hero-image { position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(90deg, color-mix(in srgb, var(--paper) 92%, transparent) 0 40%, color-mix(in srgb, var(--paper) 38%, transparent) 68%, transparent), url("/images/life-quiz-desk.webp"); background-position: center; background-size: cover; }
+  .hero-content { min-height: 214px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+  .hero-status, .section-kicker { color: var(--green-deep); font-size: 0.7rem; font-weight: 850; }
+  .hero-status { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .hero h1 { margin: 0; font-size: clamp(1.8rem, 3vw, 2.65rem); line-height: 1.12; }
+  .hero-content > p { margin: 7px 0 0; color: var(--muted-strong); font-size: 0.9rem; }
+  .hero-actions { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  .hero-actions .button { min-height: 39px; }
+  .hero-link { min-height: 39px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--radius-sm); color: var(--ink); background: color-mix(in srgb, var(--paper) 84%, transparent); text-decoration: none; font-size: 0.78rem; font-weight: 750; }
+
+  .home-page { padding-top: 24px; padding-bottom: 16px; }
+  .category-section { margin-bottom: 26px; }
+  .compact-heading { min-width: 0; display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+  .compact-heading > div { min-width: 0; }
+  .compact-heading h2 { margin: 2px 0 0; font-size: 1.08rem; line-height: 1.3; }
+  .compact-heading > span { color: var(--muted); font-size: 0.73rem; font-weight: 700; }
+  .compact-heading > a { display: inline-flex; align-items: center; gap: 4px; color: var(--green-deep); text-decoration: none; font-size: 0.74rem; font-weight: 800; white-space: nowrap; }
+
+  .topic-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
+  .topic-link { min-width: 0; min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--paper); text-decoration: none; font-size: 0.72rem; font-weight: 750; }
+  .topic-link > span { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topic-link strong { flex: 0 0 auto; color: var(--muted); font-size: 0.68rem; }
+  .topic-link:hover { border-color: color-mix(in srgb, var(--category-color, var(--green)) 40%, var(--line)); }
+  .topic-link.active { color: var(--green-deep); border-color: color-mix(in srgb, var(--green) 42%, var(--line)); background: var(--green-soft); }
+  .topic-link.all { color: var(--contrast-ink); background: var(--contrast-surface); }
+  .topic-link.all strong { color: var(--contrast-accent); }
+
+  .home-dashboard { display: grid; grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 24px; }
+  .today-feed { min-width: 0; }
+  .featured-section { margin-bottom: 28px; }
+  .featured-story { min-height: 160px; display: grid; grid-template-columns: 54px minmax(0, 1fr) 42px; align-items: stretch; overflow: hidden; border: 1px solid color-mix(in srgb, var(--category-color) 28%, var(--line)); border-radius: var(--radius-md); color: var(--ink); background: var(--paper); text-decoration: none; box-shadow: var(--shadow-sm); }
+  .featured-accent { display: grid; place-items: center; color: var(--category-color); background: var(--category-soft); }
+  .featured-copy { align-self: center; min-width: 0; padding: 19px 22px; }
+  .content-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .featured-copy h3 { margin: 8px 0 6px; font-size: clamp(1.12rem, 2vw, 1.48rem); line-height: 1.34; }
+  .featured-copy p { display: -webkit-box; margin: 0 0 9px; overflow: hidden; color: var(--muted-strong); font-size: 0.83rem; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .featured-copy small { display: block; overflow: hidden; color: var(--muted); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+  .featured-arrow { align-self: center; color: var(--category-color); }
+
+  .content-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .content-list li { min-width: 0; }
+  .content-row { min-width: 0; min-height: 112px; height: 100%; display: grid; grid-template-columns: 4px minmax(0, 1fr) 18px; align-items: center; gap: 12px; padding: 13px 13px 13px 0; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); background: var(--paper); text-decoration: none; }
+  .content-row:hover { border-color: color-mix(in srgb, var(--category-color) 38%, var(--line)); background: var(--surface); }
+  .row-marker { align-self: stretch; border-radius: 0 3px 3px 0; background: var(--category-color); }
+  .row-copy { min-width: 0; display: grid; gap: 4px; }
+  .row-meta { min-width: 0; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 0.65rem; }
+  .row-meta strong { color: var(--category-color); }
+  .row-meta b { padding: 1px 4px; border-radius: 3px; color: var(--category-color); background: var(--category-soft); }
+  .row-meta time { margin-left: auto; white-space: nowrap; }
+  .row-title { display: -webkit-box; overflow: hidden; font-size: 0.88rem; font-weight: 800; line-height: 1.38; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .row-summary { overflow: hidden; color: var(--muted); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+  .content-row > svg { color: var(--muted); }
+
+  .home-rail { position: sticky; top: 84px; display: grid; gap: 16px; }
+  .quick-panel, .explore-panel { padding: 17px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper); }
+  .quick-links { display: grid; gap: 5px; }
+  .quick-link { min-height: 56px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); text-decoration: none; }
+  .quick-link:hover { background: var(--surface-strong); }
+  .quick-link.primary { color: var(--contrast-ink); background: var(--contrast-surface); }
+  .quick-link > span { min-width: 0; display: grid; }
+  .quick-link strong { font-size: 0.8rem; }
+  .quick-link small { color: var(--muted); font-size: 0.66rem; }
+  .quick-link.primary small { color: var(--contrast-muted); }
+
+  .explore-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .explore-list a { min-width: 0; display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 9px; padding: 8px 4px; border-top: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+  .explore-list li:first-child a { border-top: 0; }
+  .explore-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--category-color); background: var(--category-soft); }
+  .explore-list a > span:last-child { min-width: 0; display: grid; gap: 1px; }
+  .explore-list small { color: var(--muted); font-size: 0.64rem; }
+  .explore-list strong { display: -webkit-box; overflow: hidden; font-size: 0.76rem; line-height: 1.35; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+  .archive-panel { display: grid; grid-template-columns: 34px minmax(0, 1fr) 18px; align-items: center; gap: 10px; padding: 15px 16px; border-radius: var(--radius-md); color: var(--contrast-ink); background: var(--contrast-surface); text-decoration: none; }
+  .archive-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--radius-sm); color: var(--contrast-accent); background: var(--contrast-line); }
+  .archive-panel > span:nth-child(2) { min-width: 0; display: grid; }
+  .archive-panel small { color: var(--contrast-muted); font-size: 0.66rem; }
+  .archive-panel strong { font-size: 0.82rem; }
+  .archive-days { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px 10px; padding-top: 9px; border-top: 1px solid var(--contrast-line); }
+  .archive-days i { display: inline-flex; align-items: center; gap: 4px; color: var(--contrast-muted); font-size: 0.62rem; font-style: normal; }
+  .empty-state { display: grid; justify-items: center; padding: 58px 20px; border: 1px dashed var(--line); border-radius: var(--radius-md); background: var(--paper); text-align: center; }
+  .empty-state h2 { margin: 13px 0 18px; font-size: 1.05rem; }
 
   @media (max-width: 1080px) {
-    .home-layout {
-      grid-template-columns: minmax(0, 1fr) 280px;
-      gap: 24px;
-    }
-
-    .topic-map {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    .topic-strip { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .home-dashboard { grid-template-columns: minmax(0, 1fr) 280px; }
+    .content-list { grid-template-columns: 1fr; }
   }
 
   @media (max-width: 900px) {
-    .hero-image {
-      opacity: 0.48;
-    }
-
-    .home-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .home-sidebar {
-      position: static;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .content-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    .home-dashboard { grid-template-columns: 1fr; }
+    .home-rail { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .archive-panel { align-self: start; }
   }
 
   @media (max-width: 620px) {
-    .topic-map {
-      grid-template-columns: 1fr;
-    }
-
-    .topic-group {
-      padding: 15px;
-    }
-
-    .topic-link {
-      min-height: 36px;
-    }
-
-    .hero,
-    .hero-content {
-      min-height: 320px;
-    }
-
-    .hero-image {
-      background-position: 62% center;
-      opacity: 0.3;
-    }
-
-    .hero h1 {
-      font-size: 2rem;
-    }
-
-    .hero-content > p:not(.hero-kicker) {
-      max-width: 300px;
-    }
-
-    .hero-actions {
-      width: 100%;
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .home-layout {
-      padding-top: 24px;
-    }
-
-    .home-sidebar {
-      grid-template-columns: 1fr;
-    }
-
-    .category-section,
-    .featured-section,
-    .feed-section {
-      margin-bottom: 32px;
-    }
-
-    .featured-story {
-      min-height: 0;
-      grid-template-columns: 58px minmax(0, 1fr);
-    }
-
-    .featured-number {
-      font-size: 1.25rem;
-    }
-
-    .featured-copy {
-      padding: 22px 18px;
-    }
-
-    .featured-copy h3 {
-      font-size: 1.2rem;
-    }
-
-    .story-arrow {
-      display: none;
-    }
-
-    .content-grid {
-      grid-template-columns: 1fr;
-    }
-
-    .content-card {
-      min-height: 0;
-    }
+    .hero, .hero-content { min-height: 238px; }
+    .hero-image { background-image: linear-gradient(90deg, color-mix(in srgb, var(--paper) 92%, transparent), color-mix(in srgb, var(--paper) 54%, transparent)), url("/images/life-quiz-desk.webp"); background-position: 60% center; }
+    .hero h1 { font-size: 1.85rem; }
+    .hero-content > p { max-width: 270px; font-size: 0.82rem; }
+    .hero-actions { width: 100%; display: grid; grid-template-columns: 1fr auto auto; }
+    .hero-actions .button { padding-inline: 12px; }
+    .hero-link { width: 39px; padding: 0; justify-content: center; font-size: 0; }
+    .hero-link svg { width: 18px; height: 18px; }
+    .home-page { padding-top: 20px; }
+    .category-section { margin-bottom: 22px; }
+    .topic-strip { display: flex; gap: 7px; padding-bottom: 6px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; }
+    .topic-strip::-webkit-scrollbar { display: none; }
+    .topic-link { min-width: 118px; flex: 0 0 118px; scroll-snap-align: start; }
+    .topic-link.all { min-width: 84px; flex-basis: 84px; }
+    .featured-story { min-height: 148px; grid-template-columns: 42px minmax(0, 1fr) 30px; }
+    .featured-copy { padding: 16px 13px; }
+    .featured-copy h3 { font-size: 1.02rem; }
+    .featured-copy p { -webkit-line-clamp: 1; }
+    .content-list { grid-template-columns: 1fr; }
+    .content-row { min-height: 100px; }
+    .row-summary { display: none; }
+    .home-rail { grid-template-columns: 1fr; }
   }
 </style>

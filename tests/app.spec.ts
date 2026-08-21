@@ -39,10 +39,12 @@ test("global navigation adapts from sidebar to the compact mobile menu", async (
   if (viewportWidth > 900) {
     await expect(sidebar).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "5분 학습 시작" })).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "전체 상식 검색" })).toBeVisible();
     await expect(mobileHeader).toBeHidden();
   } else {
     await expect(sidebar).toBeHidden();
     await expect(mobileHeader).toBeVisible();
+    await expect(page.getByRole("link", { name: "상식 검색" })).toBeVisible();
     await page.getByRole("button", { name: "전체 메뉴 열기" }).click();
     await expect(page.getByRole("dialog", { name: "전체 메뉴" })).toBeVisible();
     await expect(page.getByRole("dialog").getByRole("link", { name: /시작 코스/ })).toBeVisible();
@@ -83,7 +85,13 @@ test("home feed renders without horizontal overflow", async ({ page }) => {
 
   await expect(page.getByRole("heading", { level: 1, name: /사회초년생을 위한/ })).toBeVisible();
   await expect(page.locator(".topic-link").filter({ hasText: "주식·투자" })).toBeVisible();
-  await expect(page.locator(".featured-story, .empty-state")).toBeVisible();
+  const firstContentEntry = page.locator(".featured-story, .empty-state");
+  await expect(firstContentEntry).toBeVisible();
+
+  if ((page.viewportSize()?.width ?? 1440) <= 620) {
+    const entryBox = await firstContentEntry.boundingBox();
+    expect(entryBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(page.viewportSize()!.height);
+  }
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
@@ -95,6 +103,8 @@ test("article carousel and source area are usable", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/articles\/\d+/);
   await expect(page.locator(".article-header h1")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "글 읽기 순서" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "자세히" })).toHaveAttribute("href", "#deep-read");
   await expect(page.locator(".article-body")).toBeVisible();
   await expect(page.locator(".deep-read-section").first()).toBeVisible();
   const learningCards = page.locator(".comic-panel, .card-news");
@@ -138,13 +148,19 @@ test("archive separates older content by date and filters", async ({ page }) => 
   await expect(page.locator(".archive-card").first()).toBeVisible();
   await expect(page.getByText("보관된 상식")).toBeVisible();
 
-  const dateList = page.locator(".date-filter-list");
-  await expect(dateList).toHaveCSS("overflow-y", "auto");
-  const datedTab = dateList.locator(".filter-row").nth(1);
-  await expect(datedTab).toBeVisible();
-  await datedTab.click();
+  const dateSelect = page.locator("#date-select");
+  expect(await dateSelect.locator("option").count()).toBeGreaterThan(2);
+  const datedValue = await dateSelect.locator("option").nth(1).getAttribute("value");
+  expect(datedValue).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await dateSelect.selectOption(datedValue!);
+  await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(page).toHaveURL(/date=\d{4}-\d{2}-\d{2}/);
   await expect(page.locator(".archive-card").first()).toBeVisible();
+
+  await page.getByRole("button", { name: "목록 보기" }).click();
+  await expect(page.locator("#archive-results-list")).toHaveAttribute("data-view", "list");
+  await page.reload();
+  await expect(page.locator("#archive-results-list")).toHaveAttribute("data-view", "list");
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
